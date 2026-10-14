@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      # 3.12+ runs the core; 3.11 is Live 12's embedded Python, used to check
+      # that the Remote Script compiles there (test_remote_script_compiles_on_lives_python).
+      - name: Install Python
+        run: uv python install 3.12 3.11
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Op manifest matches the catalog
+        run: uv run midishower manifest --check
+
+      - name: Lint (errors only)
+        run: uvx ruff check --select F,E9 packages tests
+
+      - name: Tests
+        run: uv run pytest -q
