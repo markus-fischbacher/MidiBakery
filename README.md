@@ -27,3 +27,7 @@ uv run midishower ping              # with Live running and MidiShower selected 
 ```bash
 claude mcp add midishower -- uv --directory /Users/maxx/Development/Ableton/MidiShower run midishower mcp
 ```
+
+## License
+
+Proprietary, all rights reserved. The source is publicly visible, but no right to use, copy, modify or distribute it is granted; see [LICENSE](LICENSE). Ableton and Ableton Live are trademarks of Ableton AG; this project is not affiliated with Ableton.
