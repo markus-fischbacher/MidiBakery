@@ -19,7 +19,9 @@ Seed = Annotated[
     Field(description="Same seed + same inputs = same notes. Omit for a fresh idea; the used seed is returned."),
 ]
 Amount = Annotated[float, Field(ge=0, le=1)]
-Swing = Annotated[float, Field(ge=0, le=1, description="Delays every second 16th; 0 straight, 1 full triplet feel")]
+Swing = Annotated[float, Field(ge=0, le=1, description="Delays every off-beat swing_unit; 0 straight, 1 full triplet feel")]
+SwingUnit = Annotated[Literal["1/16", "1/8"], Field(description="Note value that swings: 1/16 (house, techno) or 1/8 (hip-hop, shuffle)")]
+SWING_UNITS = {"1/16": 0.25, "1/8": 0.5}
 
 
 class Spec(BaseModel):
@@ -58,6 +60,7 @@ class DrumsSpec(Generate):
     style: DrumStyle = "house"
     density: Amount = 0.5
     swing: Swing = 0.0
+    swing_unit: SwingUnit = "1/16"
     fills: bool = Field(True, description="Fill at the end of each 4-bar phrase")
     device: Annotated[int | None, Field(ge=0, description="Drum Rack device index; default: first Drum Rack")] = None
 
@@ -70,6 +73,7 @@ class BassSpec(Harmonic):
     kick_relation: KickRelation = "lock"
     density: Amount = 0.5
     swing: Swing = 0.0
+    swing_unit: SwingUnit = "1/16"
 
 
 class ChordsSpec(Harmonic):
@@ -80,6 +84,7 @@ class ChordsSpec(Harmonic):
     high: Pitch = 76
     sevenths: bool = Field(False, description="Use seventh chords for a generated progression")
     swing: Swing = 0.0
+    swing_unit: SwingUnit = "1/16"
 
     @model_validator(mode="after")
     def _range(self) -> ChordsSpec:
@@ -94,6 +99,7 @@ class MelodySpec(Harmonic):
     high: Pitch = 84
     density: Amount = 0.5
     swing: Swing = 0.0
+    swing_unit: SwingUnit = "1/16"
 
     @model_validator(mode="after")
     def _range(self) -> MelodySpec:
@@ -112,6 +118,7 @@ class TransformSpec(Spec):
     grid: Annotated[float, Field(gt=0, le=4, description="quantize grid in beats (0.25 = 1/16)")] = 0.25
     strength: Amount = Field(1.0, description="quantize strength")
     swing: Swing = 0.0
+    swing_unit: SwingUnit = "1/16"
     axis: Pitch | None = Field(None, description="invert: mirror pitch (default: middle of the notes' range)")
     steps: int = Field(0, ge=-24, le=24, description="transpose: scale steps (in key)")
     rate: Annotated[float, Field(gt=0, le=4, description="arpeggiate: step length in beats")] = 0.25

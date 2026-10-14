@@ -74,8 +74,9 @@ def generate_bass(
     kick_relation: str = "lock",
     density: float = 0.5,
     swing: float = 0.0,
+    swing_unit: float = 0.25,
 ) -> list[Note]:
-    grid = Grid(meter, 0.25, swing)
+    grid = Grid(meter, 0.25, swing, swing_unit)
     length = meter.beats_per_bar * bars
     if kick and kick_relation == "lock":
         onsets = [t for t in kick if t < length]

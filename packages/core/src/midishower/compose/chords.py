@@ -24,8 +24,9 @@ def generate_chords(
     high: int = 76,
     voices: int = 3,
     swing: float = 0.0,
+    swing_unit: float = 0.25,
 ) -> list[Note]:
-    grid = Grid(meter, 0.25, swing)
+    grid = Grid(meter, 0.25, swing, swing_unit)
     voicings = voice_lead([s.chord for s in harmony.segments], low, high)
     if voices > 3:
         voicings = [v + (v[0] + 12,) if len(v) == 3 and v[0] + 12 <= high and v[0] + 12 not in v else v for v in voicings]

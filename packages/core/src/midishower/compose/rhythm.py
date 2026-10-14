@@ -75,36 +75,42 @@ class Meter:
 class Grid:
     meter: Meter = field(default_factory=Meter)
     step: float = 0.25
-    swing: float = 0.0  # 0 = straight, 1 = full triplet feel on every second step
+    swing: float = 0.0  # 0 = straight, 1 = full triplet feel
+    swing_unit: float = 0.25  # swung note value in beats: 0.25 = 16ths, 0.5 = 8ths
 
     @property
     def steps_per_bar(self) -> int:
         return max(1, round(self.meter.beats_per_bar / self.step))
 
+    def swung(self, offset_in_bar: float) -> float:
+        """Delay every second `swing_unit` (the off-beat 16th or 8th) by up to a triplet."""
+        if not self.swing:
+            return offset_in_bar
+        units = offset_in_bar / self.swing_unit
+        if abs(units - round(units)) < 1e-9 and round(units) % 2 == 1:
+            return offset_in_bar + self.swing_unit * self.swing / 3
+        return offset_in_bar
+
     def position(self, bar: int, step_index: int) -> float:
-        """Start time of a grid step, with swing delaying every odd step."""
-        base = bar * self.meter.beats_per_bar + step_index * self.step
-        if self.swing and step_index % 2 == 1:
-            base += self.step * self.swing / 3
-        return base
+        """Start time of a grid step, with swing applied."""
+        return bar * self.meter.beats_per_bar + self.swung(step_index * self.step)
 
     def bar_positions(self, bar: int) -> list[float]:
         return [self.position(bar, i) for i in range(self.steps_per_bar)]
 
     def quantize(self, time: float, strength: float = 1.0) -> float:
-        bar = int(time // self.meter.beats_per_bar)
+        bpb = self.meter.beats_per_bar
+        bar = int(time // bpb)
         best = time
         best_distance = float("inf")
         for b in (bar - 1, bar, bar + 1):
             if b < 0:
                 continue
-            k = round((time - b * self.meter.beats_per_bar) / self.step)
+            k = round((time - b * bpb) / self.step)
             for index in (k - 1, k, k + 1):
                 if index < 0:
                     continue
-                candidate = b * self.meter.beats_per_bar + index * self.step
-                if self.swing and index % 2 == 1:
-                    candidate += self.step * self.swing / 3
+                candidate = b * bpb + self.swung(index * self.step)
                 distance = abs(candidate - time)
                 if distance < best_distance - 1e-12:
                     best, best_distance = candidate, distance

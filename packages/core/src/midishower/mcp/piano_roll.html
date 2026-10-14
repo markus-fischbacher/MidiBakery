@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MidiShower Plan</title>
+<style>
+  :root {
+    --bg: var(--color-background-primary, #ffffff);
+    --bg-2: var(--color-background-secondary, #f4f4f2);
+    --fg: var(--color-text-primary, #1d1d1b);
+    --fg-2: var(--color-text-secondary, #6b6b66);
+    --line: var(--color-border-primary, #d9d9d4);
+    --line-2: color-mix(in srgb, var(--line) 45%, transparent);
+    --keep: #9a9a94;
+    --add: #2f7de1;
+    --mod: #d98a0b;
+    --del: #d6453d;
+    --font: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    color-scheme: light dark;
+  }
+  :root[data-theme="dark"] {
+    --bg: var(--color-background-primary, #1f1f1e);
+    --bg-2: var(--color-background-secondary, #2a2a28);
+    --fg: var(--color-text-primary, #ecece8);
+    --fg-2: var(--color-text-secondary, #a3a39d);
+    --line: var(--color-border-primary, #3d3d3a);
+    --keep: #7c7c77;
+    --add: #5b9cf0;
+    --mod: #f0a93a;
+    --del: #ef6b62;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 12px; background: var(--bg); color: var(--fg); font: 13px/1.4 var(--font); }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 10px; }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  .meta { color: var(--fg-2); }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; color: var(--fg-2); font-size: 12px; margin-bottom: 10px; }
+  .legend i { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .clip { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; background: var(--bg); }
+  .clip h2 { margin: 0; padding: 6px 10px; font-size: 13px; font-weight: 600; background: var(--bg-2); display: flex; gap: 8px; flex-wrap: wrap; }
+  .clip h2 span { font-weight: 400; color: var(--fg-2); }
+  .roll { overflow-x: auto; }
+  svg { display: block; }
+  .actions { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--add); background: var(--add); color: #fff; cursor: pointer; }
+  button[disabled] { opacity: .5; cursor: default; }
+  #status { color: var(--fg-2); }
+  .empty { padding: 16px; color: var(--fg-2); }
+</style>
+</head>
+<body>
+<header>
+  <h1>MidiShower plan</h1>
+  <span class="meta" id="summary">Waiting for the tool result…</span>
+</header>
+<div class="legend">
+  <span><i style="background:var(--add)"></i>new</span>
+  <span><i style="background:var(--mod)"></i>changed</span>
+  <span><i style="border:1.5px dashed var(--del)"></i>removed</span>
+  <span><i style="background:var(--keep)"></i>unchanged</span>
+  <span><i style="background:repeating-linear-gradient(45deg,var(--add) 0 2px,transparent 2px 4px)"></i>probability &lt; 100 %</span>
+</div>
+<main id="clips"><div class="empty">No preview yet.</div></main>
+<div class="actions">
+  <button id="apply" hidden>Apply as one undo step</button>
+  <span id="status"></span>
+</div>
+<script>
+(() => {
+  "use strict";
+  const NS = "http://www.w3.org/2000/svg";
+  const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const ROW = 9;
+  let nextId = 1;
+  const pending = new Map();
+  let plan = null;
+  let lastResult = null;
+
+  const pitchName = (p) => NAMES[p % 12] + (Math.floor(p / 12) - 2);
+
+  function send(message) { window.parent.postMessage(message, "*"); }
+  function request(method, params) {
+    const id = nextId++;
+    send({ jsonrpc: "2.0", id, method, params });
+    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  }
+  function notify(method, params) { send({ jsonrpc: "2.0", method, params }); }
+
+  function applyHostContext(ctx) {
+    if (!ctx) return;
+    if (ctx.theme) document.documentElement.dataset.theme = ctx.theme;
+    const vars = ctx.styles && ctx.styles.variables;
+    if (vars) for (const [k, v] of Object.entries(vars)) if (v) document.documentElement.style.setProperty(k, v);
+  }
+
+  function el(name, attrs, parent) {
+    const node = document.createElementNS(NS, name);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+
+  function drawClip(clip, meter, labels) {
+    const removed = new Set(clip.remove);
+    const changes = new Map(clip.modify.map((m) => [m.note_id, m]));
+    const kept = [], moved = [], gone = [];
+    for (const [id, pitch, start, dur, vel, prob] of clip.existing) {
+      const note = { pitch, start, dur, vel, prob };
+      if (removed.has(id)) gone.push(note);
+      else if (changes.has(id)) {
+        const c = changes.get(id);
+        gone.push({ ...note, ghost: true });
+        moved.push({
+          pitch: c.pitch ?? pitch, start: c.start_time ?? start, dur: c.duration ?? dur,
+          vel: c.velocity ?? vel, prob: c.probability ?? prob,
+        });
+      } else kept.push(note);
+    }
+    const added = clip.add.map(([pitch, start, dur, vel, prob]) => ({ pitch, start, dur, vel, prob }));
+    const all = [...kept, ...moved, ...gone, ...added];
+    if (!all.length) return null;
+
+    let lo = Math.min(...all.map((n) => n.pitch)), hi = Math.max(...all.map((n) => n.pitch));
+    lo = Math.max(0, lo - 1); hi = Math.min(127, hi + 1);
+    const length = Math.max(clip.length || 0, ...all.map((n) => n.start + n.dur));
+    const rows = hi - lo + 1;
+    const KEYS = Object.keys(labels).length ? 64 : 40;
+    // Stretch the clip over the available width, within readable limits.
+    const available = (document.getElementById("clips").clientWidth || 600) - 2;
+    const BEAT = Math.min(80, Math.max(18, (available - KEYS) / Math.max(length, 1)));
+    const used = new Set(all.map((n) => n.pitch));
+    const width = KEYS + Math.ceil(length * BEAT) + 1, height = rows * ROW + 1;
+    const svg = el("svg", { width, height, viewBox: `0 0 ${width} ${height}`, role: "img" });
+    const y = (p) => (hi - p) * ROW;
+
+    for (let p = lo; p <= hi; p++) {
+      const black = [1, 3, 6, 8, 10].includes(p % 12);
+      el("rect", { x: KEYS, y: y(p), width: width - KEYS, height: ROW, fill: black ? "var(--bg-2)" : "var(--bg)" }, svg);
+      const label = labels[p] || (p % 12 === 0 || rows <= 16 || used.has(p) ? pitchName(p) : "");
+      if (label) {
+        const t = el("text", { x: KEYS - 4, y: y(p) + ROW - 1.5, "text-anchor": "end", "font-size": 8, fill: "var(--fg-2)" }, svg);
+        t.textContent = label;
+      }
+    }
+    const barLen = meter.beatsPerBar;
+    for (let b = 0; b <= length + 1e-9; b += 0.25) {
+      const isBar = Math.abs(b / barLen - Math.round(b / barLen)) < 1e-9;
+      const isBeat = Math.abs(b - Math.round(b)) < 1e-9;
+      if (!isBar && !isBeat && rows > 40) continue;
+      el("line", {
+        x1: KEYS + b * BEAT, x2: KEYS + b * BEAT, y1: 0, y2: height,
+        stroke: isBar ? "var(--line)" : "var(--line-2)", "stroke-width": isBar ? 1 : 0.5,
+        "stroke-dasharray": isBar || isBeat ? "" : "1 2",
+      }, svg);
+    }
+    el("line", { x1: KEYS, x2: KEYS, y1: 0, y2: height, stroke: "var(--line)" }, svg);
+
+    const pattern = (color, id) => {
+      const defs = svg.querySelector("defs") || el("defs", {}, svg);
+      const pat = el("pattern", { id, width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
+      el("rect", { width: 2, height: 4, fill: color }, pat);
+      return `url(#${id})`;
+    };
+    const uid = `c${clip.track}_${clip.slot}`;
+    const striped = { add: pattern("var(--add)", uid + "a"), mod: pattern("var(--mod)", uid + "m"), keep: pattern("var(--keep)", uid + "k") };
+
+    const drawNote = (n, kind) => {
+      const attrs = {
+        x: KEYS + n.start * BEAT + 0.5, y: y(n.pitch) + 1, width: Math.max(2, n.dur * BEAT - 1), height: ROW - 2, rx: 2,
+      };
+      if (kind === "del") {
+        Object.assign(attrs, { fill: "none", stroke: n.ghost ? "var(--mod)" : "var(--del)", "stroke-width": 1, "stroke-dasharray": "2 1.5", opacity: n.ghost ? 0.6 : 1 });
+      } else {
+        const color = { add: "var(--add)", mod: "var(--mod)", keep: "var(--keep)" }[kind];
+        Object.assign(attrs, {
+          fill: n.prob < 1 ? striped[kind] : color, stroke: color, "stroke-width": n.prob < 1 ? 1 : 0,
+          opacity: (0.35 + 0.65 * Math.min(127, n.vel) / 127).toFixed(2),
+        });
+      }
+      const rect = el("rect", attrs, svg);
+      const title = el("title", {}, rect);
+      title.textContent = `${labels[n.pitch] || pitchName(n.pitch)} · beat ${+n.start.toFixed(3)} · len ${+n.dur.toFixed(3)} · vel ${Math.round(n.vel)}` +
+        (n.prob < 1 ? ` · prob ${Math.round(n.prob * 100)} %` : "");
+    };
+    kept.forEach((n) => drawNote(n, "keep"));
+    gone.forEach((n) => drawNote(n, "del"));
+    moved.forEach((n) => drawNote(n, "mod"));
+    added.forEach((n) => drawNote(n, "add"));
+    return svg;
+  }
+
+  function render(result) {
+    lastResult = result;
+    const roll = result && result._meta && result._meta["midishower/roll"];
+    const main = document.getElementById("clips");
+    main.textContent = "";
+    if (!roll) {
+      main.innerHTML = '<div class="empty">This result has no piano-roll data.</div>';
+      return resize();
+    }
+    plan = roll;
+    const [num, den] = String(roll.time_signature || "4/4").split("/").map(Number);
+    const meter = { beatsPerBar: (num * 4) / den };
+    const summary = result.structuredContent || {};
+    document.getElementById("summary").textContent =
+      `${roll.scale} · ${roll.time_signature} · ${roll.clips.length} clip(s)` + (roll.applied ? " · applied" : " · preview");
+    for (const [i, clip] of roll.clips.entries()) {
+      const change = (summary.changes || [])[i] || {};
+      const box = document.createElement("section");
+      box.className = "clip";
+      const h = document.createElement("h2");
+      h.textContent = `Track ${clip.track + 1} · Slot ${clip.slot + 1} · ${clip.kind}`;
+      const detail = document.createElement("span");
+      const bits = [change.action, `+${clip.add.length}`, `~${clip.modify.length}`, `−${clip.remove.length}`];
+      if (change.chords) bits.push(change.chords.join(" – "));
+      if (change.seed !== undefined) bits.push(`seed ${change.seed}`);
+      detail.textContent = bits.filter(Boolean).join(" · ");
+      h.appendChild(detail);
+      box.appendChild(h);
+      const labels = {};
+      for (const [role, pitch] of Object.entries(change.pads || {})) labels[pitch] = role.replace("_", " ");
+      const svg = drawClip(clip, meter, labels);
+      const wrap = document.createElement("div");
+      wrap.className = "roll";
+      if (svg) wrap.appendChild(svg); else wrap.innerHTML = '<div class="empty">No notes.</div>';
+      box.appendChild(wrap);
+      main.appendChild(box);
+    }
+    const button = document.getElementById("apply");
+    button.hidden = roll.applied || !roll.plan_id;
+    button.disabled = false;
+    document.getElementById("status").textContent = roll.applied ? "Written to Live. The undo tool reverts it in one step." : "";
+    resize();
+  }
+
+  async function apply() {
+    if (!plan || !plan.plan_id) return;
+    const button = document.getElementById("apply");
+    const status = document.getElementById("status");
+    button.disabled = true;
+    status.textContent = "Writing to Live…";
+    try {
+      const result = await request("tools/call", { name: "apply_plan", arguments: { plan_id: plan.plan_id } });
+      if (result && result.isError) throw new Error((result.content || []).map((c) => c.text).join(" "));
+      button.hidden = true;
+      status.textContent = "Applied as one undo step.";
+    } catch (err) {
+      button.disabled = false;
+      status.textContent = "Not applied: " + (err && err.message ? err.message : err);
+    }
+    resize();
+  }
+
+  function resize() {
+    // Measure the content, not the viewport: the iframe's own height would only ever grow.
+    requestAnimationFrame(() => {
+      const box = document.body.getBoundingClientRect();
+      const style = getComputedStyle(document.body);
+      notify("ui/notifications/size-changed", {
+        width: Math.ceil(box.width + parseFloat(style.marginLeft) + parseFloat(style.marginRight)),
+        height: Math.ceil(box.height + parseFloat(style.marginTop) + parseFloat(style.marginBottom)),
+      });
+    });
+  }
+
+  window.addEventListener("message", (event) => {
+    const msg = event.data;
+    if (!msg || msg.jsonrpc !== "2.0") return;
+    if (msg.id !== undefined && pending.has(msg.id) && !msg.method) {
+      const { resolve, reject } = pending.get(msg.id);
+      pending.delete(msg.id);
+      if (msg.error) reject(new Error(msg.error.message || "Host error")); else resolve(msg.result);
+      return;
+    }
+    switch (msg.method) {
+      case "ui/notifications/tool-result": render(msg.params); break;
+      case "ui/notifications/host-context-changed": applyHostContext(msg.params); break;
+      case "ui/resource-teardown": send({ jsonrpc: "2.0", id: msg.id, result: {} }); break;
+      case "ping": if (msg.id !== undefined) send({ jsonrpc: "2.0", id: msg.id, result: {} }); break;
+    }
+  });
+
+  document.getElementById("apply").addEventListener("click", apply);
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => lastResult && render(lastResult), 150);
+  });
+  if (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) document.documentElement.dataset.theme = "dark";
+
+  request("ui/initialize", {
+    protocolVersion: "2026-01-26",
+    appInfo: { name: "midishower-piano-roll", version: "0.1.0" },
+    appCapabilities: {},
+  }).then((result) => {
+    applyHostContext(result && result.hostContext);
+    notify("ui/notifications/initialized", {});
+    resize();
+  }).catch(() => {});
+})();
+</script>
+</body>
+</html>

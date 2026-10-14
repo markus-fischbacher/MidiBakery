@@ -41,6 +41,7 @@ from midishower.compose.specs import (
     Harmonic,
     MelodySpec,
     Spec,
+    SWING_UNITS,
     TransformSpec,
 )
 from midishower.compose.theory import Scale, pitch_name
@@ -148,6 +149,29 @@ class ClipChange:
     modify: list[dict[str, Any]] = field(default_factory=list)
     remove: list[int] = field(default_factory=list)
     info: dict[str, Any] = field(default_factory=dict)
+    length: float = 0.0  # clip length after the change, in beats
+    existing: list[dict[str, Any]] = field(default_factory=list)  # notes in the clip before the change
+
+    @property
+    def removes_existing(self) -> bool:
+        """True when user notes disappear without being re-created from them (replace, not arpeggiate)."""
+        return bool(self.remove) and self.kind != "transform"
+
+    def roll(self) -> dict[str, Any]:
+        """Everything a piano-roll view needs to draw before and after, untruncated."""
+        return {
+            "track": self.track,
+            "slot": self.slot,
+            "kind": self.kind,
+            "length": self.length,
+            "existing": [
+                [n["note_id"], n["pitch"], n["start_time"], n["duration"], n["velocity"], n.get("probability", 1.0)]
+                for n in self.existing
+            ],
+            "add": [[n.pitch, n.start_time, n.duration, n.velocity, n.probability] for n in (a.clamped() for a in self.add)],
+            "modify": self.modify,
+            "remove": self.remove,
+        }
 
     @property
     def edits_notes(self) -> bool:
@@ -222,6 +246,14 @@ class Plan:
 
     def ops(self) -> list[dict[str, Any]]:
         return [op for change in self.changes for op in change.ops()]
+
+    @property
+    def removes_existing(self) -> int:
+        """Number of existing notes the plan deletes outright (clip replacements)."""
+        return sum(len(c.remove) for c in self.changes if c.removes_existing)
+
+    def roll(self) -> dict[str, Any]:
+        return {"plan_id": self.id, "scale": self.scale, "time_signature": self.meter, "clips": [c.roll() for c in self.changes]}
 
     def preview(self) -> dict[str, Any]:
         return {
@@ -326,7 +358,10 @@ def _finish(session: Session, spec: Generate, kind: str, seed: int, notes: list[
     session.planned[(spec.track, spec.slot)] = ClipState(
         True, True, length if create else state.length, [_as_dict(n) for n in notes], planned=True
     )
-    return ClipChange(spec.track, spec.slot, kind, seed, create, notes, [], remove, info)
+    return ClipChange(
+        spec.track, spec.slot, kind, seed, create, notes, [], remove, info,
+        length=length if create else (state.length or length), existing=list(state.notes or []),
+    )
 
 
 def _as_dict(note: Note) -> dict[str, Any]:
@@ -346,7 +381,10 @@ async def _plan_drums(session: Session, spec: DrumsSpec) -> ClipChange:
     seed = spec.seed if spec.seed is not None else new_seed()
     pads = await session.drum_pads(spec.track, spec.device)
     drum_map: DrumMap = map_pads(pads)
-    notes = generate_drums(session.meter, spec.bars, spec.style, random.Random(seed), drum_map, spec.density, spec.swing, spec.fills)
+    notes = generate_drums(
+        session.meter, spec.bars, spec.style, random.Random(seed), drum_map,
+        density=spec.density, swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit], fills=spec.fills,
+    )
     info = {
         "style": spec.style,
         "drum_map": drum_map.source,
@@ -369,7 +407,8 @@ async def _plan_bass(session: Session, spec: BassSpec) -> ClipChange:
         kick, info = await _kick(session, spec.follow_kick, target[1])
         info["kick_relation"] = spec.kick_relation
     notes = generate_bass(
-        harmony, session.scale, session.meter, spec.bars, spec.style, rng, spec.octave, kick, spec.kick_relation, spec.density, spec.swing
+        harmony, session.scale, session.meter, spec.bars, spec.style, rng, spec.octave, kick, spec.kick_relation,
+        density=spec.density, swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit],
     )
     info = {"style": spec.style, "chords": harmony.describe(), "chords_source": harmony.source, **info}
     return _finish(session, spec, "bass", seed, notes, target, info)
@@ -381,7 +420,10 @@ async def _plan_chords(session: Session, spec: ChordsSpec) -> ClipChange:
     rng = random.Random(seed)
     harmony = await _harmony(session, spec, rng)
     try:
-        notes = generate_chords(harmony, session.meter, spec.bars, spec.rhythm, rng, spec.low, spec.high, spec.voices, spec.swing)
+        notes = generate_chords(
+            harmony, session.meter, spec.bars, spec.rhythm, rng, spec.low, spec.high, spec.voices,
+            swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit],
+        )
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", str(exc)) from None
     info = {"rhythm": spec.rhythm, "chords": harmony.describe(), "chords_source": harmony.source}
@@ -393,7 +435,10 @@ async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
     seed = spec.seed if spec.seed is not None else new_seed()
     rng = random.Random(seed)
     harmony = await _harmony(session, spec, rng)
-    notes = generate_melody(harmony, session.scale, session.meter, spec.bars, rng, spec.low, spec.high, spec.density, spec.swing)
+    notes = generate_melody(
+        harmony, session.scale, session.meter, spec.bars, rng, spec.low, spec.high, spec.density,
+        swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit],
+    )
     info = {"chords": harmony.describe(), "chords_source": harmony.source}
     return _finish(session, spec, "melody", seed, notes, target, info)
 
@@ -419,7 +464,7 @@ async def _plan_transform(session: Session, spec: TransformSpec) -> ClipChange:
     if op == "humanize":
         diff = tf.humanize(notes, rng, spec.amount)
     elif op == "quantize":
-        diff = tf.quantize(notes, Grid(session.meter, spec.grid, spec.swing), spec.strength)
+        diff = tf.quantize(notes, Grid(session.meter, spec.grid, spec.swing, SWING_UNITS[spec.swing_unit]), spec.strength)
     elif op == "invert":
         diff = tf.invert(notes, scale, spec.axis)
     elif op == "transpose":
@@ -435,6 +480,8 @@ async def _plan_transform(session: Session, spec: TransformSpec) -> ClipChange:
     return ClipChange(
         spec.track, spec.slot, "transform", seed if uses_seed else None, None, diff.add, diff.modify, diff.remove,
         {"operation": op, "notes_considered": len(notes)},
+        length=state.length or 0.0,
+        existing=list(state.notes or []),
     )
 
 

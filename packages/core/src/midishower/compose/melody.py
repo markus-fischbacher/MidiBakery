@@ -69,8 +69,9 @@ def generate_melody(
     high: int = 84,
     density: float = 0.5,
     swing: float = 0.0,
+    swing_unit: float = 0.25,
 ) -> list[Note]:
-    grid = Grid(meter, 0.25, swing)
+    grid = Grid(meter, 0.25, swing, swing_unit)
     a = _motif(grid, rng, density)
     forms = {0: a, 1: _vary(a, rng), 2: a, 3: _motif(grid, rng, density)}
     pitch = scale.snap((low + high) // 2)

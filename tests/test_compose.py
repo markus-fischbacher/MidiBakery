@@ -305,3 +305,12 @@ def test_fit_to_length_removes_same_pitch_overlaps():
         for n in drums:
             assert n.start_time >= by_pitch.get(n.pitch, 0) - 1e-9
             by_pitch[n.pitch] = n.end_time
+
+
+def test_eighth_note_swing():
+    grid = Grid(Meter(), 0.25, swing=1.0, swing_unit=0.5)
+    assert [grid.position(0, s) for s in range(4)] == [0, 0.25, 0.5 + 0.5 / 3, 0.75]
+    assert grid.quantize(0.68) == pytest.approx(0.5 + 0.5 / 3)
+    hats = [n.start_time for n in generate_drums(Meter(), 1, "hiphop", random.Random(1), map_pads(None), swing=0.6, swing_unit=0.5)
+            if n.pitch == GM_NOTES["closed_hat"]]
+    assert hats[:4] == pytest.approx([0, 0.6, 1.0, 1.6])

@@ -8,12 +8,17 @@ trips for the model.
 from __future__ import annotations
 
 import inspect
+import json
 from collections.abc import Awaitable, Callable
+from importlib.resources import files
 from typing import Annotated, Any
 
 from mcp.server import MCPServer
+from mcp.server.apps import Apps
+from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from mcp_types import CallToolResult, InputRequiredResult, TextContent
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from midishower.bridge import BridgeClient, BridgeError
@@ -30,6 +35,8 @@ from midishower.compose import (
     apply_plan,
     build_plan,
 )
+from midishower.compose.plan import Plan, new_seed
+from midishower.mcp.confirm import confirm, request_state
 
 INSTRUCTIONS = """\
 MidiShower controls the Ableton Live 12 set that is open right now.
@@ -54,8 +61,18 @@ Composition:
 - transform_notes edits an existing clip by note_id (humanize, quantize,
   invert, arpeggiate, variation, transpose).
 - preview=true (or plan_changes) returns a diff without touching Live;
-  apply_plan(plan_id) then writes it as one undo step.
+  apply_plan(plan_id) then writes it as one undo step. Clients with MCP Apps
+  show the diff as a piano roll with an Apply button.
+- Deleting tracks or clips and replacing a clip's notes ask the user first
+  when the client supports it; a declined change returns CANCELLED.
 """
+
+PIANO_ROLL_URI = "ui://midishower/piano-roll.html"
+UI_META = {"ui": {"resourceUri": PIANO_ROLL_URI}}
+# Ops that delete something the user made; edit_notes removals are explicit by note_id and not asked.
+CONFIRM_OPS = {"track.delete", "clip.delete"}
+
+Runner = Callable[[dict[str, Any], Context | None], Awaitable[Any]]
 
 # (tool name, op, title); annotations come from the op spec.
 TOOL_OPS: list[tuple[str, str, str]] = [
@@ -155,25 +172,27 @@ def _signature_from_model(model: type[BaseModel], skip: tuple[str, ...] = ()) ->
 
 
 def _make_tool(
-    model: type[BaseModel], run: Callable[[dict[str, Any]], Awaitable[Any]], skip: tuple[str, ...] = (), extra: dict[str, Any] | None = None
+    model: type[BaseModel], run: Runner, skip: tuple[str, ...] = (), extra: dict[str, Any] | None = None
 ):
-    async def tool(**kwargs: Any) -> dict[str, Any]:
+    async def tool(ctx: Context | None = None, **kwargs: Any) -> Any:
         try:
-            result = await run(kwargs)
+            result = await run(kwargs, ctx)
         except BridgeError as exc:
             hint = f" Details: {exc.details}" if exc.details else ""
             raise ToolError(f"{exc.code}: {exc.message}.{hint}") from None
         except ValidationError as exc:
             errors = exc.errors(include_url=False, include_context=False)
             raise ToolError(f"INVALID_PARAMS: {errors}") from None
-        return result if isinstance(result, dict) else {"result": result}
+        if isinstance(result, dict | CallToolResult | InputRequiredResult):
+            return result
+        return {"result": result}
 
     signature = _signature_from_model(model, skip)
-    if extra:
-        params = list(signature.parameters.values())
-        for name, (annotation, default) in extra.items():
-            params.append(inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=default, annotation=annotation))
-        signature = signature.replace(parameters=params)
+    params = [inspect.Parameter("ctx", inspect.Parameter.KEYWORD_ONLY, default=None, annotation=Context | None)]
+    params += list(signature.parameters.values())
+    for name, (annotation, default) in (extra or {}).items():
+        params.append(inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=default, annotation=annotation))
+    signature = signature.replace(parameters=params)
     tool.__signature__ = signature  # type: ignore[attr-defined]
     tool.__annotations__ = {p.name: p.annotation for p in signature.parameters.values()} | {
         "return": signature.return_annotation
@@ -181,26 +200,66 @@ def _make_tool(
     return tool
 
 
+def _with_roll(plan: Plan, payload: dict[str, Any], applied: bool) -> CallToolResult:
+    """Text + structured result for the model, full before/after notes in _meta for the piano-roll view."""
+    roll = plan.roll() | {"applied": applied}
+    if applied:
+        roll.pop("plan_id")
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload, separators=(",", ":")))],
+        structured_content=payload,
+        _meta={"midishower/roll": roll},
+    )
+
+
+def _piano_roll_html() -> str:
+    return files("midishower.mcp").joinpath("piano_roll.html").read_text(encoding="utf-8")
+
+
 def build_server(client: BridgeClient | None = None) -> MCPServer:
     bridge = client or BridgeClient()
     plans = PlanStore()
+    apps = Apps()
+    apps.add_html_resource(
+        PIANO_ROLL_URI,
+        _piano_roll_html(),
+        name="piano-roll",
+        title="MidiShower piano roll",
+        description="Before/after piano roll of planned or applied note changes",
+        prefers_border=True,
+    )
     server = MCPServer(
         "midishower",
         title="MidiShower for Ableton Live",
         instructions=INSTRUCTIONS,
         version="0.1.0",
+        extensions=[apps],
     )
 
-    async def get_session(_: dict[str, Any]) -> dict[str, Any]:
+    async def get_session(_: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
         song = await bridge.call("song.get")
         tracks = await bridge.call("tracks.list")
         return {"song": song, **tracks}
 
-    async def get_clip(args: dict[str, Any]) -> dict[str, Any]:
+    async def get_clip(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
         clip = await bridge.call("clip.get", args)
         if clip.get("is_midi"):
             clip["notes"] = (await bridge.call("notes.get", args))["notes"]
         return clip
+
+    async def describe(op: str, params: dict[str, Any]) -> str:
+        """Human wording for a destructive op, with track and clip names."""
+        try:
+            tracks = (await bridge.call("tracks.list"))["tracks"]
+        except BridgeError:
+            tracks = []
+        track = tracks[params["track"]] if 0 <= params.get("track", -1) < len(tracks) else {}
+        track_name = f"track {params.get('track', 0) + 1} '{track.get('name', '?')}'"
+        if op == "track.delete":
+            clips = len(track.get("clips", []))
+            return f"Delete {track_name} with {clips} clip(s)?"
+        clip = next((c for c in track.get("clips", []) if c["slot"] == params.get("slot")), {})
+        return f"Delete clip '{clip.get('name') or 'unnamed'}' in slot {params.get('slot', 0) + 1} of {track_name}?"
 
     read_only = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
     server.add_tool(
@@ -221,7 +280,18 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
     for tool_name, op_name, title in TOOL_OPS:
         spec = get_op(op_name)
 
-        async def run(args: dict[str, Any], _op: str = op_name) -> Any:
+        async def run(args: dict[str, Any], ctx: Context | None, _op: str = op_name) -> Any:
+            if _op in CONFIRM_OPS:
+                asked = await confirm(ctx, await describe(_op, args))
+                if asked is not None:
+                    return asked
+            elif _op == "batch":
+                risky = [item for item in args.get("ops", []) if _item_op(item) in CONFIRM_OPS]
+                if risky:
+                    questions = [await describe(_item_op(i), _item_params(i)) for i in risky]
+                    asked = await confirm(ctx, "Run this batch? It will " + " ".join(q[0].lower() + q[1:] for q in questions))
+                    if asked is not None:
+                        return asked
             return await bridge.call(_op, args)
 
         server.add_tool(
@@ -237,20 +307,33 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             ),
         )
 
+    async def ask_before_replacing(plan: Plan, ctx: Context | None, state: dict[str, Any] | None = None):
+        removed = plan.removes_existing
+        if not removed:
+            return None
+        clips = ", ".join(f"track {c.track + 1} slot {c.slot + 1}" for c in plan.changes if c.removes_existing)
+        return await confirm(ctx, f"Replace {removed} existing note(s) in {clips}?", state)
+
     for tool_name, model, title, description in COMPOSE_TOOLS:
 
-        async def compose(args: dict[str, Any], _model: type[BaseModel] = model) -> dict[str, Any]:
+        async def compose(args: dict[str, Any], ctx: Context | None, _model: type[BaseModel] = model) -> Any:
             args = dict(args)
             preview = args.pop("preview", False)
+            if args.get("seed") is None:
+                # Keep the idea stable across a confirmation round trip.
+                args["seed"] = request_state(ctx).get("seed", new_seed())
             spec = _model.model_validate(args)
             plan = await build_plan(bridge.call, [spec])
             if preview:
                 plans.put(plan)
-                return {**plan.preview(), "next": "apply_plan(plan_id) writes this as one undo step"}
+                return _with_roll(plan, {**plan.preview(), "next": "apply_plan(plan_id) writes this as one undo step"}, False)
+            asked = await ask_before_replacing(plan, ctx, {"seed": args["seed"]})
+            if asked is not None:
+                return asked
             applied = await apply_plan(bridge.call, plan, verify=False)
             result = plan.preview()
             result.pop("plan_id")
-            return {**result, "applied": applied["applied"]}
+            return _with_roll(plan, {**result, "applied": applied["applied"]}, True)
 
         server.add_tool(
             _make_tool(model, compose, skip=("kind",), extra={"preview": (Annotated[bool, PREVIEW_FIELD], False)}),
@@ -258,16 +341,24 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             title=title,
             description=description,
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
+            meta=UI_META,
         )
 
-    async def plan_changes(args: dict[str, Any]) -> dict[str, Any]:
+    async def plan_changes(args: dict[str, Any], ctx: Context | None) -> Any:
         request = PlanChanges.model_validate(args)
         plan = await build_plan(bridge.call, list(request.steps))
         plans.put(plan)
-        return {**plan.preview(), "next": "apply_plan(plan_id) writes all steps as one undo step"}
+        return _with_roll(plan, {**plan.preview(), "next": "apply_plan(plan_id) writes all steps as one undo step"}, False)
 
-    async def run_plan(args: dict[str, Any]) -> dict[str, Any]:
-        plan = plans.pop(args["plan_id"])
+    async def run_plan(args: dict[str, Any], ctx: Context | None) -> Any:
+        plan = plans.get(args["plan_id"])
+        if plan is None:
+            plans.pop(args["plan_id"])  # raises NOT_FOUND
+        assert plan is not None
+        asked = await ask_before_replacing(plan, ctx)
+        if asked is not None:
+            return asked
+        plans.pop(plan.id)
         try:
             return await apply_plan(bridge.call, plan)
         except BridgeError as exc:
@@ -283,6 +374,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         "Later steps see earlier ones: bass can follow_kick a planned drum clip, and harmonic steps without chords "
         "share the first step's chords. Returns a diff preview and a plan_id.",
         annotations=read_only,
+        meta=UI_META,
     )
     server.add_tool(
         _make_tool(ApplyPlan, run_plan),
@@ -293,3 +385,11 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     )
     return server
+
+
+def _item_op(item: Any) -> str:
+    return item.op if hasattr(item, "op") else item.get("op", "")
+
+
+def _item_params(item: Any) -> dict[str, Any]:
+    return item.params if hasattr(item, "params") else item.get("params", {})

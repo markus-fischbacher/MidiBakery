@@ -247,9 +247,10 @@ def generate_drums(
     drum_map: DrumMap,
     density: float = 0.5,
     swing: float = 0.0,
+    swing_unit: float = 0.25,
     fills: bool = True,
 ) -> list[Note]:
-    grid = Grid(meter, 0.25, swing)
+    grid = Grid(meter, 0.25, swing, swing_unit)
     core = _core_choices(style, grid, rng, density)
     hits: list[Hit] = []
     for bar in range(bars):
