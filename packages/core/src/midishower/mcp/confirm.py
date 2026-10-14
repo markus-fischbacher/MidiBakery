@@ -11,6 +11,7 @@ and on Live's undo.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from mcp.server.mcpserver import Context
@@ -32,6 +33,17 @@ SCHEMA = {
     },
     "required": ["confirm"],
 }
+
+
+log = logging.getLogger("midishower.confirm")
+_reported: set[str] = set()
+
+
+def _report_once(reason: str) -> None:
+    """Say once per process why destructive calls run unconfirmed (shows up in the client's MCP log)."""
+    if reason not in _reported:
+        _reported.add(reason)
+        log.warning("destructive changes run without confirmation: %s", reason)
 
 
 class ConfirmForm(BaseModel):
@@ -84,7 +96,13 @@ async def confirm(ctx: Context | None, message: str, state: dict[str, Any] | Non
     user declined.
     """
     capabilities = _capabilities(ctx)
-    if ctx is None or capabilities is None or capabilities.elicitation is None:
+    if ctx is None:
+        return None
+    if capabilities is None:
+        _report_once("the client declared no capabilities")
+        return None
+    if capabilities.elicitation is None:
+        _report_once("the client does not declare the elicitation capability")
         return None
 
     if _modern(ctx):

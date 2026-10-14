@@ -169,7 +169,10 @@ class ClipSlot(LiveObject):
 
 
 class Track(LiveObject):
+    _ptrs = itertools.count(0x7000)
+
     def __init__(self, name, midi=True, scenes=8):
+        self._live_ptr = next(Track._ptrs)
         self.name = name
         self.has_midi_input = midi
         self.is_foldable = False

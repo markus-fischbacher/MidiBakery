@@ -55,8 +55,8 @@ def new_seed() -> int:
     return secrets.randbelow(2**31)
 
 
-def _fingerprint(exists: bool, is_midi: bool, length: float | None, notes: list[dict] | None) -> str:
-    payload = [exists, is_midi, length, sorted(tuple(sorted(n.items())) for n in notes or [])]
+def _fingerprint(track: tuple, exists: bool, is_midi: bool, length: float | None, notes: list[dict] | None) -> str:
+    payload = [track, exists, is_midi, length, sorted(tuple(sorted(n.items())) for n in notes or [])]
     return hashlib.sha256(json.dumps(payload, default=str).encode()).hexdigest()[:16]
 
 
@@ -67,10 +67,12 @@ class ClipState:
     length: float | None = None
     notes: list[dict] | None = None
     planned: bool = False
+    # (id, name, kind) of the track: indices shift when tracks are added or deleted.
+    track: tuple = ()
 
     @property
     def fingerprint(self) -> str:
-        return _fingerprint(self.exists, self.is_midi, self.length, self.notes)
+        return _fingerprint(self.track, self.exists, self.is_midi, self.length, self.notes)
 
 
 class Session:
@@ -110,13 +112,14 @@ class Session:
         if slot >= scenes:
             raise BridgeError("NOT_FOUND", f"No clip slot {slot} (song has {scenes} scenes; create a scene first)", {"slot": slot})
         found = next((c for c in info.get("clips", []) if c["slot"] == slot), None)
+        identity = (info.get("id"), info.get("name"), info.get("kind"))
         if found is None:
-            state = ClipState(False)
+            state = ClipState(False, track=identity)
         elif not found.get("is_midi"):
-            state = ClipState(True, False, found.get("length"))
+            state = ClipState(True, False, found.get("length"), track=identity)
         else:
             notes = (await self._call("notes.get", {"track": track, "slot": slot}))["notes"]
-            state = ClipState(True, True, found.get("length"), notes)
+            state = ClipState(True, True, found.get("length"), notes, track=identity)
         self._clips[key] = state
         return state
 
@@ -522,22 +525,47 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
     return plan
 
 
+async def _roll_back(call: Call, plan: Plan, error: BridgeError) -> None:
+    """A batch stops at its first failing op but keeps what already ran (one undo step).
+    Undo that step so a plan is applied completely or not at all. Only when ops did
+    run: undoing an empty batch would revert the user's previous action instead."""
+    if not error.details.get("completed"):
+        return
+    try:
+        await call("history.step", {"action": "undo"})
+    except BridgeError as undo_error:
+        error.message += f" (rolling back the {len(error.details['completed'])} completed op(s) failed: {undo_error.message})"
+        return
+    error.message += f"; the {len(error.details['completed'])} op(s) that had already run were undone, Live is unchanged"
+    error.details["rolled_back"] = True
+
+
 async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, Any]:
     """Run the plan as one batch (one undo step) after checking nothing changed underneath it."""
     if verify:
         session = await Session(call).load()
         for (track, slot), expected in plan.fingerprints.items():
-            state = await session.clip(track, slot, include_planned=False)
-            if state.fingerprint != expected:
+            try:
+                state = await session.clip(track, slot, include_planned=False)
+            except BridgeError as exc:
+                if exc.code != "NOT_FOUND":
+                    raise
+                state = None
+            if state is None or state.fingerprint != expected:
                 raise BridgeError(
                     "CONFLICT",
-                    f"Clip {track}/{slot} changed since plan {plan.id} was made; plan again",
+                    f"Clip {track}/{slot} or its track changed since plan {plan.id} was made "
+                    "(tracks added, deleted or edited); plan again",
                     {"track": track, "slot": slot},
                 )
     ops = plan.ops()
     applied: list[dict[str, Any]] = []
     if ops:
-        results = (await call("batch", {"ops": ops, "label": f"MidiShower plan {plan.id}"}))["results"]
+        try:
+            results = (await call("batch", {"ops": ops, "label": f"MidiShower plan {plan.id}"}))["results"]
+        except BridgeError as exc:
+            await _roll_back(call, plan, exc)
+            raise
         cursor = 0
         for change in plan.changes:
             entry: dict[str, Any] = {"track": change.track, "slot": change.slot, "kind": change.kind}

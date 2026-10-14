@@ -8,6 +8,11 @@ def _kind(track):
     return "midi" if track.has_midi_input else "audio"
 
 
+def _track_id(track):
+    ptr = getattr(track, "_live_ptr", None)
+    return int(ptr) if ptr is not None else None
+
+
 def _clamp_param(param, value):
     return max(param.min, min(param.max, value))
 
@@ -30,6 +35,8 @@ def tracks_list(ctx, params):
                 })
         tracks.append({
             "index": index,
+            # Stable for the track's lifetime while indices shift; lets the core detect stale plans.
+            "id": _track_id(track),
             "name": track.name,
             "kind": _kind(track),
             "color_index": track.color_index,

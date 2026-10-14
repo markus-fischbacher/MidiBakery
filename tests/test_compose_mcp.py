@@ -193,3 +193,38 @@ async def test_transform_notes_is_a_diff(client, live):
 
     with pytest.raises(ToolError, match="NOT_FOUND"):
         await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "invert", "note_ids": [9999]})
+
+
+async def test_apply_detects_shifted_tracks(client, live):
+    plan = await build_plan(client.call, [DrumsSpec(track=1, slot=0, seed=1)])
+    # A new, empty track with the same name and kind takes index 1: only the track id differs.
+    await client.call("track.create", {"kind": "midi", "index": 1, "name": "2-MIDI"})
+    with pytest.raises(BridgeError) as exc:
+        await apply_plan(client.call, plan)
+    assert exc.value.code == "CONFLICT"
+    await client.call("track.delete", {"track": 0})
+    await client.call("track.delete", {"track": 0})
+    with pytest.raises(BridgeError) as exc:  # index 1 no longer exists
+        await apply_plan(client.call, plan)
+    assert exc.value.code == "CONFLICT"
+
+
+async def test_failed_batch_is_rolled_back(client, live):
+    plan = await build_plan(client.call, [DrumsSpec(track=0, slot=0, seed=1), DrumsSpec(track=1, slot=0, seed=2)])
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})  # second clip.create will now fail
+    undo_before = live.on_main(lambda: live.song.undo_calls)
+    with pytest.raises(BridgeError) as exc:
+        await apply_plan(client.call, plan, verify=False)
+    assert exc.value.code == "CONFLICT" and exc.value.details["rolled_back"] is True
+    assert "undone" in exc.value.message
+    assert live.on_main(lambda: live.song.undo_calls) == undo_before + 1
+
+
+async def test_failure_on_first_op_does_not_undo(client, live):
+    plan = await build_plan(client.call, [DrumsSpec(track=0, slot=0, seed=1)])
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 4})
+    undo_before = live.on_main(lambda: live.song.undo_calls)
+    with pytest.raises(BridgeError) as exc:
+        await apply_plan(client.call, plan, verify=False)
+    assert "rolled_back" not in exc.value.details
+    assert live.on_main(lambda: live.song.undo_calls) == undo_before
