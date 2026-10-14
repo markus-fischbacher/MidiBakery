@@ -1,0 +1,543 @@
+{
+  "ops": {
+    "batch": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "label": [
+          "string",
+          "null"
+        ],
+        "ops": [
+          "array"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "ops"
+      ]
+    },
+    "clip.create": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "length": [
+          "number"
+        ],
+        "name": [
+          "string",
+          "null"
+        ],
+        "slot": [
+          "integer"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "slot",
+        "track"
+      ]
+    },
+    "clip.delete": {
+      "destructive": true,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "slot": [
+          "integer"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "slot",
+        "track"
+      ]
+    },
+    "clip.get": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "slot": [
+          "integer"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": true,
+      "required": [
+        "slot",
+        "track"
+      ]
+    },
+    "clip.launch": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "action": [
+          "string"
+        ],
+        "slot": [
+          "integer"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "slot",
+        "track"
+      ]
+    },
+    "clip.set": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "color_index": [
+          "integer",
+          "null"
+        ],
+        "loop_end": [
+          "number",
+          "null"
+        ],
+        "loop_start": [
+          "number",
+          "null"
+        ],
+        "looping": [
+          "boolean",
+          "null"
+        ],
+        "name": [
+          "string",
+          "null"
+        ],
+        "slot": [
+          "integer"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "slot",
+        "track"
+      ]
+    },
+    "device.insert": {
+      "destructive": false,
+      "min_live": [
+        12,
+        3,
+        0
+      ],
+      "properties": {
+        "index": [
+          "integer"
+        ],
+        "name": [
+          "string"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "name",
+        "track"
+      ]
+    },
+    "device.params": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "device": [
+          "integer"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": true,
+      "required": [
+        "device",
+        "track"
+      ]
+    },
+    "device.set_param": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "device": [
+          "integer"
+        ],
+        "parameter": [
+          "integer",
+          "string"
+        ],
+        "track": [
+          "integer"
+        ],
+        "value": [
+          "number"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "device",
+        "parameter",
+        "track",
+        "value"
+      ]
+    },
+    "history.step": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "action": [
+          "string"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "action"
+      ]
+    },
+    "live.health": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {},
+      "read_only": true,
+      "required": []
+    },
+    "notes.apply": {
+      "destructive": true,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "add": [
+          "array"
+        ],
+        "modify": [
+          "array"
+        ],
+        "remove": [
+          "array"
+        ],
+        "slot": [
+          "integer"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "slot",
+        "track"
+      ]
+    },
+    "notes.get": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "from_pitch": [
+          "integer"
+        ],
+        "from_time": [
+          "number"
+        ],
+        "pitch_span": [
+          "integer"
+        ],
+        "slot": [
+          "integer"
+        ],
+        "time_span": [
+          "number",
+          "null"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": true,
+      "required": [
+        "slot",
+        "track"
+      ]
+    },
+    "scene.create": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "index": [
+          "integer"
+        ],
+        "name": [
+          "string",
+          "null"
+        ]
+      },
+      "read_only": false,
+      "required": []
+    },
+    "scene.fire": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "scene": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "scene"
+      ]
+    },
+    "song.get": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {},
+      "read_only": true,
+      "required": []
+    },
+    "song.set": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "loop": [
+          "boolean",
+          "null"
+        ],
+        "loop_length": [
+          "number",
+          "null"
+        ],
+        "loop_start": [
+          "number",
+          "null"
+        ],
+        "metronome": [
+          "boolean",
+          "null"
+        ],
+        "root_note": [
+          "integer",
+          "null"
+        ],
+        "scale_mode": [
+          "boolean",
+          "null"
+        ],
+        "scale_name": [
+          "string",
+          "null"
+        ],
+        "signature_denominator": [
+          "integer",
+          "null"
+        ],
+        "signature_numerator": [
+          "integer",
+          "null"
+        ],
+        "tempo": [
+          "number",
+          "null"
+        ]
+      },
+      "read_only": false,
+      "required": []
+    },
+    "track.create": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "index": [
+          "integer"
+        ],
+        "kind": [
+          "string"
+        ],
+        "name": [
+          "string",
+          "null"
+        ]
+      },
+      "read_only": false,
+      "required": []
+    },
+    "track.delete": {
+      "destructive": true,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "track"
+      ]
+    },
+    "track.set": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "arm": [
+          "boolean",
+          "null"
+        ],
+        "color_index": [
+          "integer",
+          "null"
+        ],
+        "mute": [
+          "boolean",
+          "null"
+        ],
+        "name": [
+          "string",
+          "null"
+        ],
+        "pan": [
+          "number",
+          "null"
+        ],
+        "solo": [
+          "boolean",
+          "null"
+        ],
+        "track": [
+          "integer"
+        ],
+        "volume": [
+          "number",
+          "null"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "track"
+      ]
+    },
+    "tracks.list": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {},
+      "read_only": true,
+      "required": []
+    },
+    "transport.control": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "action": [
+          "string"
+        ],
+        "from_beat": [
+          "number",
+          "null"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "action"
+      ]
+    }
+  },
+  "protocol": 1
+}

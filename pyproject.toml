@@ -1,0 +1,21 @@
+[project]
+name = "midishower-workspace"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["midishower"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/core"]
+
+[tool.uv.sources]
+midishower = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

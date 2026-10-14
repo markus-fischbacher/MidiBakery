@@ -1,0 +1,19 @@
+[project]
+name = "midishower"
+version = "0.1.0"
+description = "AI composition and session control for Ableton Live 12"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=2.3",
+    "pydantic>=2.14",
+]
+
+[project.scripts]
+midishower = "midishower.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/midishower"]
