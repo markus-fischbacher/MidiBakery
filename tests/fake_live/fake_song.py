@@ -25,6 +25,9 @@ class Parameter(LiveObject):
 
 
 class Device(LiveObject):
+    can_have_drum_pads = False
+    can_have_chains = False
+
     def __init__(self, name):
         self.name = name
         self.class_name = name.replace(" ", "")
@@ -33,6 +36,56 @@ class Device(LiveObject):
             Parameter("Volume", 0.5, 0.0, 1.0),
             Parameter("Filter Freq", 1000.0, 20.0, 20000.0),
         ]
+
+
+class Chain(LiveObject):
+    def __init__(self, name, devices=()):
+        self.name = name
+        self.devices = list(devices)
+
+
+class DrumChain(Chain):
+    """Live 12.3+ chain with in_note."""
+
+    def __init__(self, name, in_note):
+        Chain.__init__(self, name)
+        self.in_note = in_note
+
+
+class DrumPad(LiveObject):
+    def __init__(self, note):
+        self.note = note
+        self.name = "Empty"
+        self.chains = []
+
+
+class DrumRackDevice(Device):
+    """legacy=True models Live < 12.3: chains have no in_note, pads carry the mapping."""
+
+    can_have_drum_pads = True
+    can_have_chains = True
+
+    def __init__(self, name="Drum Rack", legacy=False):
+        Device.__init__(self, name)
+        self.class_name = "DrumGroupDevice"
+        self.legacy = legacy
+        self.chains = []
+        self.drum_pads = [DrumPad(n) for n in range(128)]
+
+    def add_pad(self, name, note):
+        chain = Chain(name) if self.legacy else DrumChain(name, note)
+        self.chains.append(chain)
+        pad = self.drum_pads[note]
+        pad.name = name
+        pad.chains = [chain]
+
+
+class RackDevice(Device):
+    can_have_chains = True
+
+    def __init__(self, name, chains):
+        Device.__init__(self, name)
+        self.chains = list(chains)
 
 
 class Mixer(LiveObject):
@@ -132,7 +185,7 @@ class Track(LiveObject):
     def insert_device(self, name, index):
         if name not in NATIVE_DEVICES:
             raise RuntimeError("Unknown device")
-        self.devices.insert(index, Device(name))
+        self.devices.insert(index, DrumRackDevice() if name == "Drum Rack" else Device(name))
 
 
 class Scene(LiveObject):

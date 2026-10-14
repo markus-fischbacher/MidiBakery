@@ -8,7 +8,7 @@ See [docs/KONZEPT.md](docs/KONZEPT.md) for the architecture and roadmap.
 
 | Path | What |
 |---|---|
-| `packages/core` | `midishower` Python package: op catalog, bridge client, MCP server, CLI |
+| `packages/core` | `midishower` Python package: op catalog, bridge client, composition engine (`compose/`), MCP server, CLI |
 | `packages/remote_script/MidiShower` | Remote Script loaded by Live (stdlib only, Python 3.11) |
 | `tests/` | Contract tests: real Remote Script + fake Live Object Model over a real socket |
 

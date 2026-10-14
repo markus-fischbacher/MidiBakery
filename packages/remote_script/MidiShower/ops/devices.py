@@ -79,3 +79,48 @@ def device_set_param(ctx, params):
         raise OpError(ErrorCode.CONFLICT, "Parameter '%s' is disabled (automated or mapped)" % param.name)
     param.value = value
     return _param_dict(index, param)
+
+
+def _drum_racks(devices):
+    """Drum Racks in a device list, one level into Instrument/Effect Rack chains."""
+    for device in devices:
+        if getattr(device, "can_have_drum_pads", False):
+            yield device
+        elif getattr(device, "can_have_chains", False):
+            for chain in device.chains:
+                for inner in chain.devices:
+                    if getattr(inner, "can_have_drum_pads", False):
+                        yield inner
+
+
+def _pads(rack):
+    pads = []
+    chains = list(rack.chains)
+    if chains and hasattr(chains[0], "in_note"):
+        # Live 12.3+: DrumChain.in_note is the note that triggers the chain.
+        for chain in chains:
+            note = chain.in_note
+            if 0 <= note <= 127:
+                pads.append({"note": int(note), "name": chain.name})
+    else:
+        for pad in rack.drum_pads:
+            if len(pad.chains):
+                pads.append({"note": int(pad.note), "name": pad.name})
+    pads.sort(key=lambda p: p["note"])
+    return pads
+
+
+@op("drum_rack.pads")
+def drum_rack_pads(ctx, params):
+    track = ctx.track(params["track"])
+    index = params.get("device")
+    if index is not None:
+        device = ctx.device(params["track"], index)
+        if not getattr(device, "can_have_drum_pads", False):
+            raise OpError(ErrorCode.INVALID_PARAMS, "Device %d on track %d is not a Drum Rack" % (index, params["track"]))
+        rack = device
+    else:
+        rack = next(_drum_racks(track.devices), None)
+        if rack is None:
+            raise OpError(ErrorCode.NOT_FOUND, "No Drum Rack on track %d" % params["track"], track=params["track"])
+    return {"name": rack.name, "pads": _pads(rack)}

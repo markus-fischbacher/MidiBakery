@@ -1,4 +1,4 @@
-"""Phase-1 op catalog: session, transport, tracks, clips, notes, devices, scenes."""
+"""Op catalog: session, transport, tracks, clips, notes, devices, drum racks, scenes."""
 
 from __future__ import annotations
 
@@ -167,6 +167,13 @@ class DeviceRef(Params):
     device: Annotated[int, Field(ge=0)]
 
 
+class DrumPadsGet(Params):
+    track: TrackIndex
+    device: Annotated[int, Field(ge=0)] | None = Field(
+        None, description="Drum Rack device index; default: first Drum Rack on the track (also inside racks)"
+    )
+
+
 class DeviceParamSet(Params):
     track: TrackIndex
     device: Annotated[int, Field(ge=0)]
@@ -223,6 +230,7 @@ for spec in [
     OpSpec("notes.apply", NotesApply, "Add, modify and remove notes by id", read_only=False, destructive=True),
     OpSpec("device.insert", DeviceInsert, "Insert a native Live device", read_only=False, min_live=(12, 3, 0)),
     OpSpec("device.params", DeviceRef, "Parameters of a device with ranges and display values", read_only=True),
+    OpSpec("drum_rack.pads", DrumPadsGet, "Filled Drum Rack pads with their MIDI note and name", read_only=True),
     OpSpec("device.set_param", DeviceParamSet, "Set one device parameter", read_only=False),
     OpSpec("scene.create", SceneCreate, "Create a scene", read_only=False),
     OpSpec("scene.fire", SceneRef, "Launch a scene", read_only=False),
