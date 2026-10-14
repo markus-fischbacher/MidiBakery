@@ -96,7 +96,9 @@ async def main() -> int:
         if after and after["tempo"] != original_tempo:
             failures += 1
             print(f"  FAIL  undo did not restore tempo: {after['tempo']} != {original_tempo}")
-        failures += await compose_checks(client, track, step, after or song or {})
+        # Not `failures += await ...`: step() increments failures while the await runs.
+        compose_failures = await compose_checks(client, track, step, after or song or {})
+        failures += compose_failures
     finally:
         await step("track.delete (cleanup)", "track.delete", {"track": track})
         await client.close()
