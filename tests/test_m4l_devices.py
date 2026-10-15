@@ -55,6 +55,17 @@ def test_parameters_are_unique_and_registered(devices):
         assert len(names) == len(set(names)), names
 
 
+def test_midi_tool_controls_fit_the_clip_view_panel(devices):
+    """Live gives MIDI Tools a small fixed panel; anything outside it is cut off."""
+    for name in ("MidiShower Generator", "MidiShower Transform"):
+        _, patcher = build.read_amxd(devices[name])
+        assert patcher["patcher"]["devicewidth"] == build.TOOL_WIDTH
+        rects = [b["presentation_rect"] for b in _boxes(patcher).values() if b.get("presentation")]
+        assert rects
+        for x, y, w, h in rects:
+            assert x >= 0 and y >= 0 and x + w <= build.TOOL_WIDTH and y + h <= build.TOOL_HEIGHT, (name, x, y, w, h)
+
+
 def test_chat_device_passes_midi_through(devices):
     _, patcher = build.read_amxd(devices["MidiShower Chat"])
     texts = {b.get("text") for b in _boxes(patcher).values()}
