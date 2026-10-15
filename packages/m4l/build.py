@@ -97,20 +97,43 @@ class Patcher:
     def connect(self, source: str, outlet: int, destination: str, inlet: int = 0) -> None:
         self.lines.append({"patchline": {"source": [source, outlet], "destination": [destination, inlet]}})
 
-    def to_json(self, *, kind: str, width: float, height: float) -> dict[str, Any]:
+    def to_json(self, *, kind: str, title: str, width: float, height: float) -> dict[str, Any]:
         return {"patcher": {
             "fileversion": 1,
+            "title": title,
             "appversion": {"major": 9, "minor": 1, "revision": 0, "architecture": "x64", "modernui": 1},
             "classnamespace": "box",
             "rect": [100.0, 100.0, 900.0, 600.0],
             "openrect": [0.0, 0.0, width, height],
+            "bglocked": 0,
             "openinpresentation": 1,
             "default_fontsize": 10.0,
             "default_fontface": 0,
             "default_fontname": "Arial Bold",
+            "gridonopen": 1,
             "gridsize": [8.0, 8.0],
+            "gridsnaponopen": 1,
+            "objectsnaponopen": 1,
+            "statusbarvisible": 2,
+            "toolbarvisible": 1,
+            "lefttoolbarpinned": 0,
+            "toptoolbarpinned": 0,
+            "righttoolbarpinned": 0,
+            "bottomtoolbarpinned": 0,
+            "toolbars_unpinned_last_save": 0,
+            "tallnewobj": 0,
+            "boxanimatetime": 500,
+            "enablehscroll": 1,
+            "enablevscroll": 1,
             "devicewidth": width,
             "description": "MidiShower - AI composition for Ableton Live",
+            "digest": "",
+            "tags": "",
+            "style": "",
+            "subpatcher_template": "",
+            "assistshowspatchername": 0,
+            "platform_compatibility": 0,
+            "saved_attribute_attributes": {"default_plcolor": {"expression": ""}},
             "boxes": self.boxes,
             "lines": self.lines,
             "parameters": {**self.parameters, "parameterbanks": {}, "inherited_shortname": 1},
@@ -119,13 +142,29 @@ class Patcher:
             "is_mpe": 0,
             "minimum_live_version": "12.2",
             "minimum_max_version": "9.1",
+            # Max dereferences every one of these keys when loading a device; a missing
+            # "searchpath" crashes Live 12.4 (MaxPlugLib project_deserialize_searchpath).
+            # Mirrors the project block of Live's own Max device templates.
             "project": {
                 "version": 1,
+                "creationdate": 3590052493,
+                "modificationdate": 3590052493,
+                "viewrect": [25.0, 124.0, 300.0, 500.0],
+                "autoorganize": 1,
+                "hideprojectwindow": 1,
+                "showdependencies": 1,
+                "autolocalize": 0,
+                "contents": {"patchers": {}},
+                "layout": {},
+                "searchpath": {},
+                "detailsvisible": 0,
                 "amxdtype": int.from_bytes(DEVICE_TYPES[kind], "big"),
+                "readonly": 0,
                 "devpathtype": 0,
                 "devpath": ".",
-                "readonly": 0,
-                "contents": {"patchers": {}},
+                "sortmode": 0,
+                "viewmode": 0,
+                "includepackages": 0,
             },
             "autosave": 0,
         }}
@@ -184,7 +223,7 @@ def chat_device() -> dict[str, Any]:
     p.connect(popout, 0, trigger)
     p.connect(trigger, 0, msg)
     p.connect(msg, 0, node)
-    return p.to_json(kind="midi_effect", width=width, height=height)
+    return p.to_json(kind="midi_effect", title="MidiShower Chat", width=width, height=height)
 
 
 def _miditool_core(p: Patcher, mode: str) -> tuple[str, str]:
@@ -282,7 +321,7 @@ def generator_device() -> dict[str, Any]:
     swing = _dial(p, (820, 240, 44, 48), (60, 50, 50, 48), "Swing", "Swing", 0.0)
     _param_to_v8(p, swing, "swing", v8, 820, 360)
     _seed_controls(p, v8, ui["seed_feedback"], (160, 54, 50, 16), (160, 76, 50, 16), (124, 55, 34, 14))
-    return p.to_json(kind="generator", width=width, height=height)
+    return p.to_json(kind="generator", title="MidiShower Generator", width=width, height=height)
 
 
 def transform_device() -> dict[str, Any]:
@@ -305,7 +344,7 @@ def transform_device() -> dict[str, Any]:
     _param_to_v8(p, rate, "rate", v8, 900, 110)
     p.comment("Arp rate", (900, 60, 50, 18), presentation=(110, 26, 50, 14), fontsize=9.0)
     _seed_controls(p, v8, ui["seed_feedback"], (200, 40, 50, 16), (200, 60, 50, 16), (200, 26, 34, 14))
-    return p.to_json(kind="transformation", width=width, height=height)
+    return p.to_json(kind="transformation", title="MidiShower Transform", width=width, height=height)
 
 
 DEVICES = {
