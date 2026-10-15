@@ -24,14 +24,13 @@ from typing import Any
 
 from midishower.bridge.client import BridgeError
 from midishower.compose import harmony as harmony_mod
-from midishower.compose import transform as tf
 from midishower.compose.bass import generate_bass
 from midishower.compose.chords import generate_chords
 from midishower.compose.drums import DrumMap, generate_drums, kick_times, map_pads
 from midishower.compose.harmony import Harmony
 from midishower.compose.melody import generate_melody
 from midishower.compose.notes import Note, fit_to_length
-from midishower.compose.rhythm import Grid, Meter
+from midishower.compose.rhythm import Meter
 from midishower.compose.specs import (
     BassSpec,
     ChordsSpec,
@@ -44,6 +43,7 @@ from midishower.compose.specs import (
     SWING_UNITS,
     TransformSpec,
 )
+from midishower.compose.standalone import run_transform
 from midishower.compose.theory import Scale, pitch_name
 
 Call = Callable[..., Awaitable[Any]]
@@ -461,24 +461,11 @@ async def _plan_transform(session: Session, spec: TransformSpec) -> ClipChange:
         wanted = set(spec.note_ids)
         notes = [n for n in notes if n["note_id"] in wanted]
     seed = spec.seed if spec.seed is not None else new_seed()
-    rng = random.Random(seed)
-    scale = session.scale
     op = spec.operation
-    if op == "humanize":
-        diff = tf.humanize(notes, rng, spec.amount)
-    elif op == "quantize":
-        diff = tf.quantize(notes, Grid(session.meter, spec.grid, spec.swing, SWING_UNITS[spec.swing_unit]), spec.strength)
-    elif op == "invert":
-        diff = tf.invert(notes, scale, spec.axis)
-    elif op == "transpose":
-        diff = tf.transpose(notes, scale, spec.steps)
-    elif op == "arpeggiate":
-        diff = tf.arpeggiate(notes, rng, spec.rate, spec.direction, octaves=spec.octaves)
-        diff.add = fit_to_length(diff.add, state.length or float("inf"))
-    elif op == "variation":
-        diff = tf.variation(notes, rng, scale, spec.amount)
-    else:  # pragma: no cover - guarded by the schema
-        raise BridgeError("INVALID_PARAMS", f"unknown operation {op!r}")
+    try:
+        diff = run_transform(spec, notes, session.scale, session.meter, state.length, seed)
+    except ValueError as exc:
+        raise BridgeError("INVALID_PARAMS", str(exc)) from None
     uses_seed = op in ("humanize", "variation", "arpeggiate")
     return ClipChange(
         spec.track, spec.slot, "transform", seed if uses_seed else None, None, diff.add, diff.modify, diff.remove,

@@ -86,6 +86,77 @@ def cmd_mcp(args: argparse.Namespace) -> int:
     return 0
 
 
+def _provider_factory(default_kind: str, default_model: str | None):
+    from midishower.agent import make_provider
+
+    def factory(options: dict[str, str]):
+        kind = options.get("provider") or default_kind
+        model = options.get("model") or (default_model if kind == default_kind else None)
+        return make_provider(kind, model)
+
+    return factory
+
+
+def cmd_api(args: argparse.Namespace) -> int:
+    from midishower.api import serve
+
+    serve(_provider_factory(args.provider, args.model), port=args.port)
+    return 0
+
+
+def cmd_chat(args: argparse.Namespace) -> int:
+    from midishower.agent import REDUCED_TOOLS, Agent, ToolHost
+    from midishower.agent.loop import describe_input
+    from midishower.bridge import BridgeClient
+    from midishower.mcp import build_server
+
+    provider = _provider_factory(args.provider, args.model)({})
+
+    async def confirm(message: str) -> bool:
+        answer = await asyncio.to_thread(input, f"\n? {message} [y/N] ")
+        return answer.strip().lower() in ("y", "yes", "j", "ja")
+
+    async def emit(event: dict) -> None:
+        kind = event["type"]
+        if kind == "text":
+            print(event["text"], end="", flush=True)
+        elif kind == "tool_call":
+            print(f"\n  -> {event['name']} {describe_input(event['input'])}", flush=True)
+        elif kind == "tool_result" and event["is_error"]:
+            print(f"  !! {describe_input(event['result'])}", flush=True)
+        elif kind == "error":
+            print(f"\n[error] {event['message']}", flush=True)
+        elif kind == "done":
+            usage = event.get("usage") or {}
+            tokens = f"{usage.get('input_tokens', '?')} in / {usage.get('output_tokens', '?')} out"
+            if usage.get("cache_read_input_tokens"):
+                tokens += f", {usage['cache_read_input_tokens']} cached"
+            print(f"\n[{tokens}]", flush=True)
+
+    async def run() -> int:
+        bridge = BridgeClient()
+        allowed = REDUCED_TOOLS if args.reduced or provider.name == "ollama" else None
+        try:
+            async with ToolHost(build_server(bridge), confirm, allowed) as host:
+                agent = Agent(provider, host)
+                print(f"MidiShower chat ({provider.name}, {provider.model}, {len(host.tools)} tools). Empty line or Ctrl-D quits, /reset forgets.")
+                while True:
+                    try:
+                        text = await asyncio.to_thread(input, "\n> ")
+                    except EOFError:
+                        return 0
+                    if not text.strip():
+                        return 0
+                    if text.strip() == "/reset":
+                        agent.reset()
+                        continue
+                    await agent.send(text, emit)
+        finally:
+            await bridge.close()
+
+    return asyncio.run(run())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="midishower")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -94,6 +165,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--http", action="store_true", help="serve Streamable HTTP on 127.0.0.1 instead of stdio")
     p.add_argument("--port", type=int, default=8765)
     p.set_defaults(func=cmd_mcp)
+
+    for name, helptext in (("chat", "chat with the agent in the terminal"), ("api", "run the local API for the Max for Live devices")):
+        p = sub.add_parser(name, help=helptext)
+        p.add_argument("--provider", choices=["anthropic", "ollama"], default="anthropic")
+        p.add_argument("--model", help="default: claude-sonnet-5-5 (anthropic) or qwen3:8b (ollama)")
+        if name == "chat":
+            p.add_argument("--reduced", action="store_true", help="only the core tools (always on for ollama)")
+            p.set_defaults(func=cmd_chat)
+        else:
+            p.add_argument("--port", type=int, default=8766)
+            p.set_defaults(func=cmd_api)
 
     p = sub.add_parser("manifest", help="regenerate the Remote Script op manifest from the catalog")
     p.add_argument("--check", action="store_true", help="fail if the manifest is out of date")
