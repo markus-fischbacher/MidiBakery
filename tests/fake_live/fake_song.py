@@ -115,6 +115,8 @@ class Clip(LiveObject):
         self.end_marker = length
         self.color_index = 0
         self.is_playing = False
+        self.is_triggered = False
+        self.launch_mode = 0  # 0 Trigger, 1 Gate, 2 Toggle, 3 Repeat
         self.signature_numerator = 4
         self.signature_denominator = 4
         self.notes = {}  # note_id -> dict
@@ -163,6 +165,13 @@ class ClipSlot(LiveObject):
 
     def fire(self):
         self.fired += 1
+        clip = self.clip
+        if clip is None:
+            return
+        if clip.launch_mode == 2 and (clip.is_playing or clip.is_triggered):
+            clip.is_playing = clip.is_triggered = False
+        else:
+            clip.is_triggered = True
 
     def stop(self):
         pass

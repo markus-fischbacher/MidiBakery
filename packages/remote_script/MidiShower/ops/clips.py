@@ -70,11 +70,27 @@ def clip_delete(ctx, params):
     return {"deleted": [params["track"], params["slot"]]}
 
 
+LAUNCH_MODE_TOGGLE = 2
+
+
 @op("clip.launch")
 def clip_launch(ctx, params):
     slot = ctx.clip_slot(params["track"], params["slot"])
     if params.get("action", "fire") == "fire":
-        slot.fire()
+        _fire(ctx.song, slot)
     else:
         slot.stop()
     return {"track": params["track"], "slot": params["slot"]}
+
+
+def _fire(song, slot):
+    # fire() on a Toggle clip that is playing or triggered switches it off, the
+    # opposite of what was asked. Live keeps a clip playing across a transport stop,
+    # so such a clip only needs the transport. Live reads the launch mode when the
+    # quantized launch happens, so switching it around fire() does not help.
+    clip = slot.clip if slot.has_clip else None
+    if clip is not None and clip.launch_mode == LAUNCH_MODE_TOGGLE and (clip.is_playing or clip.is_triggered):
+        if not song.is_playing:
+            song.start_playing()
+        return
+    slot.fire()
