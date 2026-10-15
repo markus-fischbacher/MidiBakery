@@ -67,13 +67,25 @@ def test_style_menus_have_the_scripting_names_v8_uses(devices):
     assert {"style_drums", "style_bass", "style_chords"} <= varnames
 
 
-def test_node_script_ships_next_to_every_device(devices, tmp_path):
+def test_node_scripts_ship_next_to_every_device(devices, tmp_path):
     for path in devices.values():
-        assert (path.parent / build.NODE_SCRIPT).exists()
+        for name in build.NODE_FILES:
+            assert (path.parent / name).exists()
     installed = build.install(list(devices.values()), tmp_path)
     for path in installed:
-        assert (path.parent / build.NODE_SCRIPT).exists()
+        for name in build.NODE_FILES:
+            assert (path.parent / name).exists()
     assert (tmp_path / "MIDI Tools/Max Generators/MidiShower Generator.amxd").exists()
+
+
+def test_each_device_starts_the_node_entry_for_its_mode(devices):
+    """Node for Max does not pass script arguments in process.argv, so the mode comes from the entry file."""
+    expected = {"MidiShower Chat": "midishower-chat.js", "MidiShower Generator": "midishower-miditool.js",
+                "MidiShower Transform": "midishower-miditool.js"}
+    for name, path in devices.items():
+        _, patcher = build.read_amxd(path)
+        scripts = [b.get("text", "") for b in _boxes(patcher).values() if b.get("text", "").startswith("node.script")]
+        assert scripts == [f"node.script {expected[name]} @autostart 1 @watch 0"]
 
 
 @pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
@@ -82,7 +94,7 @@ def test_javascript_parses(devices, tmp_path):
     _, patcher = build.read_amxd(devices["MidiShower Generator"])
     code = next(b["code"] for b in _boxes(patcher).values() if b["maxclass"] == "v8.codebox")
     (tmp_path / "miditool.js").write_text(code)
-    for file in (tmp_path / "miditool.js", build.SRC / build.NODE_SCRIPT):
+    for file in (tmp_path / "miditool.js", *(build.SRC / n for n in build.NODE_FILES)):
         result = subprocess.run([node, "--check", str(file)], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
 

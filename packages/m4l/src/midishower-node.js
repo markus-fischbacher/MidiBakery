@@ -1,8 +1,12 @@
 /**
  * MidiShower Node for Max helper, shared by the devices.
  *
- *   node.script midishower-node.js chat       chat device: feeds jweb the chat page URL
- *   node.script midishower-node.js miditool   MIDI Tools: async HTTP for the v8 code
+ *   node.script midishower-chat.js       chat device: feeds jweb the chat page URL
+ *   node.script midishower-miditool.js   MIDI Tools: async HTTP for the v8 code
+ *
+ * Those entry files set MIDISHOWER_DEVICE and load this module. Script arguments
+ * are not used: Node for Max runs scripts through its own runner, so
+ * process.argv does not hold them where a plain `node script arg` would.
  *
  * Finds the local MidiShower API through api.json (port + token) written by
  * `midishower api`, and follows it when the API restarts with a new token.
@@ -17,7 +21,7 @@ const path = require("path");
 const { execFile } = require("child_process");
 const Max = require("max-api");
 
-const MODE = process.argv[2] === "chat" ? "chat" : "miditool";
+const MODE = process.env.MIDISHOWER_DEVICE === "chat" ? "chat" : "miditool";
 const POLL_MS = 2000;
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -29,6 +33,18 @@ function configDir() {
 }
 
 const API_FILE = path.join(configDir(), "api.json");
+const LOG_FILE = path.join(configDir(), `device-${MODE}.log`);
+
+// Small rolling log next to api.json, for diagnosing devices without the Max console.
+function log(...parts) {
+  try {
+    const line = `${new Date().toISOString()} ${parts.map((p) => (typeof p === "string" ? p : JSON.stringify(p))).join(" ")}\n`;
+    if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 256 * 1024) fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);
+    fs.appendFileSync(LOG_FILE, line);
+  } catch (_) {
+    // logging must never break the device
+  }
+}
 let api = null; // {port, token}
 // Chat: jweb may not be ready when the first URL arrives, so it is re-sent until
 // the page reports back ("loaded", via window.max in jweb).
@@ -79,10 +95,15 @@ async function loadPage() {
   }
   loadAttempts += 1;
   if (loadAttempts > 1) await Max.outlet("status", `Loading chat page (attempt ${loadAttempts})...`);
+  log("send url", chatUrl().replace(/token=.*/, "token=***"), "attempt", loadAttempts);
   await Max.outlet("url", chatUrl());
 }
 
+// Everything jweb reports (navigation, load events) except "loaded", for the log.
+Max.addHandler("jweb", (...args) => log("jweb", args));
+
 Max.addHandler("loaded", async () => {
+  log("page loaded");
   pageLoaded = true;
   if (api) await Max.outlet("status", `Connected to MidiShower API on port ${api.port}`);
 });
@@ -134,6 +155,7 @@ Max.addHandler("refresh", () => {
   return refresh();
 });
 
+log("start", MODE, process.version);
 refresh();
 setInterval(refresh, POLL_MS);
 setInterval(loadPage, 3000);
