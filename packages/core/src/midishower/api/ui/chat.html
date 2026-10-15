@@ -50,7 +50,8 @@
   /* Inside the Max for Live device the input is a native Max text field below this page:
      Live does not pass keystrokes to jweb. */
   body.device form { display: none; }
-  body.device #log { padding-bottom: 10px; }
+  /* jweb in Live can render a little taller than the device; keep the last lines clear of the edge. */
+  body.device #log { padding-bottom: 22px; }
 </style>
 </head>
 <body>
@@ -284,7 +285,12 @@ for (const b of document.querySelectorAll("#providers button")) {
 if (inDevice) window.max.bindInlet("chat_input", (...words) => sendText(words.join(" ")));
 
 // Inside the Max for Live device (jweb): tell the device the page is up.
-try { if (window.max && window.max.outlet) window.max.outlet("loaded"); } catch (_) {}
+try {
+  if (window.max && window.max.outlet) {
+    window.max.outlet("loaded");
+    window.max.outlet("viewport", window.innerWidth, window.innerHeight, window.devicePixelRatio);  // for the device log
+  }
+} catch (_) {}
 
 connect();
 </script>
