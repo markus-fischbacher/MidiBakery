@@ -76,6 +76,21 @@ def test_int_parameters_fit_maxs_int_type(devices):
                 assert 0 <= valueof.get("parameter_mmin", 0) and valueof.get("parameter_mmax", 255) <= 255, valueof
 
 
+def test_chat_device_types_into_a_native_field(devices):
+    """Live does not pass keystrokes to jweb; the native textedit forwards them as chat_input."""
+    _, patcher = build.read_amxd(devices["MidiShower Chat"])
+    boxes = _boxes(patcher)
+    by_text = {b.get("text"): i for i, b in boxes.items()}
+    entry = next(i for i, b in boxes.items() if b["maxclass"] == "textedit")
+    web = next(i for i, b in boxes.items() if b["maxclass"] == "jweb")
+    lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0]) for l in patcher["patcher"]["lines"]}
+    assert boxes[entry]["keymode"] == 1  # Enter sends instead of adding a newline
+    assert (by_text["prepend chat_input"], web) in lines
+    assert (entry, by_text["route text"]) in lines
+    page = (ROOT / "packages/core/src/midishower/api/ui/chat.html").read_text()
+    assert 'bindInlet("chat_input"' in page and "<option" not in page  # dropdowns do not open in jweb
+
+
 def test_chat_device_passes_midi_through(devices):
     _, patcher = build.read_amxd(devices["MidiShower Chat"])
     texts = {b.get("text") for b in _boxes(patcher).values()}
