@@ -198,6 +198,9 @@ $("provider").onchange = () => {
   connect();
 };
 
+// Inside the Max for Live device (jweb): tell the device the page is up.
+try { if (window.max && window.max.outlet) window.max.outlet("loaded"); } catch (_) {}
+
 connect();
 </script>
 </body>

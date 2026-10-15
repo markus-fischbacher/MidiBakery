@@ -30,6 +30,10 @@ function configDir() {
 
 const API_FILE = path.join(configDir(), "api.json");
 let api = null; // {port, token}
+// Chat: jweb may not be ready when the first URL arrives, so it is re-sent until
+// the page reports back ("loaded", via window.max in jweb).
+let pageLoaded = false;
+let loadAttempts = 0;
 
 function readApi() {
   try {
@@ -55,8 +59,33 @@ async function refresh() {
     return;
   }
   await Max.outlet("status", `MidiShower API on port ${api.port}`);
-  if (MODE === "chat") await Max.outlet("url", chatUrl());
+  if (MODE === "chat") {
+    pageLoaded = false;
+    loadAttempts = 0;
+    await loadPage();
+  }
 }
+
+const MAX_LOAD_ATTEMPTS = 5;
+
+async function loadPage() {
+  if (MODE !== "chat" || !api || pageLoaded) return;
+  if (loadAttempts >= MAX_LOAD_ATTEMPTS) {
+    if (loadAttempts === MAX_LOAD_ATTEMPTS) {
+      loadAttempts += 1;
+      await Max.outlet("status", "Chat page did not load in the device - use Pop out");
+    }
+    return;
+  }
+  loadAttempts += 1;
+  if (loadAttempts > 1) await Max.outlet("status", `Loading chat page (attempt ${loadAttempts})...`);
+  await Max.outlet("url", chatUrl());
+}
+
+Max.addHandler("loaded", async () => {
+  pageLoaded = true;
+  if (api) await Max.outlet("status", `Connected to MidiShower API on port ${api.port}`);
+});
 
 async function post(route, body) {
   if (!api) throw new Error("MidiShower API not running");
@@ -107,3 +136,4 @@ Max.addHandler("refresh", () => {
 
 refresh();
 setInterval(refresh, POLL_MS);
+setInterval(loadPage, 3000);
