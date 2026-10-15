@@ -77,6 +77,9 @@ LAUNCH_MODE_TOGGLE = 2
 def clip_launch(ctx, params):
     slot = ctx.clip_slot(params["track"], params["slot"])
     if params.get("action", "fire") == "fire":
+        if not slot.has_clip:
+            # fire() on an empty slot stops the track: almost always a wrong slot, not the intent.
+            raise OpError(ErrorCode.NOT_FOUND, "Slot %d/%d is empty; nothing to play (action 'stop' stops the track)" % (params["track"], params["slot"]))
         _fire(ctx.song, slot)
     else:
         slot.stop()
@@ -88,8 +91,8 @@ def _fire(song, slot):
     # opposite of what was asked. Live keeps a clip playing across a transport stop,
     # so such a clip only needs the transport. Live reads the launch mode when the
     # quantized launch happens, so switching it around fire() does not help.
-    clip = slot.clip if slot.has_clip else None
-    if clip is not None and clip.launch_mode == LAUNCH_MODE_TOGGLE and (clip.is_playing or clip.is_triggered):
+    clip = slot.clip
+    if clip.launch_mode == LAUNCH_MODE_TOGGLE and (clip.is_playing or clip.is_triggered):
         if not song.is_playing:
             song.start_playing()
         return

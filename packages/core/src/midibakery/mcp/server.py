@@ -44,6 +44,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   (root_note 0=C..11=B, scale_name, scale_intervals) and every track with its
   devices and clips. Tracks, clip slots, devices and scenes are addressed by
   zero-based index; indices shift when tracks or scenes are created or deleted.
+  Users count from 1 as Live shows it: "track 1" or "the first clip" is index 0.
 - Times and lengths are in beats (quarter notes). Pitch 60 is C3 in Live.
 - Prefer notes from the song scale unless the user asks otherwise.
 - edit_notes is a diff: add new notes, modify or remove existing ones by the

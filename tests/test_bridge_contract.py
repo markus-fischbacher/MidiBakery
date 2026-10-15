@@ -88,6 +88,14 @@ async def test_fire_resumes_a_toggle_clip_left_playing_by_a_transport_stop(clien
     assert live.on_main(lambda: live.song.tracks[1].clip_slots[6].fired) == 0
 
 
+async def test_firing_an_empty_slot_is_an_error(client, live):
+    with pytest.raises(BridgeError) as exc:
+        await client.call("clip.launch", {"track": 1, "slot": 7})
+    assert exc.value.code == "NOT_FOUND"
+    assert live.on_main(lambda: live.song.tracks[1].clip_slots[7].fired) == 0
+    await client.call("clip.launch", {"track": 1, "slot": 7, "action": "stop"})
+
+
 async def test_notes_diff_keeps_untouched_notes(client, live):
     await client.call("clip.create", {"track": 0, "slot": 1, "length": 4})
     added = (await client.call("notes.apply", {
