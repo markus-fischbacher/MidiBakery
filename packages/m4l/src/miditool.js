@@ -29,7 +29,7 @@ var OPERATIONS = ["humanize", "quantize", "invert", "arpeggiate", "variation", "
 var ARP_RATES = [0.125, 0.25, 0.5, 1.0];
 
 var params = {
-  kind: 0, drums: 0, bass: 5, chords: 0, density: 50, swing: 0,
+  kind: 0, drums: 0, bass: 5, chords: 0, density: 50, swing: 0, chance: 50,
   operation: 0, amount: 50, semitones: 12, rate: 1, seed: 1
 };
 var lastInput = null;
@@ -131,6 +131,8 @@ function showStyleMenu() {
   ["drums", "bass", "chords"].forEach(function (name) {
     outlet(4, "script", "sendbox", "style_" + name, "hidden", kind === name ? 0 : 1);
   });
+  // Note probability only makes musical sense for drums (ghost notes, hats).
+  outlet(4, "script", "sendbox", "chance_dial", "hidden", kind === "drums" ? 0 : 1);
 }
 
 function buildContext(d) {
@@ -158,7 +160,10 @@ function buildBody(d) {
     var kind = KINDS[params.kind];
     var p = { swing: params.swing / 100 };
     if (kind !== "chords") p.density = params.density / 100;
-    if (kind === "drums") p.style = DRUM_STYLES[params.drums];
+    if (kind === "drums") {
+      p.style = DRUM_STYLES[params.drums];
+      p.chance = params.chance / 100;
+    }
     if (kind === "bass") p.style = BASS_STYLES[params.bass];
     if (kind === "chords") p.rhythm = CHORD_RHYTHMS[params.chords];
     return { context: context, kind: kind, params: p };

@@ -142,7 +142,7 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
     unit = SWING_UNITS[spec.swing_unit]
     if request.kind == "drums":
         drum_map = map_pads([p.model_dump() for p in ctx.pads] if ctx.pads else None)
-        notes = generate_drums(meter, bars, spec.style, rng, drum_map, density=spec.density, swing=spec.swing, swing_unit=unit, fills=spec.fills)
+        notes = generate_drums(meter, bars, spec.style, rng, drum_map, density=spec.density, swing=spec.swing, swing_unit=unit, fills=spec.fills, chance=spec.chance)
         info["drum_map"] = drum_map.source
     else:
         if spec.progression:

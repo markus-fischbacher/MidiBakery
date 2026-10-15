@@ -417,7 +417,7 @@ async def _plan_drums(session: Session, spec: DrumsSpec) -> ClipChange:
     drum_map: DrumMap = map_pads(pads)
     notes = generate_drums(
         session.meter, spec.bars, spec.style, random.Random(seed), drum_map,
-        density=spec.density, swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit], fills=spec.fills,
+        density=spec.density, swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit], fills=spec.fills, chance=spec.chance,
     )
     info = {
         "style": spec.style,

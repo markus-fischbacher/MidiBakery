@@ -98,11 +98,10 @@ def generate_melody(
                 if roots:
                     pitch = min(roots, key=lambda p: abs(p - pitch))
             duration = max(grid.step * 0.9, min(1.5, (next_start - start) * 0.9))
-            probability = 1.0
             velocity = 78 + 30 * accent + rng.uniform(-5, 5)
             if accent <= 0.4 and not last and rng.random() < 0.3 + 0.3 * density:
-                # Ornamental weak-beat notes sometimes drop out for a less mechanical loop.
-                probability = 0.8
+                # Ornamental weak-beat notes sit a little softer. They always play:
+                # a melody note that drops out sounds like a mistake, not a groove.
                 velocity -= 8
-            notes.append(Note(pitch, start, duration, velocity, probability, velocity_deviation=8))
+            notes.append(Note(pitch, start, duration, velocity, 1.0, velocity_deviation=8))
     return dedupe(notes)

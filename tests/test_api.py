@@ -206,7 +206,7 @@ def test_chat_page_is_served_without_token_and_holds_no_secret(app_factory):
 
 
 @pytest.mark.parametrize("kind, params", [
-    ("drums", {"swing": 0, "density": 0.5, "style": "house"}),
+    ("drums", {"swing": 0, "density": 0.5, "style": "house", "chance": 0.5}),
     ("bass", {"swing": 0.2, "density": 0.5, "style": "syncopated"}),
     ("chords", {"swing": 0, "rhythm": "stabs"}),
     ("melody", {"swing": 0, "density": 0.7}),

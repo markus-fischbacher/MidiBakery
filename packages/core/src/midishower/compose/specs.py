@@ -64,6 +64,11 @@ class DrumsSpec(Generate):
     swing: Swing = 0.0
     swing_unit: SwingUnit = "1/16"
     fills: bool = Field(True, description="Fill at the end of each 4-bar phrase")
+    chance: Amount = Field(
+        0.5,
+        description="How often ghost notes, some hats and extra kicks drop out (Live note probability): "
+        "0 = every hit always plays, 0.5 = the style's natural variation, 1 = twice as much",
+    )
     device: Annotated[int | None, Field(ge=0, description="Drum Rack device index; default: first Drum Rack")] = None
 
 
