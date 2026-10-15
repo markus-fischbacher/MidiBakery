@@ -5,8 +5,13 @@ description = "AI composition and session control for Ableton Live 12"
 requires-python = ">=3.12"
 license = "LicenseRef-Proprietary"
 dependencies = [
+    "anthropic>=1",
+    "httpx2>=2.13.1",
     "mcp>=2.3",
     "pydantic>=2.14",
+    "starlette>=1.8.0",
+    "uvicorn>=0.54.0",
+    "websockets>=17.2",
 ]
 
 [project.scripts]
