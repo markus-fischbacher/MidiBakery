@@ -220,7 +220,10 @@ def chat_device() -> dict[str, Any]:
 
     node = p.obj("node.script midishower-chat.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=300)
     route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
-    web = p.box("jweb", (120, 200, 560, 169), inlets=1, outlets=[""], presentation=(0, 0, 560, height - 22), url="")
+    # Same size in patching and presentation: jweb may render at its patching size, which would put
+    # the bottom of the chat behind the text field.
+    web_rect = (0, 0, 560, height - 24)
+    web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url="")
     # Live does not pass keystrokes to jweb, so typing happens in a native Max text field.
     # Enter sends "chat_input <words>" to the page (window.max.bindInlet), then clears the field.
     entry = p.box("textedit", (700, 200, 400, 22), inlets=1, outlets=["", "int", "", ""],
