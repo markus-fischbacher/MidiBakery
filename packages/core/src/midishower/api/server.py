@@ -8,6 +8,7 @@
 - ``POST /miditool/generate`` and ``/miditool/transform``: the clip-view MIDI
   Tools. Notes in, notes out; nothing is written to Live by the server.
 - ``GET /health``: server and Live bridge status.
+- ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
   (``/ui#token=...``), which browsers never send to the server.
@@ -40,6 +41,7 @@ from midishower.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT
 from midishower.bridge import BridgeClient, BridgeError
 from midishower.bridge.client import config_dir
 from midishower.compose.standalone import GenerateRequest, TransformRequest, generate, transform
+from midishower.api.models import list_models
 from midishower.mcp import build_server
 
 VERSION = "0.1.0"
@@ -82,6 +84,15 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             return await handler(request)
 
         return wrapped
+
+    default: dict[str, str] = {}
+
+    async def models(request: Request) -> JSONResponse:
+        """Model choices for the chat's menu; local models are listed when their server runs."""
+        if not default:
+            provider = provider_factory({})
+            default.update(provider=provider.name, model=provider.model)
+        return JSONResponse({"models": await list_models(default["provider"], default["model"])})
 
     async def ui(request: Request) -> HTMLResponse:
         # no-store: a reloaded device always gets the page matching this API version
@@ -178,6 +189,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         routes=[
             Route("/health", guard(health), methods=["GET"]),
             Route("/ui", ui, methods=["GET"]),
+            Route("/models", guard(models), methods=["GET"]),
             Route("/miditool/generate", guard(notes_endpoint(GenerateRequest, generate)), methods=["POST"]),
             Route("/miditool/transform", guard(notes_endpoint(TransformRequest, transform)), methods=["POST"]),
             WebSocketRoute("/chat", chat),

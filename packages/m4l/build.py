@@ -260,8 +260,8 @@ def chat_device() -> dict[str, Any]:
     p.connect(web, 0, loaded)
     p.connect(loaded, 0, loaded_msg)
     p.connect(loaded_msg, 0, node)
+    # Everything else jweb reports goes to the device log (wired through the Model menu router below).
     other = p.obj("prepend jweb", 220, 440, width=90)
-    p.connect(loaded, 1, other)
     p.connect(other, 0, node)
     set_status = p.obj("prepend set", 260, 100)
     p.comment("Enter sends", (700, 300, 100, 14), presentation=(column_x, 124, column_w, 14), fontsize=9.0,
@@ -271,16 +271,24 @@ def chat_device() -> dict[str, Any]:
     p.connect(route, 1, set_status)
     p.connect(set_status, 0, status)
 
-    # Model provider as a native menu (dropdowns inside jweb do not open). The index goes to the page
-    # as "provider_index <n>", and again when the page reports "loaded" (the menu is saved with the Set).
-    model = _menu(p, (1000, 20, 110, 15), (column_x, 4, 110, 18), "Model", "Model",
-                  ["Default", "Claude", "Ollama", "LM Studio"], 0)
-    held = p.obj("i", 1000, 50, inlets=2, outlets=["int"], width=30)
-    to_page_provider = p.obj("prepend provider_index", 1000, 80, width=140)
-    p.connect(model, 0, held)
-    p.connect(held, 0, to_page_provider)
-    p.connect(to_page_provider, 0, web)
-    p.connect(loaded, 0, held)
+    # Model menu: a native umenu (dropdowns inside jweb do not open). The page fills it from GET /models
+    # (menu_clear / menu_append <label> / menu_select <n>) and keeps the choice; picks go back as model_index.
+    model_menu = p.box("umenu", (1000, 120, 110, 22), inlets=1, outlets=["int", "", ""],
+                       presentation=(column_x, 4, 110, 18), items=["Default"], fontsize=10.0, varname="model_menu")
+    menu_msgs = p.obj("route menu_clear menu_append menu_select", 1000, 20, outlets=["", "", "", ""], width=260)
+    menu_clear = p.message("clear", 1000, 60)
+    menu_append = p.obj("prepend append", 1080, 60, width=90)
+    menu_select = p.obj("prepend set", 1180, 60, width=80)
+    to_page_model = p.obj("prepend model_index", 1000, 160, width=130)
+    p.connect(loaded, 1, menu_msgs)
+    p.connect(menu_msgs, 3, other)
+    p.connect(menu_msgs, 0, menu_clear)
+    p.connect(menu_msgs, 1, menu_append)
+    p.connect(menu_msgs, 2, menu_select)
+    for box in (menu_clear, menu_append, menu_select):
+        p.connect(box, 0, model_menu)
+    p.connect(model_menu, 0, to_page_model)
+    p.connect(to_page_model, 0, web)
     popout = p.parameter("live.text", (440, 60, 70, 16), (column_x + 114, 4, column_w - 114, 18), name="Pop out", short="Pop out", ptype=ENUM,
                          inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
