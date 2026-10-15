@@ -29,6 +29,9 @@ HERE = Path(__file__).resolve().parent
 SRC = HERE / "src"
 DIST = HERE / "dist"
 NODE_SCRIPT = "midishower-node.js"
+# node.script entry files per device kind; each sets its mode and loads NODE_SCRIPT.
+NODE_ENTRIES = ("midishower-chat.js", "midishower-miditool.js")
+NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES)
 
 # Four-character device type codes, as found in Live's own device templates.
 DEVICE_TYPES = {"midi_effect": b"mmmm", "generator": b"nagg", "transformation": b"natt"}
@@ -202,7 +205,7 @@ def chat_device() -> dict[str, Any]:
     midiout = p.obj("midiout", 20, 60, outlets=[], width=50)
     p.connect(midiin, 0, midiout)
 
-    node = p.obj(f"node.script {NODE_SCRIPT} chat @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=300)
+    node = p.obj("node.script midishower-chat.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=300)
     route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
     web = p.box("jweb", (120, 200, 560, 169), inlets=1, outlets=[""], presentation=(0, 0, 560, height), url="")
     set_url = p.obj("prepend url", 120, 100)
@@ -215,6 +218,9 @@ def chat_device() -> dict[str, Any]:
     p.connect(web, 0, loaded)
     p.connect(loaded, 0, loaded_msg)
     p.connect(loaded_msg, 0, node)
+    other = p.obj("prepend jweb", 220, 440, width=90)
+    p.connect(loaded, 1, other)
+    p.connect(other, 0, node)
     set_status = p.obj("prepend set", 260, 100)
     status = p.comment("Starting...", (260, 140, 74, 120), presentation=(564, 32, 74, 120),
                        linecount=8, fontsize=9.0, textcolor=[0.6, 0.6, 0.6, 1.0])
@@ -241,7 +247,7 @@ def _miditool_core(p: Patcher, mode: str) -> tuple[str, str]:
     v8 = p.box("v8.codebox", (20, 100, 420, 300), inlets=2, outlets=["", "", "", "", ""], code=code, filename="none",
                fontface=0, fontname="<Monospaced>", fontsize=10.0)
     tool_out = p.obj("live.miditool.out", 20, 420, outlets=[], width=110)
-    node = p.obj(f"node.script {NODE_SCRIPT} miditool @autostart 1 @watch 0", 460, 420, outlets=["", ""], width=300)
+    node = p.obj("node.script midishower-miditool.js @autostart 1 @watch 0", 460, 420, outlets=["", ""], width=300)
     rebang = p.obj("t b", 460, 20, outlets=["bang"], width=40)
     # Context (right outlet) fires first and is stored; notes (left) trigger the join.
     p.connect(tool_in, 1, join, 1)
@@ -367,7 +373,8 @@ def build(out: Path = DIST) -> list[Path]:
         path = out / kind / f"{name}.amxd"
         path.parent.mkdir(parents=True, exist_ok=True)
         write_amxd(path, kind, factory())
-        shutil.copy2(SRC / NODE_SCRIPT, path.parent / NODE_SCRIPT)
+        for name in NODE_FILES:
+            shutil.copy2(SRC / name, path.parent / name)
         paths.append(path)
     return paths
 
@@ -387,8 +394,9 @@ def install(paths: list[Path], library: Path) -> list[Path]:
         target_dir = library / INSTALL_DIRS[kind]
         target_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, target_dir / path.name)
-        # node.script finds its file next to the device.
-        shutil.copy2(path.parent / NODE_SCRIPT, target_dir / NODE_SCRIPT)
+        # node.script finds its files next to the device.
+        for name in NODE_FILES:
+            shutil.copy2(path.parent / name, target_dir / name)
         installed.append(target_dir / path.name)
     return installed
 
