@@ -30,9 +30,10 @@ SMALL_SYSTEM_PROMPT = (
     "- Call get_session first. Tracks and clip slots are zero-based indices.\n"
     "- Times are in beats (quarter notes); pitch 60 = C3. Stay in the song scale.\n"
     "- compose_drums/bass/chords/melody write a new clip into an EMPTY slot; pick an empty slot from get_session. "
-    "Give bass and melody chords_from (the chord clip), the bass follow_kick (the drum clip).\n"
+    "Give bass and melody chords_from (the chord clip), the bass follow_kick (the drum clip). Never set if_exists or overwrite a clip unless the user asks for it.\n"
     "- edit_notes and transform_notes change existing notes by note_id from get_clip.\n"
-    "- Every write can be undone with undo. If a tool fails, read the error and fix the call."
+    "- Every write can be undone with undo. If a tool fails, read the error and fix the call. "
+    "If the user declined a change (CANCELLED), nothing was written: say so, never claim it was done."
 )
 
 MAX_STEPS = 24
