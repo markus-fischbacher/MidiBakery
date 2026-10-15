@@ -5,11 +5,14 @@ import json
 import httpx2 as httpx
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
 
-from midishower.agent import REDUCED_TOOLS, Agent, ToolHost
+from midishower.agent import REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, Agent, ToolHost
 from midishower.agent.providers.anthropic import FALLBACK_BETA, AnthropicProvider
 from midishower.agent.providers.base import Provider, ToolCall, Turn
+from midishower.agent.providers import make_provider
+from midishower.agent.providers.base import ToolResult
 from midishower.agent.providers.ollama import OllamaProvider, inline_refs
-from midishower.agent.tools import ToolSpec
+from midishower.agent.providers.openai_compat import OpenAICompatProvider
+from midishower.agent.tools import ToolSpec, compact_schema
 from midishower.mcp import build_server
 
 
@@ -332,3 +335,138 @@ async def test_ollama_unreachable_is_a_turn_error():
 
     turn = await provider.stream_turn(emit)
     assert turn.error and "ollama serve" in turn.error
+
+
+# --------------------------------------------------------------------------
+# LM Studio (OpenAI-compatible) provider against a mock transport
+# --------------------------------------------------------------------------
+
+
+def sse(*chunks):
+    return httpx.Response(200, content=("".join(f"data: {json.dumps(c)}\n\n" for c in chunks) + "data: [DONE]\n\n").encode())
+
+
+def lmstudio(handler):
+    return OpenAICompatProvider(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)), base_url="http://lmstudio.test/v1")
+
+
+async def test_lmstudio_streams_text_and_joins_tool_call_fragments():
+    seen = []
+
+    def handler(request):
+        seen.append((str(request.url), json.loads(request.content)))
+        delta = lambda **d: {"choices": [{"index": 0, "delta": d, "finish_reason": None}]}  # noqa: E731
+        return sse(
+            delta(role="assistant", content="Ok"),
+            delta(reasoning_content="think"),
+            delta(tool_calls=[{"index": 0, "id": "c1", "type": "function", "function": {"name": "a_tool", "arguments": ""}}]),
+            delta(tool_calls=[{"index": 0, "function": {"arguments": '{"x":'}}]),
+            delta(tool_calls=[{"index": 1, "id": "c2", "type": "function", "function": {"name": "b_tool", "arguments": "{}"}}]),
+            delta(tool_calls=[{"index": 0, "function": {"arguments": " 2}"}}]),
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]},
+            {"choices": [], "usage": {"prompt_tokens": 40, "completion_tokens": 9}},
+        )
+
+    provider = lmstudio(handler)
+    provider.configure("SYS", TOOLS)
+    provider.add_user("hi")
+    events = []
+
+    async def emit(e):
+        events.append(e)
+
+    turn = await provider.stream_turn(emit)
+    assert events == [{"type": "text", "text": "Ok"}, {"type": "thinking", "text": "think"}]
+    assert turn.stop_reason == "tool_use"
+    assert [(c.id, c.name, c.input) for c in turn.tool_calls] == [("c1", "a_tool", {"x": 2}), ("c2", "b_tool", {})]
+    assert turn.usage == {"input_tokens": 40, "output_tokens": 9, "model": provider.model}
+    url, body = seen[0]
+    assert url == "http://lmstudio.test/v1/chat/completions"
+    assert body["stream"] is True and body["messages"][0] == {"role": "system", "content": "SYS"}
+    assert body["tools"][0] == {"type": "function", "function": {"name": "b_tool", "description": "B", "parameters": {"type": "object", "properties": {}}}}
+
+    provider.add_tool_results([ToolResult("c1", "a_tool", "boom", is_error=True), ToolResult("c2", "b_tool", "fine")])
+    assert provider.messages[-3]["tool_calls"][0] == {"id": "c1", "type": "function", "function": {"name": "a_tool", "arguments": '{"x": 2}'}}
+    assert provider.messages[-2:] == [
+        {"role": "tool", "tool_call_id": "c1", "content": "ERROR: boom"},
+        {"role": "tool", "tool_call_id": "c2", "content": "fine"},
+    ]
+
+
+async def test_lmstudio_plain_answer_and_http_error():
+    replies = [
+        sse({"choices": [{"index": 0, "delta": {"content": "Hallo"}, "finish_reason": "stop"}]}),
+        httpx.Response(400, json={"error": "The number of tokens to keep from the initial prompt is greater than the context length."}),
+    ]
+    provider = lmstudio(lambda request: replies.pop(0))
+    provider.configure("S", [])
+    provider.add_user("x")
+
+    async def emit(e):
+        pass
+
+    turn = await provider.stream_turn(emit)
+    assert (turn.stop_reason, turn.text, turn.tool_calls) == ("end_turn", "Hallo", [])
+    assert provider.messages[-1] == {"role": "assistant", "content": "Hallo"}
+    turn = await provider.stream_turn(emit)
+    assert turn.error and "400" in turn.error and "context length" in turn.error
+
+
+async def test_lmstudio_unreachable_is_a_turn_error(monkeypatch):
+    def handler(request):
+        raise httpx.ConnectError("refused", request=request)
+
+    monkeypatch.setenv("LMSTUDIO_HOST", "localhost:9999")
+    provider = OpenAICompatProvider(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    assert provider.base_url == "http://localhost:9999"
+    provider.configure("S", TOOLS)
+    provider.add_user("x")
+
+    async def emit(e):
+        pass
+
+    turn = await provider.stream_turn(emit)
+    assert turn.error and "localhost:9999" in turn.error and "lms server start" in turn.error
+
+
+def test_make_provider_lmstudio():
+    provider = make_provider("lmstudio", "google/gemma-4-e4b")
+    assert (provider.name, provider.model) == ("lmstudio", "google/gemma-4-e4b")
+
+
+def test_compact_schema():
+    schema = {
+        "type": "object",
+        "title": "toolArguments",
+        "properties": {
+            "title": {"type": "string", "title": "Title", "default": None},
+            "seed": {"anyOf": [{"type": "integer"}, {"type": "null"}], "default": None, "description": "Same seed, same notes. Omit for a new idea."},
+            "bars": {"type": "integer", "minimum": 1, "maximum": 64, "default": 4},
+        },
+    }
+    assert compact_schema(schema) == {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "seed": {"type": "integer", "description": "Same seed, same notes."},
+            "bars": {"type": "integer", "default": 4},
+        },
+    }
+
+
+async def test_small_profile_fits_and_is_compact(client):
+    provider = ScriptedProvider([Turn("end_turn", text="ok")])
+
+    async def emit(e):
+        pass
+
+    async def no(message):
+        return False
+
+    async with ToolHost(build_server(client), no, SMALL_TOOLS) as host:
+        Agent(provider, host, SMALL_SYSTEM_PROMPT, compact=True)
+    assert "plan_changes" not in {t.name for t in provider.tools} and len(provider.tools) == len(SMALL_TOOLS)
+    compact = json.dumps([t.input_schema for t in provider.tools])
+    assert "$ref" not in compact and '"title"' not in compact
+    # Measured against Gemma 4 E4B in LM Studio: ~3.7k of 8192 tokens incl. descriptions. Keep it there.
+    assert len(compact) + len(SMALL_SYSTEM_PROMPT) < 14000

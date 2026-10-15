@@ -36,6 +36,9 @@ REDUCED_TOOLS = frozenset({
     "undo",
 })
 
+# For 8k-context models: plan_changes alone is ~3k tokens of schema.
+SMALL_TOOLS = REDUCED_TOOLS - {"plan_changes"}
+
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -115,3 +118,51 @@ class ToolHost:
         if accepted:
             return ElicitResult(action="accept", content={"confirm": True})
         return ElicitResult(action="decline")
+
+
+# Schema keys that cost context but do not change what a valid call looks like.
+_DROP_KEYS = frozenset({"title", "additionalProperties", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "examples"})
+
+
+def _first_sentence(text: str, limit: int) -> str:
+    text = " ".join(text.split())
+    for end in (". ", "; "):
+        if end in text:
+            text = text.split(end, 1)[0] + "."
+            break
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def compact_schema(node: Any, limit: int = 90) -> Any:
+    """Shrink an inlined JSON schema for small context windows.
+
+    Drops titles and bounds, folds Optional (anyOf [X, null]) into X, removes
+    null/empty defaults and cuts descriptions to their first sentence.
+    """
+    if isinstance(node, list):
+        return [compact_schema(v, limit) for v in node]
+    if not isinstance(node, dict):
+        return node
+    variants = node.get("anyOf")
+    if isinstance(variants, list):
+        non_null = [v for v in variants if v != {"type": "null"}]
+        if len(non_null) == 1 and len(non_null) < len(variants):
+            node = {**non_null[0], **{k: v for k, v in node.items() if k != "anyOf"}}
+    out: dict[str, Any] = {}
+    for key, value in node.items():
+        if key in _DROP_KEYS or (key == "default" and value in (None, [], {})):
+            continue
+        if key == "description" and isinstance(value, str):
+            out[key] = _first_sentence(value, limit)
+        elif key == "properties" and isinstance(value, dict):
+            out[key] = {name: compact_schema(v, limit) for name, v in value.items()}  # property names are data, not schema keys
+        else:
+            out[key] = compact_schema(value, limit)
+    return out
+
+
+def compact_tools(tools: list[ToolSpec]) -> list[ToolSpec]:
+    """Short descriptions and lean schemas, for local models with a small context."""
+    from midishower.agent.providers.ollama import inline_refs
+
+    return [ToolSpec(t.name, _first_sentence(t.description, 160), compact_schema(inline_refs(t.input_schema)), t.read_only) for t in tools]

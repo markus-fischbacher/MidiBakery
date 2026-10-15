@@ -105,7 +105,7 @@ def cmd_api(args: argparse.Namespace) -> int:
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
-    from midishower.agent import REDUCED_TOOLS, Agent, ToolHost
+    from midishower.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost
     from midishower.agent.loop import describe_input
     from midishower.bridge import BridgeClient
     from midishower.mcp import build_server
@@ -135,10 +135,11 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
     async def run() -> int:
         bridge = BridgeClient()
-        allowed = REDUCED_TOOLS if args.reduced or provider.name == "ollama" else None
+        small = provider.name in LOCAL_PROVIDERS
+        allowed = SMALL_TOOLS if small else REDUCED_TOOLS if args.reduced else None
         try:
             async with ToolHost(build_server(bridge), confirm, allowed) as host:
-                agent = Agent(provider, host)
+                agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=small)
                 print(f"MidiShower chat ({provider.name}, {provider.model}, {len(host.tools)} tools). Empty line or Ctrl-D quits, /reset forgets.")
                 while True:
                     try:
@@ -168,10 +169,10 @@ def main(argv: list[str] | None = None) -> int:
 
     for name, helptext in (("chat", "chat with the agent in the terminal"), ("api", "run the local API for the Max for Live devices")):
         p = sub.add_parser(name, help=helptext)
-        p.add_argument("--provider", choices=["anthropic", "ollama"], default="anthropic")
-        p.add_argument("--model", help="default: claude-sonnet-5-5 (anthropic) or qwen3:8b (ollama)")
+        p.add_argument("--provider", choices=["anthropic", "ollama", "lmstudio"], default="anthropic")
+        p.add_argument("--model", help="default: claude-sonnet-5-5 (anthropic), qwen3:8b (ollama), google/gemma-4-e4b (lmstudio)")
         if name == "chat":
-            p.add_argument("--reduced", action="store_true", help="only the core tools (always on for ollama)")
+            p.add_argument("--reduced", action="store_true", help="only the core tools (local providers always use the smaller, compact set)")
             p.set_defaults(func=cmd_chat)
         else:
             p.add_argument("--port", type=int, default=8766)
