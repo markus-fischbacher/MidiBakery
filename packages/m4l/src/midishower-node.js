@@ -110,6 +110,21 @@ Max.addHandler("loaded", async () => {
   if (api) await Max.outlet("status", `Connected to MidiShower API on port ${api.port}`);
 });
 
+// Max dicts hold numbers, strings, arrays and dicts only: no booleans, no null.
+function toMaxDict(value) {
+  if (value === true) return 1;
+  if (value === false) return 0;
+  if (Array.isArray(value)) return value.filter((v) => v !== null && v !== undefined).map(toMaxDict);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, v] of Object.entries(value)) {
+      if (v !== null && v !== undefined) out[key] = toMaxDict(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 function describeError(error) {
   if (!error) return "unknown error";
   if (typeof error === "string") return error;
@@ -151,7 +166,7 @@ Max.addHandler("request", async (id, kind, dictName) => {
     const result = await post(`/miditool/${kind}`, body);
     step = "write result dict";
     const resName = `${dictName}_res`;
-    await Max.setDict(resName, result);
+    await Max.setDict(resName, toMaxDict(result));
     log("request", id, kind, `${(result.notes || []).length} notes`, `${Date.now() - started} ms`);
     await Max.outlet("response", id, resName);
   } catch (error) {
