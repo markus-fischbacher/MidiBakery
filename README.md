@@ -2,7 +2,7 @@
 
 AI composition and session control for Ableton Live 12 Suite.
 
-See [docs/KONZEPT.md](docs/KONZEPT.md) for the architecture and roadmap.
+See [docs/KONZEPT.md](docs/KONZEPT.md) for the concept and roadmap, and [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) for how the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together.
 
 ## Layout
 
