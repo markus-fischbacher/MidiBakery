@@ -148,6 +148,25 @@ def test_javascript_parses(devices, tmp_path):
         assert result.returncode == 0, result.stderr
 
 
+def test_chat_page_has_plan_apply_and_undo():
+    """Plan previews get an Apply button and the header an Undo button; both run tools over the chat socket."""
+    page = (ROOT / "packages/core/src/midibakery/api/ui/chat.html").read_text()
+    assert '<button id="undo"' in page
+    assert 'name: "apply_plan", input: { plan_id: roll.plan_id }' in page
+    assert 'name: "undo", input: { action: "undo" }' in page
+    assert 'case "plan":\n      showPlan(ev);' in page
+
+
+@pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
+def test_chat_page_script_parses(tmp_path):
+    node = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
+    page = (ROOT / "packages/core/src/midibakery/api/ui/chat.html").read_text()
+    script = page.split("<script>", 1)[1].split("</script>", 1)[0]
+    (tmp_path / "chat.js").write_text(script)
+    result = subprocess.run([node, "--check", str(tmp_path / "chat.js")], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 LIVE_TEMPLATES = Path("/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/Misc")
 
 

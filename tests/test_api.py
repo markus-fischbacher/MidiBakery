@@ -159,6 +159,60 @@ def test_chat_streams_agent_events(app_factory, live):
     assert live.on_main(lambda: live.song.tracks[1].clip_slots[0].has_clip)
 
 
+def test_plan_preview_is_applied_and_undone_from_the_page(app_factory, live):
+    """The page's Apply and Undo buttons run apply_plan and undo through the same tool host."""
+    provider = ScriptedProvider([
+        Turn("tool_use", [ToolCall("t1", "plan_changes", {"steps": [{"kind": "chords", "track": 1, "slot": 0, "seed": 4}]})]),
+        Turn("end_turn", text="Here is a preview."),
+        Turn("end_turn", text="ok"),
+    ])
+    api, _ = app_factory(provider)
+    with api.websocket_connect(f"/chat?token={TOKEN}") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "user", "text": "plan chords"})
+        events = _until(ws, "done")
+        plan = next(e for e in events if e["type"] == "plan")
+        assert events[0]["source"] == "model"
+        clip = plan["roll"]["clips"][0]
+        assert plan["roll"]["plan_id"] and not plan["roll"]["applied"]
+        assert clip["kind"] == "chords" and clip["add"] and clip["existing"] == []
+        assert not live.on_main(lambda: live.song.tracks[1].clip_slots[0].has_clip)
+
+        ws.send_json({"type": "tool", "name": "apply_plan", "input": {"plan_id": plan["roll"]["plan_id"]}})
+        events = _until(ws, "done")
+        assert [e["type"] for e in events] == ["tool_call", "tool_result", "done"]
+        assert all(e["source"] == "user" for e in events[:2]) and not events[1]["is_error"]
+        assert events[1]["result"]["plan_id"] == plan["roll"]["plan_id"]
+        assert events[2]["stop_reason"] == "user_tool"
+        assert live.on_main(lambda: live.song.tracks[1].clip_slots[0].has_clip)
+
+        ws.send_json({"type": "tool", "name": "undo", "input": {"action": "undo"}})
+        events = _until(ws, "done")
+        assert events[1]["name"] == "undo" and not events[1]["is_error"]
+        assert live.on_main(lambda: live.song.undo_calls) == 1
+
+        # The model hears about the buttons with the next message, so it does not apply twice.
+        ws.send_json({"type": "user", "text": "thanks"})
+        _until(ws, "done")
+    assert provider.users[-1].startswith("[The user ran apply_plan")
+    assert "[The user ran undo" in provider.users[-1] and provider.users[-1].endswith("\n\nthanks")
+
+
+def test_page_tools_are_limited_and_wait_for_the_model(app_factory, live):
+    api, _ = app_factory()
+    with api.websocket_connect(f"/chat?token={TOKEN}") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "tool", "name": "delete_track", "input": {"track": 0}})
+        assert ws.receive_json() == {"type": "error", "message": "delete_track cannot be run from the chat"}
+        ws.send_json({"type": "tool", "name": "apply_plan", "input": {"plan_id": "gone"}})
+        events = _until(ws, "done")
+        assert events[1]["is_error"] and "NOT_FOUND" in events[1]["result"]
+        ws.send_json({"type": "tool", "name": "undo", "input": {"action": "undo"}})
+        events = _until(ws, "done")
+        assert events[1]["is_error"] and "Nothing to undo" in events[1]["result"]
+    assert live.on_main(lambda: len(live.song.tracks)) == 2
+
+
 def test_local_models_get_every_tool(app_factory):
     provider = ScriptedProvider([Turn("end_turn", text="hi")])
     provider.name = "lmstudio"

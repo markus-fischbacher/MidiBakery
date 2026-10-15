@@ -1,10 +1,12 @@
 """Local HTTP/WebSocket API for the Max for Live devices.
 
 - ``WS /chat``: the chat device. Client sends ``{"type": "user", "text": ...}``,
-  ``{"type": "confirm_reply", "id": n, "accept": bool}``, ``{"type": "cancel"}``
-  and ``{"type": "reset"}``; the server streams agent events (``text``,
-  ``thinking``, ``tool_call``, ``tool_result``, ``plan``, ``confirm``, ``done``,
-  ``error``) as JSON messages.
+  ``{"type": "confirm_reply", "id": n, "accept": bool}``, ``{"type": "cancel"}``,
+  ``{"type": "reset"}`` and ``{"type": "tool", "name": ..., "input": {...}}`` for
+  the page's own buttons (``apply_plan`` on a plan preview, ``undo``; see
+  ``UI_TOOLS``); the server streams agent events (``text``, ``thinking``,
+  ``tool_call``, ``tool_result``, ``plan``, ``confirm``, ``done``, ``error``) as
+  JSON messages. Tool events carry ``source``: ``model`` or ``user``.
 - ``POST /miditool/generate`` and ``/miditool/transform``: the clip-view MIDI
   Tools. Notes in, notes out; nothing is written to Live by the server.
 - ``GET /health``: server and Live bridge status.
@@ -188,11 +190,17 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
                 while True:
                     message = await ws.receive_json()
                     kind = message.get("type")
-                    if kind == "user":
+                    if kind in ("user", "tool"):
                         if running is not None and not running.done():
                             await emit({"type": "error", "message": "Still working on the previous message; send cancel first."})
                             continue
-                        running = asyncio.create_task(agent.send(str(message.get("text", "")), emit))
+                        if kind == "user":
+                            work = agent.send(str(message.get("text", "")), emit)
+                        else:
+                            arguments = message.get("input")
+                            work = agent.run_tool(str(message.get("name", "")), arguments if isinstance(arguments, dict) else {}, emit)
+                        # A task, not awaited here: apply_plan may ask for a confirm_reply on this socket.
+                        running = asyncio.create_task(work)
                     elif kind == "confirm_reply":
                         future = pending.get(message.get("id"))
                         if future is not None and not future.done():
