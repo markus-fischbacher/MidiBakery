@@ -262,7 +262,7 @@ def _miditool_core(p: Patcher, mode: str) -> tuple[str, str]:
 
 
 def _status_and_feedback(p: Patcher, v8: str, presentation) -> dict[str, str]:
-    status = p.comment("Connecting...", (460, 120, 250, 36), presentation=presentation, linecount=2,
+    status = p.comment("Connecting...", (460, 120, 250, 36), presentation=presentation, linecount=3,
                        fontsize=9.0, textcolor=[0.6, 0.6, 0.6, 1.0])
     p.connect(v8, 3, status)
     feedback = p.obj("route seed", 460, 180, outlets=["", ""], width=70)
@@ -307,16 +307,18 @@ def _dial(p: Patcher, rect, presentation, name: str, short: str, initial: float)
                        parameter_initial_enable=1, parameter_unitstyle=UNIT_PERCENT)
 
 
-def generator_device() -> dict[str, Any]:
-    p = Patcher()
-    width, height = 260.0, 147.0
-    v8, _ = _miditool_core(p, "generate")
-    ui = _status_and_feedback(p, v8, (4, 108, 252, 36))
+# Live's clip-view MIDI Tool panel (Live 12.4): the size of its own Max MIDI Tool templates.
+TOOL_WIDTH, TOOL_HEIGHT = 152.0, 147.0
+STATUS_RECT = (2, 98, 148, 46)
 
-    kind = p.parameter("live.tab", (760, 20, 200, 18), (4, 4, 252, 18), name="Part", short="Part", ptype=ENUM,
-                       inlets=1, outlets=["", "", ""], parameter_enum=["Drums", "Bass", "Chords", "Melody"],
-                       parameter_mmax=3, parameter_initial=[0], parameter_initial_enable=1)
-    p.boxes[-1]["box"]["num_lines_patching"] = 1
+
+def generator_device() -> dict[str, Any]:
+    """Layout (152 x 147): Part | Style menus, Density + Swing dials with Seed/Dice beside them, status."""
+    p = Patcher()
+    v8, _ = _miditool_core(p, "generate")
+    ui = _status_and_feedback(p, v8, STATUS_RECT)
+
+    kind = _menu(p, (760, 20, 80, 15), (2, 2, 72, 16), "Part", "Part", ["Drums", "Bass", "Chords", "Melody"], 0)
     _param_to_v8(p, kind, "kind", v8, 760, 44)
     styles = [
         ("drums", "Drum Style", ["House", "Techno", "Hip-Hop", "Trap", "Rock", "Breakbeat"], 0),
@@ -324,39 +326,41 @@ def generator_device() -> dict[str, Any]:
         ("chords", "Chord Rhythm", ["Sustain", "Pulse", "Offbeat", "Stabs"], 0),
     ]
     for i, (key, name, items, initial) in enumerate(styles):
-        menu = _menu(p, (760, 80 + i * 50, 110, 15), (4, 28, 120, 16), name, name.split()[-1], items, initial,
+        menu = _menu(p, (760, 80 + i * 50, 110, 15), (78, 2, 72, 16), name, name.split()[-1], items, initial,
                      varname=f"style_{key}")
         p.boxes[-1]["box"]["hidden"] = 0 if key == "drums" else 1
         _param_to_v8(p, menu, key, v8, 880, 80 + i * 50)
-    density = _dial(p, (760, 240, 44, 48), (4, 50, 50, 48), "Density", "Density", 50.0)
+    density = _dial(p, (760, 240, 44, 48), (2, 24, 48, 48), "Density", "Density", 50.0)
     _param_to_v8(p, density, "density", v8, 760, 300)
-    swing = _dial(p, (820, 240, 44, 48), (60, 50, 50, 48), "Swing", "Swing", 0.0)
+    swing = _dial(p, (820, 240, 44, 48), (52, 24, 48, 48), "Swing", "Swing", 0.0)
     _param_to_v8(p, swing, "swing", v8, 820, 360)
-    _seed_controls(p, v8, ui["seed_feedback"], (160, 54, 50, 16), (160, 76, 50, 16), (124, 55, 34, 14))
-    return p.to_json(kind="generator", title="MidiShower Generator", width=width, height=height)
+    _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(104, 40, 46, 16), dice_rect=(104, 60, 46, 16),
+                   label_rect=(104, 24, 46, 14))
+    return p.to_json(kind="generator", title="MidiShower Generator", width=TOOL_WIDTH, height=TOOL_HEIGHT)
 
 
 def transform_device() -> dict[str, Any]:
+    """Layout (152 x 147): Operation menu, Amount dial with Semis and Arp rate beside it, Seed row, status."""
     p = Patcher()
-    width, height = 260.0, 147.0
     v8, _ = _miditool_core(p, "transform")
-    ui = _status_and_feedback(p, v8, (4, 108, 252, 36))
+    ui = _status_and_feedback(p, v8, STATUS_RECT)
 
-    operation = _menu(p, (760, 20, 110, 15), (4, 4, 120, 16), "Operation", "Operation",
+    operation = _menu(p, (760, 20, 110, 15), (2, 2, 148, 16), "Operation", "Operation",
                       ["Humanize", "Quantize", "Invert", "Arpeggiate", "Variation", "Transpose"], 0)
     _param_to_v8(p, operation, "operation", v8, 760, 44)
-    amount = _dial(p, (760, 80, 44, 48), (4, 26, 50, 48), "Amount", "Amount", 50.0)
+    amount = _dial(p, (760, 80, 44, 48), (2, 24, 48, 48), "Amount", "Amount", 50.0)
     _param_to_v8(p, amount, "amount", v8, 760, 140)
-    semis = p.parameter("live.numbox", (820, 80, 44, 15), (60, 40, 44, 16), name="Semitones", short="Semis", ptype=INT,
+    p.comment("Semis", (820, 60, 40, 18), presentation=(52, 24, 46, 14), fontsize=9.0)
+    semis = p.parameter("live.numbox", (820, 80, 44, 15), (52, 40, 46, 16), name="Semitones", short="Semis", ptype=INT,
                         inlets=1, outlets=["", "float"], parameter_mmin=-48, parameter_mmax=48, parameter_initial=[12],
                         parameter_initial_enable=1, parameter_unitstyle=UNIT_INT)
     _param_to_v8(p, semis, "semitones", v8, 820, 110)
-    p.comment("Semis", (820, 60, 40, 18), presentation=(60, 26, 44, 14), fontsize=9.0)
-    rate = _menu(p, (900, 80, 60, 15), (110, 40, 50, 16), "Arp Rate", "Rate", ["1/32", "1/16", "1/8", "1/4"], 1)
+    p.comment("Arp rate", (900, 60, 50, 18), presentation=(102, 24, 48, 14), fontsize=9.0)
+    rate = _menu(p, (900, 80, 60, 15), (102, 40, 48, 16), "Arp Rate", "Rate", ["1/32", "1/16", "1/8", "1/4"], 1)
     _param_to_v8(p, rate, "rate", v8, 900, 110)
-    p.comment("Arp rate", (900, 60, 50, 18), presentation=(110, 26, 50, 14), fontsize=9.0)
-    _seed_controls(p, v8, ui["seed_feedback"], (200, 40, 50, 16), (200, 60, 50, 16), (200, 26, 34, 14))
-    return p.to_json(kind="transformation", title="MidiShower Transform", width=width, height=height)
+    _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(52, 76, 46, 16), dice_rect=(102, 76, 48, 16),
+                   label_rect=(2, 77, 46, 14))
+    return p.to_json(kind="transformation", title="MidiShower Transform", width=TOOL_WIDTH, height=TOOL_HEIGHT)
 
 
 DEVICES = {
