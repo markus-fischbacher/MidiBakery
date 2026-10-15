@@ -36,19 +36,30 @@
   form { display: flex; gap: 4px; padding: 4px 6px; border-top: 1px solid var(--line); }
   #input { flex: 1; padding: 3px 6px; }
   #input:disabled { opacity: .5; }
+  .seg { display: flex; }
+  .seg button { border-radius: 0; margin-left: -1px; }
+  .seg button:first-child { border-radius: 3px 0 0 3px; margin-left: 0; }
+  .seg button:last-child { border-radius: 0 3px 3px 0; }
+  .seg button.on { background: var(--accent); color: #1e1e1e; border-color: var(--accent); }
+  .note { color: var(--dim); font-size: 10px; align-self: center; }
+  /* Inside the Max for Live device the input is a native Max text field below this page:
+     Live does not pass keystrokes to jweb. */
+  body.device form { display: none; }
 </style>
 </head>
 <body>
 <header>
   <span id="dot" class="dot" title="Connection"></span>
   <span id="status" class="status">Connecting…</span>
-  <select id="provider" title="Model provider">
-    <option value="">Default</option>
-    <option value="anthropic">Claude</option>
-    <option value="ollama">Ollama</option>
-    <option value="lmstudio">LM Studio</option>
-  </select>
-  <button id="reset" title="Forget the conversation">New</button>
+  <!-- Buttons, not a <select>: native dropdowns do not open inside jweb. -->
+  <span id="providers" class="seg" title="Model provider">
+    <button type="button" data-provider="">Default</button>
+    <button type="button" data-provider="anthropic">Claude</button>
+    <button type="button" data-provider="ollama">Ollama</button>
+    <button type="button" data-provider="lmstudio">LM Studio</button>
+  </span>
+  <button id="stopTop" type="button" title="Stop the current answer" hidden>Stop</button>
+  <button id="reset" type="button" title="Forget the conversation">New</button>
 </header>
 <div id="log" aria-live="polite"></div>
 <form id="form">
@@ -70,8 +81,17 @@ let current = null;      // assistant message element being streamed
 let thinking = null;     // thinking element being streamed
 let retry = 0;
 
+const inDevice = Boolean(window.max && window.max.bindInlet);
+if (inDevice) document.body.classList.add("device");
+
 // Empty = the provider `midishower api` was started with.
-try { $("provider").value = localStorage.getItem(PROVIDER_KEY) || hash.get("provider") || ""; } catch (_) {}
+let provider = "";
+try { provider = localStorage.getItem(PROVIDER_KEY) || hash.get("provider") || ""; } catch (_) {}
+
+function showProvider() {
+  for (const b of document.querySelectorAll("#providers button")) b.classList.toggle("on", b.dataset.provider === provider);
+}
+showProvider();
 
 function add(cls, text) {
   const el = document.createElement("div");
@@ -88,6 +108,7 @@ function setBusy(value) {
   $("input").disabled = !ws || ws.readyState !== 1 || busy;
   $("send").disabled = $("input").disabled;
   $("stop").hidden = !busy;
+  $("stopTop").hidden = !busy || !inDevice;
   if (!busy) $("input").focus();
 }
 
@@ -101,7 +122,6 @@ function connect() {
     $("status").textContent = "No access token. Open this page from the MidiShower device.";
     return;
   }
-  const provider = $("provider").value;
   const url = `ws://${location.host}/chat?token=${encodeURIComponent(token)}` + (provider ? `&provider=${encodeURIComponent(provider)}` : "");
   ws = new WebSocket(url);
   $("status").textContent = "Connecting…";
@@ -158,6 +178,7 @@ function handle(ev) {
       break;
     case "reset":
       log.textContent = "";
+      add("note", "New conversation");
       break;
   }
 }
@@ -179,24 +200,40 @@ function askConfirm(ev) {
   box.append(text, yes, no);
 }
 
-$("form").onsubmit = (event) => {
-  event.preventDefault();
-  const text = $("input").value.trim();
-  if (!text || busy || !ws || ws.readyState !== 1) return;
+function sendText(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return false;
+  if (busy) { add("note", "Still answering - press Stop first."); return false; }
+  if (!ws || ws.readyState !== 1) { add("note", "Not connected yet."); return false; }
   add("msg user", text);
-  $("input").value = "";
   current = null; thinking = null;
   ws.send(JSON.stringify({ type: "user", text }));
   setBusy(true);
+  return true;
+}
+
+$("form").onsubmit = (event) => {
+  event.preventDefault();
+  if (sendText($("input").value)) $("input").value = "";
 };
-$("stop").onclick = () => ws && ws.send(JSON.stringify({ type: "cancel" }));
+const stop = () => ws && ws.send(JSON.stringify({ type: "cancel" }));
+$("stop").onclick = stop;
+$("stopTop").onclick = stop;
 $("reset").onclick = () => ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "reset" }));
-$("provider").onchange = () => {
-  try { localStorage.setItem(PROVIDER_KEY, $("provider").value); } catch (_) {}
-  log.textContent = "";
-  if (ws) { ws.onclose = null; ws.close(); }
-  connect();
-};
+for (const b of document.querySelectorAll("#providers button")) {
+  b.onclick = () => {
+    if (b.dataset.provider === provider) return;
+    provider = b.dataset.provider;
+    try { localStorage.setItem(PROVIDER_KEY, provider); } catch (_) {}
+    showProvider();
+    log.textContent = "";
+    if (ws) { ws.onclose = null; ws.close(); }
+    connect();
+  };
+}
+
+// The device's Max text field sends "chat_input <words...>" on Enter.
+if (inDevice) window.max.bindInlet("chat_input", (...words) => sendText(words.join(" ")));
 
 // Inside the Max for Live device (jweb): tell the device the page is up.
 try { if (window.max && window.max.outlet) window.max.outlet("loaded"); } catch (_) {}

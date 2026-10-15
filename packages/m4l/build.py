@@ -220,7 +220,25 @@ def chat_device() -> dict[str, Any]:
 
     node = p.obj("node.script midishower-chat.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=300)
     route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
-    web = p.box("jweb", (120, 200, 560, 169), inlets=1, outlets=[""], presentation=(0, 0, 560, height), url="")
+    web = p.box("jweb", (120, 200, 560, 169), inlets=1, outlets=[""], presentation=(0, 0, 560, height - 22), url="")
+    # Live does not pass keystrokes to jweb, so typing happens in a native Max text field.
+    # Enter sends "chat_input <words>" to the page (window.max.bindInlet), then clears the field.
+    entry = p.box("textedit", (700, 200, 400, 22), inlets=1, outlets=["", "int", "", ""],
+                  presentation=(0, height - 20, 560, 20), keymode=1, lines=1, wordwrap=0, fontsize=12.0,
+                  bgcolor=[0.165, 0.165, 0.165, 1.0], textcolor=[0.85, 0.85, 0.85, 1.0],
+                  bordercolor=[0.3, 0.3, 0.3, 1.0], varname="chat_entry")
+    on_text = p.obj("route text", 700, 240, outlets=["", ""], width=70)
+    order = p.obj("t b l", 700, 270, outlets=["bang", ""], width=50)
+    as_symbol = p.obj("tosymbol", 760, 300, width=60)
+    to_page = p.obj("prepend chat_input", 760, 330, width=120)
+    clear = p.message("clear", 700, 330)
+    p.connect(entry, 0, on_text)
+    p.connect(on_text, 0, order)
+    p.connect(order, 1, as_symbol)
+    p.connect(as_symbol, 0, to_page)
+    p.connect(to_page, 0, web)
+    p.connect(order, 0, clear)
+    p.connect(clear, 0, entry)
     set_url = p.obj("prepend url", 120, 100)
     p.connect(node, 0, route)
     p.connect(route, 0, set_url)
