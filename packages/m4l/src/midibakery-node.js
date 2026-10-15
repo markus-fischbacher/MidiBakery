@@ -15,6 +15,7 @@
 
 "use strict";
 
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -64,7 +65,10 @@ function readApi() {
 }
 
 function chatUrl() {
-  return `http://127.0.0.1:${api.port}/ui#token=${encodeURIComponent(api.token)}`;
+  // A new token must be a new page: jweb does not reload when only the #fragment changes,
+  // and the page reads its token once. The query is derived from the token, never the token.
+  const key = crypto.createHash("sha256").update(api.token).digest("hex").slice(0, 8);
+  return `http://127.0.0.1:${api.port}/ui?key=${key}#token=${encodeURIComponent(api.token)}`;
 }
 
 async function refresh() {
