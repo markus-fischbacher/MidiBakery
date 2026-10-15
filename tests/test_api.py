@@ -7,6 +7,7 @@ import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from midibakery.agent import REDUCED_TOOLS
 from midibakery.agent.providers.base import ToolCall, Turn
 from midibakery.api.server import api_info_path, build_app, write_api_info
 from midibakery.bridge import BridgeClient
@@ -158,6 +159,16 @@ def test_chat_streams_agent_events(app_factory, live):
     assert live.on_main(lambda: live.song.tracks[1].clip_slots[0].has_clip)
 
 
+def test_local_models_get_every_tool(app_factory):
+    provider = ScriptedProvider([Turn("end_turn", text="hi")])
+    provider.name = "lmstudio"
+    api, _ = app_factory(provider)
+    with api.websocket_connect(f"/chat?token={TOKEN}") as ws:
+        ready = ws.receive_json()
+    assert ready["tools"] > len(REDUCED_TOOLS)
+    assert {"launch_clip", "fire_scene", "update_track"} <= {t.name for t in provider.tools}
+
+
 def test_chat_confirmation_round_trip(app_factory, live):
     provider = ScriptedProvider([
         Turn("tool_use", [ToolCall("t1", "delete_track", {"track": 1})]),
@@ -165,7 +176,7 @@ def test_chat_confirmation_round_trip(app_factory, live):
     ])
     api, _ = app_factory(provider)
     with api.websocket_connect(f"/chat?token={TOKEN}&tools=reduced") as ws:
-        assert ws.receive_json()["tools"] == 14
+        assert ws.receive_json()["tools"] == len(REDUCED_TOOLS)
         ws.send_json({"type": "user", "text": "delete track 2"})
         # delete_track is not in the reduced set: the model gets an error, nothing is asked.
         events = _until(ws, "done")

@@ -139,7 +139,7 @@ M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
 
 ### Agent / LLM-Provider (`agent/`)
 - Provider-Interface mit zwei Implementierungen: **Anthropic** (Default `claude-sonnet-5-5`, wählbar `claude-opus-5-5`) und **Ollama** (lokal).
-- Der Tool-Loop nutzt dieselben Katalog-Tools. Für kleine lokale Modelle wird ein reduziertes Tool-Set bereitgestellt.
+- Der Tool-Loop nutzt dieselben Katalog-Tools. Lokale Modelle bekommen dieselben Tools; ein reduziertes Tool-Set für Modelle mit kleinem Kontext ist optional.
 - Bei der Umsetzung wird die `claude-api`-Skill-Referenz für die SDK-Nutzung herangezogen.
 
 ## Kommerzielle Aspekte

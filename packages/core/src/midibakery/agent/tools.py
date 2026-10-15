@@ -34,6 +34,7 @@ REDUCED_TOOLS = frozenset({
     "plan_changes",
     "apply_plan",
     "transport",
+    "launch_clip",
     "undo",
 })
 

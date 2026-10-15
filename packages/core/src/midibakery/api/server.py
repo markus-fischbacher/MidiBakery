@@ -147,12 +147,13 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             await emit({"type": "error", "message": str(exc)})
             await ws.close()
             return
-        # Local models get the small profile unless the device asks for tools=full.
-        small = provider.name in LOCAL_PROVIDERS and options.get("tools") != "full"
+        # Every model gets every tool; local models get them with lean schemas and short
+        # results. tools=small or tools=reduced opts into a subset.
+        small = options.get("tools") == "small"
         allowed = SMALL_TOOLS if small else REDUCED_TOOLS if options.get("tools") == "reduced" else None
         running: asyncio.Task[None] | None = None
         async with ToolHost(server, confirm, allowed) as host:
-            agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=small)
+            agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=provider.name in LOCAL_PROVIDERS)
             await emit({"type": "ready", "provider": provider.name, "model": provider.model, "tools": len(host.tools)})
             try:
                 while True:

@@ -28,7 +28,7 @@ uv run midibakery ping              # with Live running and MidiBakery selected 
 ```bash
 uv run midibakery chat                                  # Claude (claude-sonnet-5-5) in the terminal
 uv run midibakery chat --model claude-opus-5-5
-uv run midibakery chat --provider ollama --model qwen3:8b  # local: small tool set, compact schemas
+uv run midibakery chat --provider ollama --model qwen3:8b  # local: all tools, compact schemas (--small for 8k context)
 uv run midibakery chat --provider lmstudio --model google/gemma-4-e4b  # LM Studio server (LMSTUDIO_HOST, default 127.0.0.1:1234)
 uv run midibakery api                                   # HTTP/WebSocket API for the Max for Live devices
 ```
