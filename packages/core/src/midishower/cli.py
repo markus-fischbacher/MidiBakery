@@ -113,7 +113,10 @@ def cmd_chat(args: argparse.Namespace) -> int:
     provider = _provider_factory(args.provider, args.model)({})
 
     async def confirm(message: str) -> bool:
-        answer = await asyncio.to_thread(input, f"\n? {message} [y/N] ")
+        try:
+            answer = await asyncio.to_thread(input, f"\n? {message} [y/N] ")
+        except EOFError:  # input closed (piped): never confirm by default
+            return False
         return answer.strip().lower() in ("y", "yes", "j", "ja")
 
     async def emit(event: dict) -> None:
