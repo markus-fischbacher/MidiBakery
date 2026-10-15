@@ -334,3 +334,32 @@ def test_eighth_note_swing():
     hats = [n.start_time for n in generate_drums(Meter(), 1, "hiphop", random.Random(1), map_pads(None), swing=0.6, swing_unit=0.5)
             if n.pitch == GM_NOTES["closed_hat"]]
     assert hats[:4] == pytest.approx([0, 0.6, 1.0, 1.6])
+
+
+def test_melody_notes_always_play():
+    """Dropped melody notes sound like mistakes, so the melody generator never lowers probability."""
+    from midishower.compose import harmony as harmony_mod
+    from midishower.compose.melody import generate_melody
+    from midishower.compose.theory import MAJOR, Scale
+
+    scale = Scale(0, MAJOR)
+    for seed in range(20):
+        rng = random.Random(seed)
+        harmony = harmony_mod.auto(scale, Meter(), 4, 1.0, rng)
+        notes = generate_melody(harmony, scale, Meter(), 4, rng, 60, 84, 1.0)
+        assert all(n.probability == 1.0 for n in notes)
+
+
+def test_drum_chance_scales_only_the_optional_hits():
+    from midishower.compose.drums import scale_chance
+
+    def probabilities(chance):
+        notes = generate_drums(Meter(), 4, "hiphop", random.Random(3), map_pads(None), density=0.6, chance=chance)
+        return [n.probability for n in notes]
+
+    assert all(p == 1.0 for p in probabilities(0.0))
+    natural = probabilities(0.5)
+    assert any(p < 1.0 for p in natural)
+    assert all(a <= b for a, b in zip(probabilities(1.0), natural))
+    assert scale_chance(1.0, 1.0) == 1.0  # backbeats never drop out
+    assert scale_chance(0.7, 0.5) == 0.7

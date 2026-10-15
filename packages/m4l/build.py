@@ -313,7 +313,7 @@ STATUS_RECT = (2, 98, 148, 46)
 
 
 def generator_device() -> dict[str, Any]:
-    """Layout (152 x 147): Part | Style menus, Density + Swing dials with Seed/Dice beside them, status."""
+    """Layout (152 x 147): Part | Style menus; Density, Swing, Chance (drums only) dials; Seed row; status."""
     p = Patcher()
     v8, _ = _miditool_core(p, "generate")
     ui = _status_and_feedback(p, v8, STATUS_RECT)
@@ -334,8 +334,11 @@ def generator_device() -> dict[str, Any]:
     _param_to_v8(p, density, "density", v8, 760, 300)
     swing = _dial(p, (820, 240, 44, 48), (52, 24, 48, 48), "Swing", "Swing", 0.0)
     _param_to_v8(p, swing, "swing", v8, 820, 360)
-    _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(104, 40, 46, 16), dice_rect=(104, 60, 46, 16),
-                   label_rect=(104, 24, 46, 14))
+    chance = _dial(p, (880, 240, 44, 48), (102, 24, 48, 48), "Chance", "Chance", 50.0)
+    p.boxes[-1]["box"]["varname"] = "chance_dial"
+    _param_to_v8(p, chance, "chance", v8, 880, 360)
+    _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(52, 76, 46, 16), dice_rect=(102, 76, 48, 16),
+                   label_rect=(2, 77, 46, 14))
     return p.to_json(kind="generator", title="MidiShower Generator", width=TOOL_WIDTH, height=TOOL_HEIGHT)
 
 
