@@ -197,7 +197,21 @@ function toLive(notes) {
   });
 }
 
+// Shown when a transformation changed nothing, so it does not look like a failure.
+var NO_CHANGE_HINTS = {
+  arpeggiate: "No chords to arpeggiate (needs notes starting together). Cmd+Z restores earlier chords.",
+  quantize: "Already on the grid - nothing to quantize.",
+  invert: "Nothing to invert (a single pitch mirrors onto itself).",
+  transpose: "Nothing transposed (0 semitones?).",
+  humanize: "Nothing changed - raise Amount.",
+  variation: "Nothing changed - raise Amount or try another seed."
+};
+
 function describe(result) {
+  var d = result.diff;
+  if (MODE === "transform" && d && !d.added && !d.modified && !d.removed) {
+    return NO_CHANGE_HINTS[OPERATIONS[params.operation]] || "Nothing changed.";
+  }
   var parts = [];
   if (result.chords) parts.push(Array.isArray(result.chords) ? result.chords.join(" - ") : String(result.chords));
   if (result.diff) parts.push("+" + result.diff.added + " ~" + result.diff.modified + " -" + result.diff.removed);
