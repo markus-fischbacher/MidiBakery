@@ -42,6 +42,11 @@
   .seg button:last-child { border-radius: 0 3px 3px 0; }
   .seg button.on { background: var(--accent); color: #1e1e1e; border-color: var(--accent); }
   .note { color: var(--dim); font-size: 10px; align-self: center; }
+  /* While the model works: phase + elapsed seconds, with animated dots. */
+  .pending { color: var(--accent); font-size: 11px; align-self: flex-start; }
+  .pending .dots::after { content: ""; animation: dots 1.2s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+  .pending .secs { color: var(--dim); margin-left: 4px; }
   /* Inside the Max for Live device the input is a native Max text field below this page:
      Live does not pass keystrokes to jweb. */
   body.device form { display: none; }
@@ -97,9 +102,38 @@ function add(cls, text) {
   const el = document.createElement("div");
   el.className = cls;
   el.textContent = text;
-  log.appendChild(el);
+  // The progress line always stays last.
+  if (pending.el && pending.el.parentNode === log) log.insertBefore(el, pending.el);
+  else log.appendChild(el);
   log.scrollTop = log.scrollHeight;
   return el;
+}
+
+// Progress line while the model is working ("Thinking... 4 s", "Running get_session... 1 s").
+const pending = { el: null, since: 0, timer: null };
+
+function showPending(label) {
+  if (!pending.el) {
+    pending.el = document.createElement("div");
+    pending.el.className = "pending";
+    pending.el.innerHTML = '<span class="label"></span><span class="dots"></span><span class="secs"></span>';
+  }
+  pending.el.querySelector(".label").textContent = label;
+  pending.since = Date.now();
+  log.appendChild(pending.el);
+  renderPending();
+  if (!pending.timer) pending.timer = setInterval(renderPending, 1000);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderPending() {
+  if (pending.el) pending.el.querySelector(".secs").textContent = `${Math.floor((Date.now() - pending.since) / 1000)} s`;
+}
+
+function hidePending() {
+  clearInterval(pending.timer);
+  pending.timer = null;
+  if (pending.el) pending.el.remove();
 }
 
 function setBusy(value) {
@@ -127,6 +161,7 @@ function connect() {
   $("status").textContent = "Connecting…";
   ws.onopen = () => { retry = 0; setBusy(false); };
   ws.onclose = (event) => {
+    hidePending();
     setBusy(false);
     if (event.code === 4401) { $("status").textContent = "Access denied: the API was restarted. Reload the device."; return; }
     $("status").textContent = "Disconnected. Is `midishower api` running? Retrying…";
@@ -143,28 +178,36 @@ function handle(ev) {
       break;
     case "thinking":
       if (!thinking) thinking = add("msg thinking", "");
+      if (pending.el && pending.el.querySelector(".label").textContent !== "Thinking") showPending("Thinking");
       thinking.textContent += ev.text;
       break;
     case "text":
       thinking = null;
-      if (!current) current = add("msg assistant", "");
+      if (!current) {
+        current = add("msg assistant", "");
+        showPending("Writing");
+      }
       current.textContent += ev.text;
       log.scrollTop = log.scrollHeight;
       break;
     case "tool_call":
       current = null; thinking = null;
       add("tool", `→ ${ev.name} ${brief(ev.input)}`);
+      showPending(`Running ${ev.name}`);
       break;
     case "tool_result":
       if (ev.is_error) add("tool err", `✗ ${brief(ev.result, 220)}`);
+      showPending("Thinking");
       break;
     case "plan":
       add("tool", `◇ preview from ${ev.name}`);
       break;
     case "confirm":
+      hidePending();  // waiting for the user, not the model
       askConfirm(ev);
       break;
     case "done": {
+      hidePending();
       current = null; thinking = null;
       const u = ev.usage || {};
       if (u.input_tokens != null) add("usage", `${u.input_tokens} in / ${u.output_tokens} out` + (u.cache_read_input_tokens ? `, ${u.cache_read_input_tokens} cached` : ""));
@@ -172,11 +215,13 @@ function handle(ev) {
       break;
     }
     case "error":
+      hidePending();
       current = null; thinking = null;
       add("error", ev.message);
       setBusy(false);
       break;
     case "reset":
+      hidePending();
       log.textContent = "";
       add("note", "New conversation");
       break;
@@ -193,6 +238,7 @@ function askConfirm(ev) {
   no.textContent = "Cancel";
   const answer = (accept) => {
     ws.send(JSON.stringify({ type: "confirm_reply", id: ev.id, accept }));
+    showPending(accept ? "Applying" : "Thinking");
     box.replaceChildren(document.createTextNode(accept ? "✓ applied" : "✗ cancelled"));
   };
   yes.onclick = () => answer(true);
@@ -209,6 +255,7 @@ function sendText(raw) {
   current = null; thinking = null;
   ws.send(JSON.stringify({ type: "user", text }));
   setBusy(true);
+  showPending("Thinking");
   return true;
 }
 
