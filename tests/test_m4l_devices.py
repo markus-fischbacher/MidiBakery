@@ -57,7 +57,7 @@ def test_parameters_are_unique_and_registered(devices):
 
 def test_midi_tool_controls_fit_the_clip_view_panel(devices):
     """Live gives MIDI Tools a small fixed panel; anything outside it is cut off."""
-    for name in ("MidiShower Generator", "MidiShower Transform"):
+    for name in ("MidiBakery Generator", "MidiBakery Transform"):
         _, patcher = build.read_amxd(devices[name])
         assert patcher["patcher"]["devicewidth"] == build.TOOL_WIDTH
         rects = [b["presentation_rect"] for b in _boxes(patcher).values() if b.get("presentation")]
@@ -78,7 +78,7 @@ def test_int_parameters_fit_maxs_int_type(devices):
 
 def test_chat_device_types_into_a_native_field(devices):
     """Live does not pass keystrokes to jweb; the native textedit forwards them as chat_input."""
-    _, patcher = build.read_amxd(devices["MidiShower Chat"])
+    _, patcher = build.read_amxd(devices["MidiBakery Chat"])
     boxes = _boxes(patcher)
     by_text = {b.get("text"): i for i, b in boxes.items()}
     entry = next(i for i, b in boxes.items() if b["maxclass"] == "textedit")
@@ -98,20 +98,20 @@ def test_chat_device_types_into_a_native_field(devices):
     assert (by_text["prepend append"], menu) in lines and (by_text["prepend set"], menu) in lines
     assert (menu, by_text["prepend model_index"]) in lines and (by_text["prepend model_index"], web) in lines
     assert (router, by_text["prepend jweb"]) in lines  # other jweb messages still reach the log
-    page = (ROOT / "packages/core/src/midishower/api/ui/chat.html").read_text()
+    page = (ROOT / "packages/core/src/midibakery/api/ui/chat.html").read_text()
     assert 'bindInlet("model_index"' in page and 'outlet("menu_append"' in page
     assert 'bindInlet("chat_input"' in page
     assert "body.device #modelSelect { display: none; }" in page  # the HTML dropdown is browser-only
 
 
 def test_chat_device_passes_midi_through(devices):
-    _, patcher = build.read_amxd(devices["MidiShower Chat"])
+    _, patcher = build.read_amxd(devices["MidiBakery Chat"])
     texts = {b.get("text") for b in _boxes(patcher).values()}
     assert {"midiin", "midiout"} <= texts
 
 
 def test_style_menus_have_the_scripting_names_v8_uses(devices):
-    _, patcher = build.read_amxd(devices["MidiShower Generator"])
+    _, patcher = build.read_amxd(devices["MidiBakery Generator"])
     varnames = {b.get("varname") for b in _boxes(patcher).values()}
     assert {"style_drums", "style_bass", "style_chords"} <= varnames
 
@@ -124,13 +124,13 @@ def test_node_scripts_ship_next_to_every_device(devices, tmp_path):
     for path in installed:
         for name in build.NODE_FILES:
             assert (path.parent / name).exists()
-    assert (tmp_path / "MIDI Tools/Max Generators/MidiShower Generator.amxd").exists()
+    assert (tmp_path / "MIDI Tools/Max Generators/MidiBakery Generator.amxd").exists()
 
 
 def test_each_device_starts_the_node_entry_for_its_mode(devices):
     """Node for Max does not pass script arguments in process.argv, so the mode comes from the entry file."""
-    expected = {"MidiShower Chat": "midishower-chat.js", "MidiShower Generator": "midishower-miditool.js",
-                "MidiShower Transform": "midishower-miditool.js"}
+    expected = {"MidiBakery Chat": "midibakery-chat.js", "MidiBakery Generator": "midibakery-miditool.js",
+                "MidiBakery Transform": "midibakery-miditool.js"}
     for name, path in devices.items():
         _, patcher = build.read_amxd(path)
         scripts = [b.get("text", "") for b in _boxes(patcher).values() if b.get("text", "").startswith("node.script")]
@@ -140,7 +140,7 @@ def test_each_device_starts_the_node_entry_for_its_mode(devices):
 @pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
 def test_javascript_parses(devices, tmp_path):
     node = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
-    _, patcher = build.read_amxd(devices["MidiShower Generator"])
+    _, patcher = build.read_amxd(devices["MidiBakery Generator"])
     code = next(b["code"] for b in _boxes(patcher).values() if b["maxclass"] == "v8.codebox")
     (tmp_path / "miditool.js").write_text(code)
     for file in (tmp_path / "miditool.js", *(build.SRC / n for n in build.NODE_FILES)):

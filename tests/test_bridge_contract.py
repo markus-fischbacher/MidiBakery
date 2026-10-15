@@ -6,7 +6,7 @@ import socket
 
 import pytest
 
-from midishower.bridge import BridgeError, discovery_path
+from midibakery.bridge import BridgeError, discovery_path
 
 
 async def test_health_lists_supported_ops(client):
@@ -203,7 +203,7 @@ async def test_device_insert_and_parameters(client):
 
 async def test_device_insert_unsupported_before_live_12_3(bridge_env):
     from conftest import LiveHarness
-    from midishower.bridge import BridgeClient
+    from midibakery.bridge import BridgeClient
 
     harness = LiveHarness(version=(12, 2, 5)).start()
     client = BridgeClient()
@@ -217,8 +217,8 @@ async def test_device_insert_unsupported_before_live_12_3(bridge_env):
 
 
 async def test_expired_request_times_out_instead_of_running_late(client, live, monkeypatch):
-    from midishower.catalog import OPS
-    from midishower.catalog.registry import OpSpec
+    from midibakery.catalog import OPS
+    from midibakery.catalog.registry import OpSpec
 
     spec = OPS["song.set"]
     monkeypatch.setitem(OPS, "song.set", OpSpec(spec.name, spec.params, spec.summary, spec.read_only, timeout=0.2))

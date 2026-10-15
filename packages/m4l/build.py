@@ -1,16 +1,16 @@
-"""Builds the MidiShower Max for Live devices (.amxd) from the sources in src/.
+"""Builds the MidiBakery Max for Live devices (.amxd) from the sources in src/.
 
     uv run python packages/m4l/build.py            # -> packages/m4l/dist/
     uv run python packages/m4l/build.py --install  # also copy into Live's User Library
 
 Devices:
-- MidiShower Chat (MIDI Effect): chat with the MidiShower agent in Live's device
+- MidiBakery Chat (MIDI Effect): chat with the MidiBakery agent in Live's device
   view (jweb shows the API's /ui page). MIDI passes through unchanged.
-- MidiShower Generator / MidiShower Transform (MIDI Tools, Live 12.2+): the
+- MidiBakery Generator / MidiBakery Transform (MIDI Tools, Live 12.2+): the
   composition engine in the clip view's Generate / Transform panels.
 
 Patchers are generated here instead of hand-saved in Max, so they stay
-reviewable in git and every device shares one node helper (src/midishower-node.js).
+reviewable in git and every device shares one node helper (src/midibakery-node.js).
 An .amxd file is a small chunk header followed by the patcher JSON.
 """
 
@@ -28,15 +28,15 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 SRC = HERE / "src"
 DIST = HERE / "dist"
-NODE_SCRIPT = "midishower-node.js"
+NODE_SCRIPT = "midibakery-node.js"
 # node.script entry files per device kind; each sets its mode and loads NODE_SCRIPT.
-NODE_ENTRIES = ("midishower-chat.js", "midishower-miditool.js")
+NODE_ENTRIES = ("midibakery-chat.js", "midibakery-miditool.js")
 NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES)
 
 # Four-character device type codes, as found in Live's own device templates.
 DEVICE_TYPES = {"midi_effect": b"mmmm", "generator": b"nagg", "transformation": b"natt"}
 INSTALL_DIRS = {
-    "midi_effect": Path("Presets/MIDI Effects/Max MIDI Effect/MidiShower"),
+    "midi_effect": Path("Presets/MIDI Effects/Max MIDI Effect/MidiBakery"),
     "generator": Path("MIDI Tools/Max Generators"),
     "transformation": Path("MIDI Tools/Max Transformations"),
 }
@@ -130,7 +130,7 @@ class Patcher:
             "enablehscroll": 1,
             "enablevscroll": 1,
             "devicewidth": width,
-            "description": "MidiShower - AI composition for Ableton Live",
+            "description": "MidiBakery by Klirrwerk - AI composition for Ableton Live",
             "digest": "",
             "tags": "",
             "style": "",
@@ -221,7 +221,7 @@ def chat_device() -> dict[str, Any]:
     midiout = p.obj("midiout", 20, 60, outlets=[], width=50)
     p.connect(midiin, 0, midiout)
 
-    node = p.obj("node.script midishower-chat.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=300)
+    node = p.obj("node.script midibakery-chat.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=300)
     route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
     # Same size in patching and presentation: jweb may render at its patching size.
     web_rect = (0, 0, 500, height)
@@ -293,7 +293,7 @@ def chat_device() -> dict[str, Any]:
                          inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
     _on_press(p, popout, "popout", node, 440, 100)
-    return p.to_json(kind="midi_effect", title="MidiShower Chat", width=width, height=height)
+    return p.to_json(kind="midi_effect", title="MidiBakery Chat", width=width, height=height)
 
 
 def _miditool_core(p: Patcher, mode: str) -> tuple[str, str]:
@@ -305,7 +305,7 @@ def _miditool_core(p: Patcher, mode: str) -> tuple[str, str]:
     v8 = p.box("v8.codebox", (20, 100, 420, 300), inlets=2, outlets=["", "", "", "", ""], code=code, filename="none",
                fontface=0, fontname="<Monospaced>", fontsize=10.0)
     tool_out = p.obj("live.miditool.out", 20, 420, outlets=[], width=110)
-    node = p.obj("node.script midishower-miditool.js @autostart 1 @watch 0", 460, 420, outlets=["", ""], width=300)
+    node = p.obj("node.script midibakery-miditool.js @autostart 1 @watch 0", 460, 420, outlets=["", ""], width=300)
     rebang = p.obj("t b", 460, 20, outlets=["bang"], width=40)
     # Context (right outlet) fires first and is stored; notes (left) trigger the join.
     p.connect(tool_in, 1, join, 1)
@@ -400,7 +400,7 @@ def generator_device() -> dict[str, Any]:
                           parameter_initial=[1], parameter_initial_enable=1)
     p.boxes[-1]["box"].update({"mode": 1, "text": "Replace", "texton": "Replace"})
     _param_to_v8(p, replace, "replace", v8, 940, 330)
-    return p.to_json(kind="generator", title="MidiShower Generator", width=TOOL_WIDTH, height=TOOL_HEIGHT)
+    return p.to_json(kind="generator", title="MidiBakery Generator", width=TOOL_WIDTH, height=TOOL_HEIGHT)
 
 
 def transform_device() -> dict[str, Any]:
@@ -424,13 +424,13 @@ def transform_device() -> dict[str, Any]:
     _param_to_v8(p, rate, "rate", v8, 900, 110)
     _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(52, 76, 46, 16), dice_rect=(102, 76, 48, 16),
                    label_rect=(2, 77, 46, 14))
-    return p.to_json(kind="transformation", title="MidiShower Transform", width=TOOL_WIDTH, height=TOOL_HEIGHT)
+    return p.to_json(kind="transformation", title="MidiBakery Transform", width=TOOL_WIDTH, height=TOOL_HEIGHT)
 
 
 DEVICES = {
-    "MidiShower Chat": ("midi_effect", chat_device),
-    "MidiShower Generator": ("generator", generator_device),
-    "MidiShower Transform": ("transformation", transform_device),
+    "MidiBakery Chat": ("midi_effect", chat_device),
+    "MidiBakery Generator": ("generator", generator_device),
+    "MidiBakery Transform": ("transformation", transform_device),
 }
 
 

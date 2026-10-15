@@ -4,16 +4,16 @@ import random
 
 import pytest
 
-from midishower.compose import harmony
-from midishower.compose import transform as tf
-from midishower.compose.bass import STYLES as BASS_STYLES
-from midishower.compose.bass import generate_bass
-from midishower.compose.chords import RHYTHMS, generate_chords
-from midishower.compose.drums import GM_NOTES, STYLES as DRUM_STYLES
-from midishower.compose.drums import classify_pad, generate_drums, kick_times, map_pads
-from midishower.compose.melody import generate_melody
-from midishower.compose.rhythm import Grid, Meter
-from midishower.compose.theory import (
+from midibakery.compose import harmony
+from midibakery.compose import transform as tf
+from midibakery.compose.bass import STYLES as BASS_STYLES
+from midibakery.compose.bass import generate_bass
+from midibakery.compose.chords import RHYTHMS, generate_chords
+from midibakery.compose.drums import GM_NOTES, STYLES as DRUM_STYLES
+from midibakery.compose.drums import classify_pad, generate_drums, kick_times, map_pads
+from midibakery.compose.melody import generate_melody
+from midibakery.compose.rhythm import Grid, Meter
+from midibakery.compose.theory import (
     Scale,
     detect_chord,
     diatonic_chord,
@@ -160,7 +160,7 @@ def test_pitched_parts_stay_in_scale(scale, seed):
 @pytest.mark.parametrize("meter", METERS, ids=str)
 @pytest.mark.parametrize("bars", [1, 2, 5])
 def test_notes_respect_bar_boundaries(meter, bars):
-    from midishower.compose.notes import fit_to_length
+    from midibakery.compose.notes import fit_to_length
 
     length = meter.beats_per_bar * bars
     for key, notes in _gens(A_MINOR, meter, bars, 3).items():
@@ -286,7 +286,7 @@ def test_transpose_by_semitones_is_chromatic():
 def test_transform_spec_transpose_needs_an_amount():
     from pydantic import ValidationError
 
-    from midishower.compose.specs import TransformSpec
+    from midibakery.compose.specs import TransformSpec
 
     with pytest.raises(ValidationError, match="semitones"):
         TransformSpec(track=0, slot=0, operation="transpose")
@@ -314,7 +314,7 @@ def test_variation_keeps_scale_and_uses_probability():
 
 
 def test_fit_to_length_removes_same_pitch_overlaps():
-    from midishower.compose.notes import Note, fit_to_length
+    from midibakery.compose.notes import Note, fit_to_length
 
     notes = [Note(42, 0.0, 0.5), Note(42, 0.25, 0.5), Note(36, 0.0, 2.0), Note(42, 3.9, 1.0), Note(50, 4.0, 1.0)]
     fitted = fit_to_length(notes, 4.0)
@@ -338,9 +338,9 @@ def test_eighth_note_swing():
 
 def test_melody_notes_always_play():
     """Dropped melody notes sound like mistakes, so the melody generator never lowers probability."""
-    from midishower.compose import harmony as harmony_mod
-    from midishower.compose.melody import generate_melody
-    from midishower.compose.theory import MAJOR, Scale
+    from midibakery.compose import harmony as harmony_mod
+    from midibakery.compose.melody import generate_melody
+    from midibakery.compose.theory import MAJOR, Scale
 
     scale = Scale(0, MAJOR)
     for seed in range(20):
@@ -351,7 +351,7 @@ def test_melody_notes_always_play():
 
 
 def test_drum_chance_scales_only_the_optional_hits():
-    from midishower.compose.drums import scale_chance
+    from midibakery.compose.drums import scale_chance
 
     def probabilities(chance):
         notes = generate_drums(Meter(), 4, "hiphop", random.Random(3), map_pads(None), density=0.6, chance=chance)

@@ -58,11 +58,11 @@ class LiveHarness:
         try:
             Live.MAIN_THREAD["ident"] = threading.get_ident()
             Live.Application.VERSION["value"] = self.version
-            import MidiShower
+            import MidiBakery
 
             self.song = Song()
             self.c_instance = CInstance(self.song)
-            self.surface = MidiShower.create_instance(self.c_instance)
+            self.surface = MidiBakery.create_instance(self.c_instance)
         except BaseException as exc:  # surface start-up failure
             self.error = exc
             self._ready.set()
@@ -85,8 +85,8 @@ class LiveHarness:
 
 @pytest.fixture
 def bridge_env(tmp_path, monkeypatch):
-    monkeypatch.setenv("MIDISHOWER_HOME", str(tmp_path))
-    monkeypatch.setenv("MIDISHOWER_PORT", "0")
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    monkeypatch.setenv("MIDIBAKERY_PORT", "0")
     return tmp_path
 
 
@@ -99,7 +99,7 @@ def live(bridge_env):
 
 @pytest.fixture
 async def client(live):
-    from midishower.bridge import BridgeClient
+    from midibakery.bridge import BridgeClient
 
     c = BridgeClient()
     yield c

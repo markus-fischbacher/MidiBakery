@@ -6,8 +6,8 @@ import pytest
 from mcp import Client
 from mcp_types import ElicitResult
 
-from midishower.mcp import build_server
-from midishower.mcp.server import PIANO_ROLL_URI
+from midibakery.mcp import build_server
+from midibakery.mcp.server import PIANO_ROLL_URI
 
 
 class Answer:
@@ -88,7 +88,7 @@ async def test_replace_asks_and_keeps_the_same_idea_across_the_round_trip(client
     change = result.structured_content["changes"][0]
     # The seed drawn on the first round is reused after the confirmation, so the
     # notes written are exactly the ones the result reports.
-    roll = result.meta["midishower/roll"]["clips"][0]
+    roll = result.meta["midibakery/roll"]["clips"][0]
     written = sorted((n["pitch"], n["start_time"]) for n in _notes(live, 1, 0))
     assert written == sorted((n[0], n[1]) for n in roll["add"])
     assert change["seed"] == result.structured_content["applied"][0]["seed"]
@@ -126,7 +126,7 @@ async def test_piano_roll_app(client, live):
             {"pitch": 60, "start_time": 0.1, "duration": 1}, {"pitch": 64, "start_time": 1, "duration": 1},
         ]})
         result = await mcp.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "quantize", "preview": True})
-        roll = result.meta["midishower/roll"]
+        roll = result.meta["midibakery/roll"]
         assert roll["applied"] is False and roll["plan_id"] == result.structured_content["plan_id"]
         clip = roll["clips"][0]
         assert clip["length"] == 4 and len(clip["existing"]) == 2
