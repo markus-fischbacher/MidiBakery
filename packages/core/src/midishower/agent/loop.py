@@ -7,7 +7,7 @@ import json
 from typing import Any
 
 from midishower.agent.providers.base import Emit, Provider, ToolResult
-from midishower.agent.tools import ToolHost
+from midishower.agent.tools import ToolHost, compact_tools
 from midishower.mcp.server import INSTRUCTIONS
 
 SYSTEM_PROMPT = (
@@ -23,17 +23,30 @@ SYSTEM_PROMPT = (
     "Tool guide:\n" + INSTRUCTIONS
 )
 
+# For local models with a small context (e.g. 8k): the essentials of SYSTEM_PROMPT and INSTRUCTIONS.
+SMALL_SYSTEM_PROMPT = (
+    "You are MidiShower, a music assistant controlling the open Ableton Live 12 set through tools. "
+    "Answer in the user's language, briefly.\n"
+    "- Call get_session first. Tracks and clip slots are zero-based indices.\n"
+    "- Times are in beats (quarter notes); pitch 60 = C3. Stay in the song scale.\n"
+    "- compose_drums/bass/chords/melody write a new clip into an EMPTY slot; pick an empty slot from get_session. "
+    "Give bass and melody chords_from (the chord clip), the bass follow_kick (the drum clip).\n"
+    "- edit_notes and transform_notes change existing notes by note_id from get_clip.\n"
+    "- Every write can be undone with undo. If a tool fails, read the error and fix the call."
+)
+
 MAX_STEPS = 24
 
 
 class Agent:
     """One conversation: a provider (the model) plus a tool host (Live via MCP)."""
 
-    def __init__(self, provider: Provider, host: ToolHost, system: str = SYSTEM_PROMPT, max_steps: int = MAX_STEPS):
+    def __init__(self, provider: Provider, host: ToolHost, system: str = SYSTEM_PROMPT, max_steps: int = MAX_STEPS, compact: bool = False):
+        """`compact` sends short descriptions and lean schemas (see compact_tools) for small local models."""
         self.provider = provider
         self.host = host
         self.max_steps = max_steps
-        provider.configure(system, host.tools)
+        provider.configure(system, compact_tools(host.tools) if compact else host.tools)
         self._lock = asyncio.Lock()
 
     def reset(self) -> None:

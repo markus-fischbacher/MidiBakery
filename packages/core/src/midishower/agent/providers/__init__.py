@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from midishower.agent.providers.base import Provider, ToolCall, ToolResult, Turn
 
-__all__ = ["Provider", "ToolCall", "ToolResult", "Turn", "make_provider"]
+__all__ = ["LOCAL_PROVIDERS", "Provider", "ToolCall", "ToolResult", "Turn", "make_provider"]
+
+# Local backends get the small profile: SMALL_TOOLS, SMALL_SYSTEM_PROMPT, compact schemas.
+LOCAL_PROVIDERS = frozenset({"ollama", "lmstudio"})
 
 
 def make_provider(kind: str = "anthropic", model: str | None = None, **options) -> Provider:
-    """`anthropic` (default model claude-sonnet-5-5) or `ollama` (local)."""
+    """`anthropic` (default model claude-sonnet-5-5), `ollama` or `lmstudio` (local)."""
     if kind == "anthropic":
         from midishower.agent.providers.anthropic import DEFAULT_MODEL, AnthropicProvider
 
@@ -17,4 +20,8 @@ def make_provider(kind: str = "anthropic", model: str | None = None, **options) 
         from midishower.agent.providers.ollama import DEFAULT_MODEL, OllamaProvider
 
         return OllamaProvider(model or DEFAULT_MODEL, **options)
-    raise ValueError(f"unknown provider {kind!r}; use 'anthropic' or 'ollama'")
+    if kind == "lmstudio":
+        from midishower.agent.providers.openai_compat import DEFAULT_MODEL, OpenAICompatProvider
+
+        return OpenAICompatProvider(model or DEFAULT_MODEL, **options)
+    raise ValueError(f"unknown provider {kind!r}; use 'anthropic', 'ollama' or 'lmstudio'")

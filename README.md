@@ -27,7 +27,8 @@ uv run midishower ping              # with Live running and MidiShower selected 
 ```bash
 uv run midishower chat                                  # Claude (claude-sonnet-5-5) in the terminal
 uv run midishower chat --model claude-opus-5-5
-uv run midishower chat --provider ollama --model qwen3:8b  # local, reduced tool set
+uv run midishower chat --provider ollama --model qwen3:8b  # local: small tool set, compact schemas
+uv run midishower chat --provider lmstudio --model google/gemma-4-e4b  # LM Studio server (LMSTUDIO_HOST, default 127.0.0.1:1234)
 uv run midishower api                                   # HTTP/WebSocket API for the Max for Live devices
 ```
 

@@ -33,7 +33,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from midishower.agent import REDUCED_TOOLS, Agent, Provider, ToolHost
+from midishower.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midishower.bridge import BridgeClient, BridgeError
 from midishower.bridge.client import config_dir
 from midishower.compose.standalone import GenerateRequest, TransformRequest, generate, transform
@@ -128,10 +128,12 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             await emit({"type": "error", "message": str(exc)})
             await ws.close()
             return
-        allowed = REDUCED_TOOLS if options.get("tools") == "reduced" else None
+        # Local models get the small profile unless the device asks for tools=full.
+        small = provider.name in LOCAL_PROVIDERS and options.get("tools") != "full"
+        allowed = SMALL_TOOLS if small else REDUCED_TOOLS if options.get("tools") == "reduced" else None
         running: asyncio.Task[None] | None = None
         async with ToolHost(server, confirm, allowed) as host:
-            agent = Agent(provider, host)
+            agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=small)
             await emit({"type": "ready", "provider": provider.name, "model": provider.model, "tools": len(host.tools)})
             try:
                 while True:
