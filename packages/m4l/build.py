@@ -271,7 +271,17 @@ def chat_device() -> dict[str, Any]:
     p.connect(route, 1, set_status)
     p.connect(set_status, 0, status)
 
-    popout = p.parameter("live.text", (440, 60, 70, 16), (column_x, 4, column_w, 18), name="Pop out", short="Pop out", ptype=ENUM,
+    # Model provider as a native menu (dropdowns inside jweb do not open). The index goes to the page
+    # as "provider_index <n>", and again when the page reports "loaded" (the menu is saved with the Set).
+    model = _menu(p, (1000, 20, 110, 15), (column_x, 4, 110, 18), "Model", "Model",
+                  ["Default", "Claude", "Ollama", "LM Studio"], 0)
+    held = p.obj("i", 1000, 50, inlets=2, outlets=["int"], width=30)
+    to_page_provider = p.obj("prepend provider_index", 1000, 80, width=140)
+    p.connect(model, 0, held)
+    p.connect(held, 0, to_page_provider)
+    p.connect(to_page_provider, 0, web)
+    p.connect(loaded, 0, held)
+    popout = p.parameter("live.text", (440, 60, 70, 16), (column_x + 114, 4, column_w - 114, 18), name="Pop out", short="Pop out", ptype=ENUM,
                          inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
     _on_press(p, popout, "popout", node, 440, 100)

@@ -91,7 +91,11 @@ def test_chat_device_types_into_a_native_field(devices):
     assert wx + ww <= entry_box["presentation_rect"][0]  # the text field sits beside the chat, never over it
     assert (by_text["prepend chat_input"], web) in lines
     assert (entry, by_text["route text"]) in lines
+    assert (by_text["prepend provider_index"], web) in lines  # native Model menu drives the page
+    model = next(i for i, b in boxes.items() if b.get("varname") == "Model")
+    items = boxes[model]["saved_attribute_attributes"]["valueof"]["parameter_enum"]
     page = (ROOT / "packages/core/src/midishower/api/ui/chat.html").read_text()
+    assert 'const PROVIDER_ORDER = ["", "anthropic", "ollama", "lmstudio"]' in page and items == ["Default", "Claude", "Ollama", "LM Studio"]
     assert 'bindInlet("chat_input"' in page and "<option" not in page  # dropdowns do not open in jweb
 
 
