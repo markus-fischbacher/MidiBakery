@@ -132,16 +132,25 @@ async function post(route, body) {
   }
 }
 
-// From the v8 code: request <id> <generate|transform> <json body>
-Max.addHandler("request", async (id, kind, json) => {
+// From the v8 code: request <id> <generate|transform> <dict name>; the body is in that dict
+// and the result goes back in "<dict name>_res".
+Max.addHandler("request", async (id, kind, dictName) => {
+  const started = Date.now();
   try {
     if (kind !== "generate" && kind !== "transform") throw new Error(`unknown request kind ${kind}`);
-    const result = await post(`/miditool/${kind}`, JSON.parse(json));
-    await Max.outlet("response", id, JSON.stringify(result));
+    const body = await Max.getDict(dictName);
+    const result = await post(`/miditool/${kind}`, body);
+    const resName = `${dictName}_res`;
+    await Max.setDict(resName, result);
+    log("request", id, kind, `${(result.notes || []).length} notes`, `${Date.now() - started} ms`);
+    await Max.outlet("response", id, resName);
   } catch (error) {
+    log("request failed", id, kind, String(error.message || error));
     await Max.outlet("failed", id, String(error.message || error));
   }
 });
+
+Max.addHandler("log", (...args) => log("v8", args));
 
 // Chat device: open the same page in the system browser, with more room.
 Max.addHandler("popout", () => {

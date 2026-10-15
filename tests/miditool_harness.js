@@ -5,7 +5,17 @@ const fs = require("fs");
 const vm = require("vm");
 
 const log = [];
+const dicts = {};
+function Dict(name) {
+  this.parse = (text) => { dicts[name] = JSON.parse(text); };
+  this.stringify = () => JSON.stringify(dicts[name]);
+}
+function Task(fn) {
+  this.schedule = () => log.push(["task", "schedule"]);
+  this.cancel = () => {};
+}
 const sandbox = {
+  Dict, Task, Date, Array,
   inlet: 0,
   outlet: (...args) => log.push(["outlet", ...args]),
   outlet_dictionary: (n, d) => log.push(["dict", n, JSON.parse(JSON.stringify(d))]),
@@ -27,11 +37,12 @@ const requestOf = () => log.filter((e) => e[0] === "outlet" && e[1] === 1 && e[2
 
 call(0, "msg_dictionary", input);                 // pass 1: no-op answer + request
 const req = requestOf();
-const result = JSON.stringify({ seed: 1, notes: [{ pitch: 69, start_time: 4, duration: 1, velocity: 90, mute: false }], chords: "Am" });
+dicts.res = { seed: 1, notes: [{ pitch: 69, start_time: 4, duration: 1, velocity: 90, mute: false }], chords: "Am" };
+const result = "res";
 call(1, "response", req[3], result);              // response -> re-bang
 call(0, "msg_dictionary", input);                 // pass 2: cached answer
 call(0, "msg_dictionary", input);                 // later apply with same inputs: still cached, no new request
 call(1, "param", "density", 80);                  // UI change -> bang
 call(0, "msg_dictionary", input);                 // changed inputs -> new request
 call(1, "response", 1, result);                   // stale response id -> ignored
-console.log(JSON.stringify({ log, body: JSON.parse(req[5]) }));
+console.log(JSON.stringify({ log, body: dicts[req[5]] }));

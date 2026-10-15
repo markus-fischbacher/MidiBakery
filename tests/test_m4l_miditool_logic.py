@@ -21,7 +21,7 @@ def test_generator_answers_synchronously_then_applies_the_cached_result(tmp_path
     log, body = data["log"], data["body"]
 
     dicts = [e for e in log if e[0] == "dict"]
-    requests = [e for e in log if e[0] == "outlet" and e[1] == 1]
+    requests = [e for e in log if e[0] == "outlet" and e[1] == 1 and e[2] == "request"]
     bangs = [e for e in log if e[0] == "outlet" and e[1] == 2]
 
     # Every apply got exactly one synchronous answer.
@@ -32,6 +32,7 @@ def test_generator_answers_synchronously_then_applies_the_cached_result(tmp_path
     assert dicts[2][2] == dicts[1][2]                          # unchanged inputs stay cached
     assert len(requests) == 2                                  # first apply + after the density change
     assert len(bangs) == 2                                     # one re-apply per response + one per UI change
+    assert ["task", "schedule"] in log                         # "click again" fallback armed after the re-apply
 
     assert body["kind"] == "drums"
     assert body["context"] == {"start": 4, "length": 16, "seed": 1,
