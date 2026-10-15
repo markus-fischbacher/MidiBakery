@@ -186,7 +186,15 @@ function connect() {
     $("status").textContent = "Disconnected. Is `midishower api` running? Retrying…";
     setTimeout(connect, Math.min(10000, 1000 * 2 ** retry++));
   };
-  ws.onmessage = (event) => handle(JSON.parse(event.data));
+  ws.onmessage = (event) => followBottom(() => handle(JSON.parse(event.data)));
+}
+
+// Keep the newest output in view (streamed thinking and text included), unless the user
+// scrolled up to read; scrolling back to the bottom resumes following.
+function followBottom(update) {
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  update();
+  if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
 function handle(ev) {
@@ -271,6 +279,7 @@ function sendText(raw) {
   if (busy) { add("note", "Still answering - press Stop first."); return false; }
   if (!ws || ws.readyState !== 1) { add("note", "Not connected yet."); return false; }
   add("msg user", text);
+  log.scrollTop = log.scrollHeight;
   current = null; thinking = null;
   ws.send(JSON.stringify({ type: "user", text }));
   setBusy(true);
