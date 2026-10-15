@@ -79,6 +79,30 @@ def cmd_install(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_auth(args: argparse.Namespace) -> int:
+    from getpass import getpass
+
+    from midibakery import credentials
+
+    if args.action == "set-key":
+        key = getpass("Claude API key (input hidden): ").strip()
+        try:
+            if not credentials.valid_format(key):
+                raise credentials.InvalidKey("That does not look like a Claude API key")
+            asyncio.run(credentials.verify(key))
+            credentials.store().save(key)
+        except (credentials.InvalidKey, OSError) as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        print("Key stored. The chat uses it on the next connection; no restart needed.")
+    elif args.action == "remove":
+        credentials.store().delete()
+        print("Key removed.")
+    state = credentials.status()
+    print(f"Claude: {'configured via ' + state['source'] if state['configured'] else 'no API key'}")
+    return 0
+
+
 def cmd_ping(args: argparse.Namespace) -> int:
     from midibakery.bridge import BridgeClient, BridgeError
 
@@ -215,6 +239,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--api-port", type=int, default=8766)
     p.add_argument("--no-api", action="store_true", help="do not start the API with Live")
     p.set_defaults(func=cmd_install)
+
+    p = sub.add_parser("auth", help="manage the Claude API key (stored in the macOS Keychain)")
+    p.add_argument("action", choices=["set-key", "status", "remove"])
+    p.set_defaults(func=cmd_auth)
 
     p = sub.add_parser("ping", help="check the connection to Live")
     p.set_defaults(func=cmd_ping)

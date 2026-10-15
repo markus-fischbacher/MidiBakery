@@ -52,6 +52,15 @@
   body.device form { display: none; }
   body.device #modelSelect { display: none; }  /* the device has a native Model menu (umenu) */
   #modelSelect { max-width: 220px; padding: 1px 4px; }
+  /* Claude API key: a password field in the browser; in the device the next line typed into the
+     Max text field is taken as the key (jweb gets no keystrokes). */
+  #keyPanel { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #keyPanel[hidden] { display: none; }
+  #keyPanel .text { flex: 1 1 100%; }
+  #keyPanel .text.err { color: var(--err); }
+  #keyInput { flex: 1; min-width: 160px; padding: 2px 6px; }
+  body.device #keyInput, body.device #keySave { display: none; }
+  body:not(.device) #keyTypeHint { display: none; }
   /* jweb in Live can render a little taller than the device; keep the last lines clear of the edge. */
   body.device #log { padding-bottom: 22px; }
 </style>
@@ -63,8 +72,17 @@
   <!-- Browser only: dropdowns do not open inside jweb; the device shows the same list in a Max menu. -->
   <select id="modelSelect" title="Model"></select>
   <button id="stopTop" type="button" title="Stop the current answer" hidden>Stop</button>
+  <button id="keyButton" type="button" title="Claude API key">Key</button>
   <button id="reset" type="button" title="Forget the conversation">New</button>
 </header>
+<div id="keyPanel" hidden>
+  <span id="keyText" class="text"></span>
+  <span id="keyTypeHint" class="note">Paste the key into the message field below and press Enter. It is not sent to any model.</span>
+  <input id="keyInput" type="password" autocomplete="off" placeholder="sk-ant-…">
+  <button id="keySave" class="primary" type="button">Save</button>
+  <button id="keyRemove" type="button" hidden>Remove</button>
+  <button id="keyClose" type="button">Close</button>
+</div>
 <div id="log" aria-live="polite"></div>
 <form id="form">
   <input id="input" autocomplete="off" placeholder="Ask MidiBakery… e.g. 4 bars of deep house drums on track 1" disabled>
@@ -86,6 +104,7 @@ let busy = false;
 let current = null;      // assistant message element being streamed
 let thinking = null;     // thinking element being streamed
 let retry = 0;
+let keyMode = false;     // device: the next line from the Max text field is the API key
 
 const inDevice = Boolean(window.max && window.max.bindInlet);
 if (inDevice) document.body.classList.add("device");
@@ -185,6 +204,7 @@ function connect() {
     hidePending();
     setBusy(false);
     if (event.code === 4401) { $("status").textContent = "Access denied: the API was restarted. Reload the device."; return; }
+    if (event.code === 4402) { $("status").textContent = "Claude needs an API key."; return; }
     $("status").textContent = "Disconnected. Is `midibakery api` running? Retrying…";
     setTimeout(connect, Math.min(10000, 1000 * 2 ** retry++));
   };
@@ -246,6 +266,7 @@ function handle(ev) {
     case "error":
       hidePending();
       current = null; thinking = null;
+      if (ev.code === "NO_API_KEY") { openKeyPanel("Claude needs an API key. It is stored in your Keychain, not in MidiBakery's files."); break; }
       add("error", ev.message);
       setBusy(false);
       break;
@@ -275,7 +296,70 @@ function askConfirm(ev) {
   box.append(text, yes, no);
 }
 
+async function keyRequest(method, body) {
+  const response = await fetch("/auth/anthropic", {
+    method,
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
+  return data;
+}
+
+const SOURCES = { env: "from ANTHROPIC_API_KEY", keychain: "stored in your Keychain", file: "stored in MidiBakery's config folder", profile: "from your Anthropic profile (ant auth login)" };
+
+function showKeyState(state, message, isError = false) {
+  $("keyText").textContent = message || (state.configured ? `Claude key: ${SOURCES[state.source] || state.source}.` : "No Claude key yet.");
+  $("keyText").className = "text" + (isError ? " err" : "");
+  $("keyRemove").hidden = !(state.source === "keychain" || state.source === "file");
+}
+
+async function openKeyPanel(message) {
+  $("keyPanel").hidden = false;
+  keyMode = inDevice;
+  showKeyState({}, message || "Checking…");
+  try {
+    const state = await keyRequest("GET");
+    showKeyState(state, message);
+  } catch (error) {
+    showKeyState({}, `Could not read the key status: ${error.message}`, true);
+  }
+  if (!inDevice) $("keyInput").focus();
+}
+
+function closeKeyPanel() {
+  $("keyPanel").hidden = true;
+  keyMode = false;
+  $("keyInput").value = "";
+}
+
+async function saveKey(raw) {
+  const key = String(raw || "").trim();
+  if (!key) return;
+  showKeyState({}, "Checking the key with the Claude API…");
+  try {
+    const state = await keyRequest("PUT", { api_key: key });
+    closeKeyPanel();
+    add("note", `Claude key saved (${SOURCES[state.source] || state.source}).`);
+    if (ws) { ws.onclose = null; ws.close(); }
+    connect();
+  } catch (error) {
+    keyMode = inDevice;  // let the user try again
+    showKeyState({}, error.message, true);
+  }
+}
+
+$("keyButton").onclick = () => ($("keyPanel").hidden ? openKeyPanel() : closeKeyPanel());
+$("keyClose").onclick = closeKeyPanel;
+$("keySave").onclick = () => saveKey($("keyInput").value);
+$("keyInput").onkeydown = (event) => { if (event.key === "Enter") saveKey($("keyInput").value); };
+$("keyRemove").onclick = async () => {
+  try { showKeyState(await keyRequest("DELETE"), "Claude key removed."); } catch (error) { showKeyState({}, error.message, true); }
+};
+
 function sendText(raw) {
+  if (keyMode) { keyMode = false; saveKey(raw); return true; }  // never shown, never sent to a model
   const text = String(raw || "").trim();
   if (!text) return false;
   if (busy) { add("note", "Still answering - press Stop first."); return false; }
