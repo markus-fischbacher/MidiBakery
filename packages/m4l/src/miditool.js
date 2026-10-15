@@ -29,7 +29,7 @@ var OPERATIONS = ["humanize", "quantize", "invert", "arpeggiate", "variation", "
 var ARP_RATES = [0.125, 0.25, 0.5, 1.0];
 
 var params = {
-  kind: 0, drums: 0, bass: 5, chords: 0, density: 50, swing: 0, chance: 50,
+  kind: 0, drums: 0, bass: 5, chords: 0, density: 50, swing: 0, chance: 100,
   operation: 0, amount: 50, semitones: 12, rate: 1, seed: 1
 };
 var lastInput = null;

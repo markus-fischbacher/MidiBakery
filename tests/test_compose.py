@@ -172,7 +172,7 @@ def test_notes_respect_bar_boundaries(meter, bars):
 
 
 def test_drums_use_probability_and_velocity_deviation():
-    notes = generate_drums(Meter(), 4, "house", random.Random(5), map_pads(None), density=0.4)
+    notes = generate_drums(Meter(), 4, "house", random.Random(5), map_pads(None), density=0.4, chance=0.5)
     assert any(n.probability < 1 for n in notes)
     assert any(n.velocity_deviation for n in notes)
     kicks = kick_times([{"pitch": n.pitch, "start_time": n.start_time} for n in notes], GM_NOTES["kick"])
@@ -357,9 +357,10 @@ def test_drum_chance_scales_only_the_optional_hits():
         notes = generate_drums(Meter(), 4, "hiphop", random.Random(3), map_pads(None), density=0.6, chance=chance)
         return [n.probability for n in notes]
 
-    assert all(p == 1.0 for p in probabilities(0.0))
+    assert all(p == 1.0 for p in probabilities(1.0))  # default: everything plays, like Live's Chance 100 %
     natural = probabilities(0.5)
     assert any(p < 1.0 for p in natural)
-    assert all(a <= b for a, b in zip(probabilities(1.0), natural))
+    assert all(a <= b for a, b in zip(probabilities(0.0), natural))
     assert scale_chance(1.0, 1.0) == 1.0  # backbeats never drop out
     assert scale_chance(0.7, 0.5) == 0.7
+    assert all(n.probability == 1.0 for n in generate_drums(Meter(), 4, "hiphop", random.Random(3), map_pads(None)))

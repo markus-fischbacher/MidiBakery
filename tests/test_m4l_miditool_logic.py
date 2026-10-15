@@ -37,4 +37,4 @@ def test_generator_answers_synchronously_then_applies_the_cached_result(tmp_path
     assert body["kind"] == "drums"
     assert body["context"] == {"start": 4, "length": 16, "seed": 1,
                                "scale": {"root": 9, "intervals": [0, 2, 3, 5, 7, 8, 10], "name": "Minor"}}
-    assert body["params"] == {"swing": 0, "density": 0.5, "style": "house", "chance": 0.5}
+    assert body["params"] == {"swing": 0, "density": 0.5, "style": "house", "chance": 1}
