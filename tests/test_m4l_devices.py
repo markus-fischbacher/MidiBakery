@@ -85,3 +85,24 @@ def test_javascript_parses(devices, tmp_path):
     for file in (tmp_path / "miditool.js", build.SRC / build.NODE_SCRIPT):
         result = subprocess.run([node, "--check", str(file)], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
+
+
+LIVE_TEMPLATES = Path("/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/Misc")
+
+
+@pytest.mark.skipif(not LIVE_TEMPLATES.exists(), reason="Ableton Live 12 not installed")
+def test_patcher_and_project_have_every_key_lives_templates_have(devices):
+    """Max dereferences these keys while loading; a missing project.searchpath crashed Live 12.4.6."""
+    templates = {
+        "midi_effect": LIVE_TEMPLATES / "Max Devices/Max MIDI Effect.amxd",
+        "generator": LIVE_TEMPLATES / "Max MIDI Tools/Max MIDI Generator.amxd",
+        "transformation": LIVE_TEMPLATES / "Max MIDI Tools/Max MIDI Transformation.amxd",
+    }
+    for name, path in devices.items():
+        kind = build.DEVICES[name][0]
+        _, ours = build.read_amxd(path)
+        _, template = build.read_amxd(templates[kind])
+        missing = set(template["patcher"]) - set(ours["patcher"])
+        assert not missing, (name, sorted(missing))
+        missing_project = set(template["patcher"]["project"]) - set(ours["patcher"]["project"])
+        assert not missing_project, (name, sorted(missing_project))
