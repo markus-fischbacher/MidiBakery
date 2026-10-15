@@ -91,12 +91,17 @@ def test_chat_device_types_into_a_native_field(devices):
     assert wx + ww <= entry_box["presentation_rect"][0]  # the text field sits beside the chat, never over it
     assert (by_text["prepend chat_input"], web) in lines
     assert (entry, by_text["route text"]) in lines
-    assert (by_text["prepend provider_index"], web) in lines  # native Model menu drives the page
-    model = next(i for i, b in boxes.items() if b.get("varname") == "Model")
-    items = boxes[model]["saved_attribute_attributes"]["valueof"]["parameter_enum"]
+    # Native Model menu: the page fills it and gets the pick back as model_index.
+    menu = next(i for i, b in boxes.items() if b["maxclass"] == "umenu")
+    router = by_text["route menu_clear menu_append menu_select"]
+    assert (by_text["route loaded"], router) in lines
+    assert (by_text["prepend append"], menu) in lines and (by_text["prepend set"], menu) in lines
+    assert (menu, by_text["prepend model_index"]) in lines and (by_text["prepend model_index"], web) in lines
+    assert (router, by_text["prepend jweb"]) in lines  # other jweb messages still reach the log
     page = (ROOT / "packages/core/src/midishower/api/ui/chat.html").read_text()
-    assert 'const PROVIDER_ORDER = ["", "anthropic", "ollama", "lmstudio"]' in page and items == ["Default", "Claude", "Ollama", "LM Studio"]
-    assert 'bindInlet("chat_input"' in page and "<option" not in page  # dropdowns do not open in jweb
+    assert 'bindInlet("model_index"' in page and 'outlet("menu_append"' in page
+    assert 'bindInlet("chat_input"' in page
+    assert "body.device #modelSelect { display: none; }" in page  # the HTML dropdown is browser-only
 
 
 def test_chat_device_passes_midi_through(devices):

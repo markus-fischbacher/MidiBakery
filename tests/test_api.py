@@ -241,3 +241,31 @@ def test_transform_accepts_the_requests_the_transform_device_builds(app_factory,
     response = api.post("/miditool/transform", json=body, headers=AUTH)
     assert response.status_code == 200, response.text
     assert response.json()["notes"]
+
+
+def test_models_lists_default_and_claude_and_skips_unreachable_local_servers(app_factory, monkeypatch):
+    monkeypatch.setenv("LMSTUDIO_HOST", "http://127.0.0.1:9")  # nothing listens on the discard port
+    monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
+    api, _ = app_factory()
+    assert api.get("/models").status_code == 401
+    models = api.get("/models", headers=AUTH).json()["models"]
+    assert models[0]["provider"] == "" and models[0]["label"].startswith("Default (")
+    assert {"provider": "anthropic", "model": "claude-opus-5-5", "label": "Claude Opus 5.5"} in models
+    assert not [m for m in models if m["provider"] in ("lmstudio", "ollama")]
+
+
+async def test_local_models_are_listed_and_embeddings_dropped():
+    import httpx2 as httpx
+
+    from midishower.api.models import list_models
+
+    def handler(request):
+        if request.url.path == "/v1/models":
+            return httpx.Response(200, json={"data": [{"id": "google/gemma-4-e4b"}, {"id": "text-embedding-nomic"}]})
+        return httpx.Response(200, json={"models": [{"name": "qwen3:8b"}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        models = await list_models("lmstudio", "google/gemma-4-e4b", client=client)
+    labels = [m["label"] for m in models]
+    assert "LM Studio · google/gemma-4-e4b" in labels and "Ollama · qwen3:8b" in labels
+    assert not any("embedding" in label for label in labels)

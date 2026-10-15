@@ -50,7 +50,8 @@
   /* Inside the Max for Live device the input is a native Max text field below this page:
      Live does not pass keystrokes to jweb. */
   body.device form { display: none; }
-  body.device #providers { display: none; }  /* the device has a native Model menu */
+  body.device #modelSelect { display: none; }  /* the device has a native Model menu (umenu) */
+  #modelSelect { max-width: 220px; padding: 1px 4px; }
   /* jweb in Live can render a little taller than the device; keep the last lines clear of the edge. */
   body.device #log { padding-bottom: 22px; }
 </style>
@@ -59,13 +60,8 @@
 <header>
   <span id="dot" class="dot" title="Connection"></span>
   <span id="status" class="status">Connecting…</span>
-  <!-- Buttons, not a <select>: native dropdowns do not open inside jweb. -->
-  <span id="providers" class="seg" title="Model provider">
-    <button type="button" data-provider="">Default</button>
-    <button type="button" data-provider="anthropic">Claude</button>
-    <button type="button" data-provider="ollama">Ollama</button>
-    <button type="button" data-provider="lmstudio">LM Studio</button>
-  </span>
+  <!-- Browser only: dropdowns do not open inside jweb; the device shows the same list in a Max menu. -->
+  <select id="modelSelect" title="Model"></select>
   <button id="stopTop" type="button" title="Stop the current answer" hidden>Stop</button>
   <button id="reset" type="button" title="Forget the conversation">New</button>
 </header>
@@ -81,7 +77,7 @@ const $ = (id) => document.getElementById(id);
 const log = $("log");
 const hash = new URLSearchParams(location.hash.slice(1));
 const token = hash.get("token");
-const PROVIDER_KEY = "midishower.provider";
+const CHOICE_KEY = "midishower.choice";
 
 let ws = null;
 let busy = false;
@@ -92,14 +88,32 @@ let retry = 0;
 const inDevice = Boolean(window.max && window.max.bindInlet);
 if (inDevice) document.body.classList.add("device");
 
-// Empty = the provider `midishower api` was started with.
-let provider = "";
-try { provider = localStorage.getItem(PROVIDER_KEY) || hash.get("provider") || ""; } catch (_) {}
+// The chosen model: provider "" + model "" = whatever `midishower api` was started with.
+let choice = { provider: hash.get("provider") || "", model: "" };
+try { choice = { ...choice, ...JSON.parse(localStorage.getItem(CHOICE_KEY) || "{}") }; } catch (_) {}
+let models = [];  // from GET /models
 
-function showProvider() {
-  for (const b of document.querySelectorAll("#providers button")) b.classList.toggle("on", b.dataset.provider === provider);
+const sameChoice = (a, b) => a.provider === b.provider && a.model === b.model;
+
+async function loadModels() {
+  try {
+    const response = await fetch("/models", { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) return;
+    models = (await response.json()).models || [];
+  } catch (_) {
+    return;
+  }
+  if (!models.some((m) => sameChoice(m, choice))) setChoice({ provider: "", model: "" });  // e.g. model removed
+  const index = models.findIndex((m) => sameChoice(m, choice));
+  const select = $("modelSelect");
+  select.replaceChildren(...models.map((m, i) => new Option(m.label, String(i))));
+  select.value = String(index);
+  if (inDevice) {
+    window.max.outlet("menu_clear");
+    for (const m of models) window.max.outlet("menu_append", m.label);
+    window.max.outlet("menu_select", index);
+  }
 }
-showProvider();
 
 function add(cls, text) {
   const el = document.createElement("div");
@@ -159,7 +173,9 @@ function connect() {
     $("status").textContent = "No access token. Open this page from the MidiShower device.";
     return;
   }
-  const url = `ws://${location.host}/chat?token=${encodeURIComponent(token)}` + (provider ? `&provider=${encodeURIComponent(provider)}` : "");
+  const url = `ws://${location.host}/chat?token=${encodeURIComponent(token)}`
+    + (choice.provider ? `&provider=${encodeURIComponent(choice.provider)}` : "")
+    + (choice.model ? `&model=${encodeURIComponent(choice.model)}` : "");
   ws = new WebSocket(url);
   $("status").textContent = "Connecting…";
   ws.onopen = () => { retry = 0; setBusy(false); };
@@ -270,21 +286,18 @@ const stop = () => ws && ws.send(JSON.stringify({ type: "cancel" }));
 $("stop").onclick = stop;
 $("stopTop").onclick = stop;
 $("reset").onclick = () => ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "reset" }));
-function setProvider(value) {
-  if (value === provider) return;
-  provider = value;
-  try { localStorage.setItem(PROVIDER_KEY, provider); } catch (_) {}
-  showProvider();
+function setChoice(next) {
+  if (!next || sameChoice(next, choice)) return;
+  choice = { provider: next.provider, model: next.model };
+  try { localStorage.setItem(CHOICE_KEY, JSON.stringify(choice)); } catch (_) {}
   log.textContent = "";
   if (ws) { ws.onclose = null; ws.close(); }
   connect();
 }
 
-for (const b of document.querySelectorAll("#providers button")) b.onclick = () => setProvider(b.dataset.provider);
-
-// The device's Model menu sends "provider_index <n>" (order of its items).
-const PROVIDER_ORDER = ["", "anthropic", "ollama", "lmstudio"];
-if (inDevice) window.max.bindInlet("provider_index", (n) => setProvider(PROVIDER_ORDER[Number(n)] ?? ""));
+$("modelSelect").onchange = () => setChoice(models[Number($("modelSelect").value)]);
+// The device's Model menu (umenu) sends "model_index <n>", in the order of the list sent to it.
+if (inDevice) window.max.bindInlet("model_index", (n) => setChoice(models[Number(n)]));
 
 // The device's Max text field sends "chat_input <words...>" on Enter.
 if (inDevice) window.max.bindInlet("chat_input", (...words) => sendText(words.join(" ")));
@@ -298,6 +311,7 @@ try {
 } catch (_) {}
 
 connect();
+loadModels();
 </script>
 </body>
 </html>
