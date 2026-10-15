@@ -29,11 +29,12 @@ var OPERATIONS = ["humanize", "quantize", "invert", "arpeggiate", "variation", "
 var ARP_RATES = [0.125, 0.25, 0.5, 1.0];
 
 var params = {
-  kind: 0, drums: 0, bass: 5, chords: 0, density: 50, swing: 0, chance: 100,
+  kind: 0, drums: 0, bass: 5, chords: 0, density: 50, swing: 0, chance: 100, replace: 1,
   operation: 0, amount: 50, semitones: 12, rate: 1, seed: 1
 };
 var lastInput = null;
-var cache = { key: null, notes: null, info: "" };
+// cycle: Live's per-apply-cycle seed when the cached notes were last applied.
+var cache = { key: null, notes: null, info: "", cycle: null };
 var pending = { id: 0, key: null };
 var requestCounter = 0;
 var reapplied = false;
@@ -56,21 +57,35 @@ function status(text) {
   outlet(3, "set", text);
 }
 
+function replacing() {
+  return MODE === "generate" && params.replace;
+}
+
 function msg_dictionary(d) {
   if (inlet !== 0) return;
   lastInput = d;
   var body = buildBody(d);
   var key = JSON.stringify(body);
-  if (cache.key === key) {
+  var cycle = d.seed;
+  // With Replace, a new apply cycle (new Live seed) must clear the range again before
+  // the cached notes go back in; within one cycle Live itself replaces the previous output.
+  var sameCycle = reapplied || !replacing() || cache.cycle === cycle;
+  if (cache.key === key && sameCycle) {
     dbg("apply cached", cache.notes.length, "notes");
     waitForApply.cancel();
     outlet_dictionary(0, { notes: cache.notes });
     status(cache.info);
+    cache.cycle = cycle;
     reapplied = false;
     return;
   }
   // Synchronous no-op answer keeps Live in sync while the API computes.
   outlet_dictionary(0, { notes: MODE === "generate" ? [] : toLive(d.notes || []) });
+  if (cache.key === key) {
+    // Same settings, new cycle: no new request, just clear and re-apply.
+    applyResult();
+    return;
+  }
   if (pending.key === key && Date.now() - requestedAt < REQUEST_TIMEOUT_MS) return; // already asked
   requestCounter += 1;
   pending = { id: requestCounter, key: key };
@@ -94,10 +109,28 @@ function response(id, dictName) {
   cache = { key: pending.key, notes: toLive(result.notes || []), info: describe(result) };
   pending = { id: 0, key: null };
   dbg("response", id, cache.notes.length, "notes out");
-  if (!reapplied) {
-    reapplied = true;
-    outlet(2, "bang");
-    waitForApply.schedule(1500);
+  if (!reapplied) applyResult();
+}
+
+// Clear the time selection (Replace), then re-trigger the tool so Live applies the cache.
+function applyResult() {
+  if (replacing() && lastInput) clearRange(buildContext(lastInput));
+  reapplied = true;
+  outlet(2, "bang");
+  waitForApply.schedule(1500);
+}
+
+function clearRange(context) {
+  try {
+    var clip = new LiveAPI("live_set view detail_clip");
+    if (!clip || Number(clip.id) === 0) {
+      dbg("replace: no detail clip");
+      return;
+    }
+    clip.call("remove_notes_extended", 0, 128, context.start, context.length);
+    dbg("replace: cleared", context.start, context.length);
+  } catch (e) {
+    dbg("replace failed", String(e));
   }
 }
 

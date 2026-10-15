@@ -197,6 +197,18 @@ def read_amxd(path: Path) -> tuple[bytes, dict[str, Any]]:
 # ----------------------------------------------------------------------------
 
 
+def _on_press(p: Patcher, button: str, message: str, target: str, x: float, y: float, inlet: int = 0) -> None:
+    """Send `message` when a live.text button is pressed; it may output bang or 1/0 depending on mode."""
+    route = p.obj("route bang", x, y, outlets=["", ""], width=70)
+    sel = p.obj("sel 1", x + 80, y + 30, inlets=2, outlets=["bang", ""], width=50)
+    msg = p.message(message, x, y + 60)
+    p.connect(button, 0, route)
+    p.connect(route, 0, msg)
+    p.connect(route, 1, sel)
+    p.connect(sel, 0, msg)
+    p.connect(msg, 0, target, inlet)
+
+
 def chat_device() -> dict[str, Any]:
     p = Patcher()
     width, height = 640.0, 169.0
@@ -230,11 +242,7 @@ def chat_device() -> dict[str, Any]:
     popout = p.parameter("live.text", (440, 60, 70, 16), (564, 8, 72, 18), name="Pop out", short="Pop out", ptype=ENUM,
                          inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
-    trigger = p.obj("sel 1", 440, 100, inlets=2, outlets=["bang", ""], width=50)
-    msg = p.message("popout", 440, 140)
-    p.connect(popout, 0, trigger)
-    p.connect(trigger, 0, msg)
-    p.connect(msg, 0, node)
+    _on_press(p, popout, "popout", node, 440, 100)
     return p.to_json(kind="midi_effect", title="MidiShower Chat", width=width, height=height)
 
 
@@ -287,11 +295,7 @@ def _seed_controls(p: Patcher, v8: str, feedback: str, numbox_rect, dice_rect, l
     dice = p.parameter("live.text", (840, 300, 50, 15), dice_rect, name="New seed", short="Dice", ptype=ENUM,
                        inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 0, "text": "Dice", "texton": "Dice"})
-    sel = p.obj("sel 1", 840, 330, inlets=2, outlets=["bang", ""], width=50)
-    msg = p.message("dice", 840, 360)
-    p.connect(dice, 0, sel)
-    p.connect(sel, 0, msg)
-    p.connect(msg, 0, v8, 1)
+    _on_press(p, dice, "dice", v8, 840, 330, inlet=1)
     p.comment("Seed", (760, 280, 40, 18), presentation=label_rect, fontsize=9.0)
 
 
@@ -310,13 +314,14 @@ def _dial(p: Patcher, rect, presentation, name: str, short: str, initial: float)
 # Live's clip-view MIDI Tool panel (Live 12.4): the size of its own Max MIDI Tool templates.
 TOOL_WIDTH, TOOL_HEIGHT = 152.0, 147.0
 STATUS_RECT = (2, 98, 148, 46)
+GENERATOR_STATUS_RECT = (2, 116, 148, 30)  # below the Replace toggle
 
 
 def generator_device() -> dict[str, Any]:
     """Layout (152 x 147): Part | Style menus; Density, Swing, Chance (drums only) dials; Seed row; status."""
     p = Patcher()
     v8, _ = _miditool_core(p, "generate")
-    ui = _status_and_feedback(p, v8, STATUS_RECT)
+    ui = _status_and_feedback(p, v8, GENERATOR_STATUS_RECT)
 
     kind = _menu(p, (760, 20, 80, 15), (2, 2, 72, 16), "Part", "Part", ["Drums", "Bass", "Chords", "Melody"], 0)
     _param_to_v8(p, kind, "kind", v8, 760, 44)
@@ -339,6 +344,12 @@ def generator_device() -> dict[str, Any]:
     _param_to_v8(p, chance, "chance", v8, 880, 360)
     _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(52, 76, 46, 16), dice_rect=(102, 76, 48, 16),
                    label_rect=(2, 77, 46, 14))
+    # Replace: clear the time selection before the new notes go in (a Generator can only add).
+    replace = p.parameter("live.text", (940, 300, 60, 15), (2, 96, 60, 16), name="Replace", short="Replace", ptype=ENUM,
+                          inlets=1, outlets=["", ""], parameter_enum=["off", "on"], parameter_mmax=1,
+                          parameter_initial=[1], parameter_initial_enable=1)
+    p.boxes[-1]["box"].update({"mode": 1, "text": "Replace", "texton": "Replace"})
+    _param_to_v8(p, replace, "replace", v8, 940, 330)
     return p.to_json(kind="generator", title="MidiShower Generator", width=TOOL_WIDTH, height=TOOL_HEIGHT)
 
 
