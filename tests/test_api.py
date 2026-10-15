@@ -195,3 +195,49 @@ def test_chat_reset_and_unknown_messages(app_factory):
         assert ws.receive_json() == {"type": "reset"}
         ws.send_json({"type": "nope"})
         assert ws.receive_json()["type"] == "error"
+
+
+def test_chat_page_is_served_without_token_and_holds_no_secret(app_factory):
+    api, _ = app_factory()
+    page = api.get("/ui")
+    assert page.status_code == 200
+    assert page.headers["cache-control"] == "no-store"
+    assert "location.hash" in page.text and TOKEN not in page.text
+
+
+@pytest.mark.parametrize("kind, params", [
+    ("drums", {"swing": 0, "density": 0.5, "style": "house"}),
+    ("bass", {"swing": 0.2, "density": 0.5, "style": "syncopated"}),
+    ("chords", {"swing": 0, "rhythm": "stabs"}),
+    ("melody", {"swing": 0, "density": 0.7}),
+])
+def test_generate_accepts_the_requests_the_generator_device_builds(app_factory, kind, params):
+    """Mirrors buildBody() in packages/m4l/src/miditool.js."""
+    api, _ = app_factory()
+    body = {"context": {"start": 4, "length": 16, "seed": 1, "scale": A_MINOR}, "kind": kind, "params": params}
+    response = api.post("/miditool/generate", json=body, headers=AUTH)
+    assert response.status_code == 200, response.text
+    notes = response.json()["notes"]
+    assert notes and all(4 <= n["start_time"] < 20 for n in notes)
+
+
+@pytest.mark.parametrize("operation, params", [
+    ("humanize", {"amount": 0.5}),
+    ("quantize", {"strength": 1.0, "grid": 0.25}),
+    ("invert", {}),
+    ("arpeggiate", {"rate": 0.25}),
+    ("variation", {"amount": 0.5}),
+    ("transpose", {"semitones": 12}),
+])
+def test_transform_accepts_the_requests_the_transform_device_builds(app_factory, operation, params):
+    api, _ = app_factory()
+    notes = [
+        {"note_id": 1, "pitch": 57, "start_time": 4.0, "duration": 1.0, "velocity": 100, "mute": False,
+         "probability": 1, "velocity_deviation": 0, "release_velocity": 64},
+        {"note_id": 2, "pitch": 60, "start_time": 4.0, "duration": 1.0, "velocity": 90, "mute": False,
+         "probability": 1, "velocity_deviation": 0, "release_velocity": 64},
+    ]
+    body = {"context": {"start": 4, "length": 16, "seed": 1, "scale": A_MINOR}, "operation": operation, "params": params, "notes": notes}
+    response = api.post("/miditool/transform", json=body, headers=AUTH)
+    assert response.status_code == 200, response.text
+    assert response.json()["notes"]

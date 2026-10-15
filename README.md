@@ -10,6 +10,7 @@ See [docs/KONZEPT.md](docs/KONZEPT.md) for the architecture and roadmap.
 |---|---|
 | `packages/core` | `midishower` Python package: op catalog, bridge client, composition engine (`compose/`), agent loop (`agent/`), local API for Max for Live (`api/`), MCP server, CLI |
 | `packages/remote_script/MidiShower` | Remote Script loaded by Live (stdlib only, Python 3.11) |
+| `packages/m4l` | Max for Live devices: build script and sources (chat device, MIDI Tools) |
 | `tests/` | Contract tests: real Remote Script + fake Live Object Model over a real socket |
 
 ## Development
@@ -34,6 +35,19 @@ uv run midishower api                                   # HTTP/WebSocket API for
 
 The Anthropic provider reads `ANTHROPIC_API_KEY` (or an `ant auth login` profile). The API listens on
 127.0.0.1:8766 and writes its port and token to `api.json` in the MidiShower config folder.
+
+### Max for Live devices
+
+```bash
+uv run python packages/m4l/build.py --install   # builds the .amxd files into Live's User Library
+uv run midishower api --provider lmstudio       # the devices talk to this API
+```
+
+- **MidiShower Chat** (Max for Live > Max MIDI Effect > MidiShower): chat with the agent in the device view;
+  MIDI passes through. *Pop out* opens the same chat in the browser.
+- **MidiShower Generator / Transform** (clip view, Generate / Transform panels, Live 12.2+): the composition
+  engine on the selected time range, in the clip's scale. MIDI Tools must answer synchronously, so the first
+  apply shows "Working..." and the result follows a moment later in the same apply cycle.
 
 ### Claude Code / Claude Desktop
 
