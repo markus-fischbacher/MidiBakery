@@ -110,6 +110,12 @@ Max.addHandler("loaded", async () => {
   if (api) await Max.outlet("status", `Connected to MidiShower API on port ${api.port}`);
 });
 
+function describeError(error) {
+  if (!error) return "unknown error";
+  if (typeof error === "string") return error;
+  return error.message || error.name || JSON.stringify(error);
+}
+
 async function post(route, body) {
   if (!api) throw new Error("MidiShower API not running");
   const controller = new AbortController();
@@ -136,17 +142,22 @@ async function post(route, body) {
 // and the result goes back in "<dict name>_res".
 Max.addHandler("request", async (id, kind, dictName) => {
   const started = Date.now();
+  let step = "check";
   try {
     if (kind !== "generate" && kind !== "transform") throw new Error(`unknown request kind ${kind}`);
+    step = "read request dict";
     const body = await Max.getDict(dictName);
+    step = "call API";
     const result = await post(`/miditool/${kind}`, body);
+    step = "write result dict";
     const resName = `${dictName}_res`;
     await Max.setDict(resName, result);
     log("request", id, kind, `${(result.notes || []).length} notes`, `${Date.now() - started} ms`);
     await Max.outlet("response", id, resName);
   } catch (error) {
-    log("request failed", id, kind, String(error.message || error));
-    await Max.outlet("failed", id, String(error.message || error));
+    const message = `${step}: ${describeError(error)}`;
+    log("request failed", id, kind, message, error && error.stack ? error.stack : "");
+    await Max.outlet("failed", id, message);
   }
 });
 
