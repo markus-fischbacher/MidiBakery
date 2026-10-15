@@ -12,7 +12,7 @@ from midishower.agent.providers import make_provider
 from midishower.agent.providers.base import ToolResult
 from midishower.agent.providers.ollama import OllamaProvider, inline_refs
 from midishower.agent.providers.openai_compat import OpenAICompatProvider
-from midishower.agent.tools import ToolSpec, compact_schema
+from midishower.agent.tools import ToolSpec, compact_schema, compact_session
 from midishower.mcp import build_server
 
 
@@ -98,6 +98,21 @@ async def test_tool_errors_go_back_to_the_model(client, live):
     errors = provider.results[0]
     assert [r.is_error for r in errors] == [True, True, True]
     assert "Unknown tool" in errors[0].content and "JSON object" in errors[1].content and "NOT_FOUND" in errors[2].content
+
+
+async def test_unknown_arguments_are_named_not_dropped(client, live):
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
+    await client.call("notes.apply", {"track": 1, "slot": 0, "add": [{"pitch": 60, "start_time": 0.0, "duration": 1}]})
+    provider = ScriptedProvider([
+        tool_turn(("transform_notes", {"track": 1, "slot": 0, "operation": "transpose", "sembitimes": 2})),
+        tool_turn(("transform_notes", {"track": 1, "slot": 0, "operation": "transpose"})),
+        Turn("end_turn", text="Sorry."),
+    ])
+    await run(build_server(client), provider, "2 semitones up")
+    typo, missing = provider.results[0][0], provider.results[1][0]
+    assert typo.is_error and "'sembitimes' (did you mean 'semitones'?)" in typo.content
+    assert missing.is_error and "transpose needs either semitones" in missing.content and "'input'" not in missing.content
+    assert live.on_main(lambda: [n["pitch"] for n in live.song.tracks[1].clip_slots[0].clip.notes.values()]) == [60]
 
 
 async def test_confirmation_is_asked_through_the_frontend(client, live):
@@ -467,6 +482,52 @@ async def test_small_profile_fits_and_is_compact(client):
         Agent(provider, host, SMALL_SYSTEM_PROMPT, compact=True)
     assert "plan_changes" not in {t.name for t in provider.tools} and len(provider.tools) == len(SMALL_TOOLS)
     compact = json.dumps([t.input_schema for t in provider.tools])
-    assert "$ref" not in compact and '"title"' not in compact
+    assert "$ref" not in compact and '"title"' not in compact and "if_exists" not in compact
     # Measured against Gemma 4 E4B in LM Studio: ~3.7k of 8192 tokens incl. descriptions. Keep it there.
     assert len(compact) + len(SMALL_SYSTEM_PROMPT) < 14000
+
+
+SESSION = {
+    "song": {"tempo": 120.0, "signature_numerator": 4, "signature_denominator": 4, "root_note": 9, "scale_name": "Minor",
+             "scene_count": 8, "is_playing": False, "loop": True, "loop_start": 0.0, "loop_length": 16.0},
+    "tracks": [
+        {"index": 0, "id": 11, "name": "Drums", "kind": "midi", "color_index": 3, "mute": False, "solo": False, "arm": False,
+         "volume": 0.85, "pan": 0.0, "devices": [{"index": 0, "name": "909 Core Kit", "class_name": "DrumGroupDevice"}],
+         "clips": [{"slot": 0, "name": "Beat", "length": 8.0, "is_midi": True, "is_playing": False},
+                   {"slot": 1, "name": "Fill", "length": 4.0, "is_midi": True, "is_playing": False}]},
+        {"index": 1, "id": 12, "name": "Chord Stabs", "kind": "midi", "color_index": 5, "mute": False, "solo": False, "arm": False,
+         "volume": 0.85, "pan": 0.0, "devices": [{"index": 0, "name": "Drift", "class_name": "Drift"}],
+         "clips": [{"slot": 3, "name": "Stabs", "length": 16.0, "is_midi": True, "is_playing": True}]},
+        {"index": 2, "id": 13, "name": "Vox", "kind": "audio", "color_index": 1, "mute": False, "solo": False, "arm": None,
+         "volume": 0.85, "pan": 0.0, "devices": [], "clips": []},
+    ],
+}
+
+
+def test_compact_session():
+    text = compact_session(SESSION)
+    assert text.splitlines() == [
+        "Song: 120 BPM, 4/4, scale A Minor, 8 slots per track (0-7).",
+        "Tracks (index 'name' [kind, devices]; free slots; clips as slot 'name' length):",
+        "0 'Drums' [drums, 909 Core Kit]; free slots 2-7; clips 0 'Beat' 2 bars, 1 'Fill' 1 bars",
+        "1 'Chord Stabs' [midi, Drift]; free slots 0-2,4-7; clips 3 'Stabs' 4 bars",
+        "2 'Vox' [audio]; free slots 0-7; no clips",
+    ]
+    assert len(text) * 3 < len(json.dumps(SESSION))
+
+
+async def test_small_profile_shortens_get_session(client, live):
+    async def yes(message):
+        return True
+
+    async def emit(e):
+        pass
+
+    results = {}
+    for compact in (False, True):
+        provider = ScriptedProvider([tool_turn(("get_session", {})), Turn("end_turn", text="ok")])
+        async with ToolHost(build_server(client), yes, SMALL_TOOLS) as host:
+            await Agent(provider, host, SMALL_SYSTEM_PROMPT, compact=compact).send("what is in the set?", emit)
+        results[compact] = provider.results[0][0].content
+    assert json.loads(results[False])["song"]["tempo"] == 120  # full JSON for Claude
+    assert results[True].startswith("Song: 120 BPM, 4/4") and "0 '1-MIDI' [midi]; free slots 0-7; no clips" in results[True]

@@ -276,6 +276,26 @@ def test_transpose_in_key():
     assert [m["pitch"] for m in diff.modify] == [64, 67]
 
 
+def test_transpose_by_semitones_is_chromatic():
+    diff = tf.transpose(_clip((60, 0, 1), (64, 1, 1)), C_MAJOR, 0, semitones=2)
+    assert [m["pitch"] for m in diff.modify] == [62, 66]  # E + 2 = F#, out of key on purpose
+    combined = tf.transpose(_clip((60, 0, 1)), C_MAJOR, 2, semitones=12)
+    assert [m["pitch"] for m in combined.modify] == [76]  # a third up in key, then an octave
+
+
+def test_transform_spec_transpose_needs_an_amount():
+    from pydantic import ValidationError
+
+    from midishower.compose.specs import TransformSpec
+
+    with pytest.raises(ValidationError, match="semitones"):
+        TransformSpec(track=0, slot=0, operation="transpose")
+    with pytest.raises(ValidationError, match="not both"):
+        TransformSpec(track=0, slot=0, operation="transpose", semitones=2, steps=1)
+    assert TransformSpec(track=0, slot=0, operation="transpose", semitones=-2).semitones == -2
+    assert TransformSpec(track=0, slot=0, operation="humanize").semitones == 0
+
+
 def test_arpeggiate_replaces_chords_only():
     notes = _clip((60, 0, 1), (64, 0, 1), (67, 0, 1), (72, 2, 0.5))
     diff = tf.arpeggiate(notes, random.Random(1), rate=0.25, direction="up")

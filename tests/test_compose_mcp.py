@@ -195,6 +195,33 @@ async def test_transform_notes_is_a_diff(client, live):
         await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "invert", "note_ids": [9999]})
 
 
+async def test_transform_semitones_is_chromatic(client, live):
+    server = build_server(client)
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
+    await client.call("notes.apply", {"track": 1, "slot": 0, "add": [
+        {"pitch": 60, "start_time": 0.0, "duration": 1}, {"pitch": 64, "start_time": 1.0, "duration": 1},
+    ]})
+    await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "transpose", "semitones": 2})
+    assert [n["pitch"] for n in _clip_notes(live, 1, 0)] == [62, 66]
+    plan = _payload(await server.call_tool("plan_changes", {"steps": [
+        {"kind": "transform", "track": 1, "slot": 0, "operation": "transpose", "semitones": -2},
+    ]}))
+    assert plan["changes"][0]["modify"] == 2
+    with pytest.raises(ToolError, match="semitones"):
+        await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "transpose"})
+
+
+async def test_chords_from_rejects_a_drum_track(client, live):
+    _add_kit(live, track=0)
+    server = build_server(client)
+    await server.call_tool("compose_drums", {"track": 0, "slot": 0, "seed": 1})
+    await server.call_tool("compose_chords", {"track": 1, "slot": 0, "seed": 1})
+    with pytest.raises(ToolError, match="drum track") as exc:
+        await server.call_tool("compose_bass", {"track": 1, "slot": 1, "chords_from": {"track": 0, "slot": 0}})
+    assert "1 '2-MIDI'" in str(exc.value)  # points at the track that has a chord clip
+    await server.call_tool("compose_bass", {"track": 1, "slot": 1, "seed": 2, "chords_from": {"track": 1, "slot": 0}})
+
+
 async def test_apply_detects_shifted_tracks(client, live):
     plan = await build_plan(client.call, [DrumsSpec(track=1, slot=0, seed=1)])
     # A new, empty track with the same name and kind takes index 1: only the track id differs.
@@ -228,3 +255,17 @@ async def test_failure_on_first_op_does_not_undo(client, live):
         await apply_plan(client.call, plan, verify=False)
     assert "rolled_back" not in exc.value.details
     assert live.on_main(lambda: live.song.undo_calls) == undo_before
+
+
+async def test_compose_without_slot_takes_the_first_free_one(client, live):
+    server = build_server(client)
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
+    await client.call("clip.create", {"track": 1, "slot": 2, "length": 4})
+    result = _payload(await server.call_tool("compose_chords", {"track": 1, "seed": 1}))
+    assert result["changes"][0]["slot"] == 1
+    plan = await build_plan(client.call, [DrumsSpec(track=1, seed=1), DrumsSpec(track=1, seed=2)])
+    assert [c.slot for c in plan.changes] == [3, 4]
+    for slot in range(3, 8):
+        await client.call("clip.create", {"track": 1, "slot": slot, "length": 4})
+    with pytest.raises(ToolError, match="no free clip slot"):
+        await server.call_tool("compose_chords", {"track": 1})
