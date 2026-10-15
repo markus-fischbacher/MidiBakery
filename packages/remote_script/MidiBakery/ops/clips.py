@@ -2,6 +2,12 @@ from ..protocol import ErrorCode, OpError
 from ..registry import op
 
 
+LAUNCH_MODES = {0: "trigger", 1: "gate", 2: "toggle", 3: "repeat"}
+LAUNCH_MODE_TOGGLE = 2
+# Track.fired_slot_index while the track's Clip Stop button is fired, i.e. a quantized stop is pending.
+STOP_PENDING = -2
+
+
 def describe_clip(clip):
     return {
         "name": clip.name,
@@ -14,6 +20,8 @@ def describe_clip(clip):
         "end_marker": clip.end_marker,
         "color_index": clip.color_index,
         "is_playing": clip.is_playing,
+        "is_triggered": clip.is_triggered,
+        "launch_mode": LAUNCH_MODES.get(clip.launch_mode, clip.launch_mode),
         "signature_numerator": clip.signature_numerator,
         "signature_denominator": clip.signature_denominator,
     }
@@ -35,7 +43,10 @@ def clip_create(ctx, params):
 
 @op("clip.get")
 def clip_get(ctx, params):
-    return describe_clip(ctx.clip(params["track"], params["slot"]))
+    result = describe_clip(ctx.clip(params["track"], params["slot"]))
+    track = ctx.track(params["track"])
+    result["stop_pending"] = track.fired_slot_index == STOP_PENDING
+    return result
 
 
 @op("clip.set")
@@ -70,9 +81,6 @@ def clip_delete(ctx, params):
     return {"deleted": [params["track"], params["slot"]]}
 
 
-LAUNCH_MODE_TOGGLE = 2
-
-
 @op("clip.launch")
 def clip_launch(ctx, params):
     slot = ctx.clip_slot(params["track"], params["slot"])
@@ -80,19 +88,25 @@ def clip_launch(ctx, params):
         if not slot.has_clip:
             # fire() on an empty slot stops the track: almost always a wrong slot, not the intent.
             raise OpError(ErrorCode.NOT_FOUND, "Slot %d/%d is empty; nothing to play (action 'stop' stops the track)" % (params["track"], params["slot"]))
-        _fire(ctx.song, slot)
+        _fire(ctx.song, ctx.track(params["track"]), slot)
     else:
         slot.stop()
     return {"track": params["track"], "slot": params["slot"]}
 
 
-def _fire(song, slot):
+def _fire(song, track, slot):
     # fire() on a Toggle clip that is playing or triggered switches it off, the
     # opposite of what was asked. Live keeps a clip playing across a transport stop,
     # so such a clip only needs the transport. Live reads the launch mode when the
     # quantized launch happens, so switching it around fire() does not help.
     clip = slot.clip
     if clip.launch_mode == LAUNCH_MODE_TOGGLE and (clip.is_playing or clip.is_triggered):
+        if track.fired_slot_index == STOP_PENDING:
+            # A quantized stop is still pending (the transport stopped before it ran):
+            # starting the transport would let it run. Stop now, then launch fresh.
+            track.stop_all_clips(False)
+            slot.fire()
+            return
         if not song.is_playing:
             song.start_playing()
         return
