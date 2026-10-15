@@ -14,11 +14,11 @@ import asyncio
 import json
 import sys
 
-from midishower.bridge import BridgeClient, BridgeError
-from midishower.compose import BassSpec, ChordsSpec, DrumsSpec, MelodySpec, TransformSpec, apply_plan, build_plan
-from midishower.compose.theory import Scale
+from midibakery.bridge import BridgeClient, BridgeError
+from midibakery.compose import BassSpec, ChordsSpec, DrumsSpec, MelodySpec, TransformSpec, apply_plan, build_plan
+from midibakery.compose.theory import Scale
 
-TRACK_NAME = "MidiShower Smoke"
+TRACK_NAME = "MidiBakery Smoke"
 COMPOSE_SLOTS = (1, 2, 3, 4)  # drums, chords, bass, melody
 
 

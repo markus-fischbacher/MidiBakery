@@ -1,9 +1,9 @@
 /**
- * MidiShower MIDI Tool (v8.codebox) - shared by the Generator and the Transformation.
+ * MidiBakery MIDI Tool (v8.codebox) - shared by the Generator and the Transformation.
  * The build script prepends `var MODE = "generate" | "transform";`.
  *
  * Live's MIDI Tools need a synchronous answer for every apply cycle, but the
- * notes come from the MidiShower API over HTTP. So every apply is answered at
+ * notes come from the MidiBakery API over HTTP. So every apply is answered at
  * once: from the cache when the request was computed before, otherwise with
  * a no-op (no new notes / the unchanged notes) while the request goes out via
  * node.script. When the response arrives it is cached and the tool re-triggers
@@ -97,7 +97,7 @@ function msg_dictionary(d) {
   requestedAt = Date.now();
   reapplied = false;
   showWorking.schedule(300);
-  var name = "midishower_" + instance + "_req" + requestCounter;
+  var name = "midibakery_" + instance + "_req" + requestCounter;
   requestDict = new Dict(name);
   requestDict.parse(key);
   resultDict = new Dict(name + "_res");

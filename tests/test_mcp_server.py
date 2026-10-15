@@ -3,7 +3,7 @@ import json
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from midishower.mcp import build_server
+from midibakery.mcp import build_server
 
 
 def _payload(result):

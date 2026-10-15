@@ -6,10 +6,10 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from fake_song import DrumRackDevice, RackDevice, Chain
-from midishower.bridge import BridgeError
-from midishower.compose import DrumsSpec, apply_plan, build_plan
-from midishower.compose.theory import Scale
-from midishower.mcp import build_server
+from midibakery.bridge import BridgeError
+from midibakery.compose import DrumsSpec, apply_plan, build_plan
+from midibakery.compose.theory import Scale
+from midibakery.mcp import build_server
 
 KIT = {"Kick 909": 36, "Clap": 39, "Snare": 40, "Closed HH": 44, "Open HH": 46}
 

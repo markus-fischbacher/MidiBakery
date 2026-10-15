@@ -1,4 +1,6 @@
-# MidiShower – Konzept: KI-Steuerung & Komposition für Ableton Live 12 Suite
+# MidiBakery – Konzept: KI-Steuerung & Komposition für Ableton Live 12 Suite
+
+MidiBakery ist ein Tool von Klirrwerk.
 
 ## Context
 
@@ -9,7 +11,7 @@
 - Die alte Notes-API zerstört Note-IDs und Undo-Schritte.
 - Es gibt keine Events, die „KI-Helfer“ sind bloße Zufallsgeneratoren.
 
-MidiShower übernimmt nur die Idee und baut sie neu: als **kommerzielles Produkt**, in **Python**, für **Claude via MCP, Chat direkt in Live und lokale LLMs (Ollama)**, mit Schwerpunkt **Komposition/MIDI und Session-Fernsteuerung**.
+MidiBakery übernimmt nur die Idee und baut sie neu: als **kommerzielles Produkt**, in **Python**, für **Claude via MCP, Chat direkt in Live und lokale LLMs (Ollama)**, mit Schwerpunkt **Komposition/MIDI und Session-Fernsteuerung**.
 
 Ausgangslage auf deinem Rechner: Live **12.4.6 Suite** (Python 3.11 im Remote-Script-Host, `ableton.v3` vorhanden) und Max **9.2.0**.
 
@@ -61,7 +63,7 @@ Ollama / Anthropic API ◄── Agent-Loop ────────────
 M4L Chat-Device (v8ui + Node) ─WebSocket───────────┤
 M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
                                                     ▼
-                        midishower-core (Python 3.12+, uv)
+                        midibakery-core (Python 3.12+, uv)
                          ├─ catalog/  Single Source of Truth (Pydantic-Schemas aller Ops)
                          ├─ bridge/   async Client, NDJSON + Request-IDs, Events
                          ├─ compose/  Musik-Engine (Theorie, Generatoren, Transformationen)
@@ -70,7 +72,7 @@ M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
                          └─ api/      lokaler HTTP/WebSocket-Server für M4L
                                                     │ TCP 127.0.0.1, Token-Auth, NDJSON
                                                     ▼
-                  MidiShower Remote Script (ableton.v3, keine Fremd-Dependencies)
+                  MidiBakery Remote Script (ableton.v3, keine Fremd-Dependencies)
                          ├─ Op-Registry (Decorator, Schema-validiert)
                          ├─ MainThreadExecutor (Queue → schedule_message)
                          ├─ Listener → Event-Stream
@@ -85,7 +87,7 @@ M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
   - Ergebnisse gehen per Future mit Request-ID zurück; ein Timeout bricht die Op ab, statt sie still nachzuholen.
 - **Batch-Op:** Mehrere Ops laufen in **einem** Main-Thread-Tick und als **ein** Undo-Schritt.
 - **Framing:** NDJSON mit `{"id","op","params"}` und `{"id","ok","result"|"error"}`, dazu Events als `{"event","data"}`.
-- **Sicherheit:** Die Bridge bindet nur an Loopback. Beim Start erzeugt sie ein Token und legt es in `~/Library/Application Support/MidiShower/` ab; die Core liest es von dort.
+- **Sicherheit:** Die Bridge bindet nur an Loopback. Beim Start erzeugt sie ein Token und legt es in `~/Library/Application Support/MidiBakery/` ab; die Core liest es von dort.
 
 ### Single Source of Truth: `catalog/`
 - Jede Op wird einmal definiert: Name, Pydantic-Parameter, Ergebnis-Schema, `read_only` / `destructive`, Timeout-Klasse und Kategorie.
@@ -126,11 +128,11 @@ M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
 - **Bibliotheken:** zuerst reines Python oder numpy. Die Lizenzen von music21 (BSD) und anderen werden geprüft.
 
 ### Frontends in Live (Max 9)
-1. **MidiShower Chat (Audio-/MIDI-Effekt-AMXD):**
+1. **MidiBakery Chat (Audio-/MIDI-Effekt-AMXD):**
    - `v8ui` als Chat-Oberfläche, Node for Max als WebSocket-Client zur Core.
    - Die Agent-Logik läuft in der Core, nicht im Gerät.
    - Das Gerät zeigt Plan-Diffs an und hat einen Apply/Undo-Button.
-2. **MidiShower MIDI Tools (Generator + Transformation):**
+2. **MidiBakery MIDI Tools (Generator + Transformation):**
    - `live.miditool.in` → Node → Core `compose/*` → `live.miditool.out`.
    - Damit sind KI-Generatoren direkt im Clip-View nutzbar und bekommen Scale, Grid und Seed von Live.
    - Gleicher Code wie die MCP-Kompositions-Tools.
@@ -154,12 +156,12 @@ M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
   - Getestet wird gegen 12.3, 12.4.x und Max 9.1/9.2.
 - **Telemetrie:** nur Opt-in. Die Crash-Logs der Core landen lokal.
 
-## Projektstruktur (`/Users/maxx/Development/Ableton/MidiShower`)
+## Projektstruktur (`/Users/maxx/Development/Ableton/MidiBakery`)
 ```
-MidiShower/
+MidiBakery/
 ├─ pyproject.toml / uv workspace
-├─ packages/core/src/midishower/{catalog,bridge,compose,agent,mcp,api}/
-├─ packages/remote_script/MidiShower/  (__init__.py, registry.py, executor.py, ops/*.py, listeners.py)
+├─ packages/core/src/midibakery/{catalog,bridge,compose,agent,mcp,api}/
+├─ packages/remote_script/MidiBakery/  (__init__.py, registry.py, executor.py, ops/*.py, listeners.py)
 ├─ packages/m4l/{chat,miditools}/      (.maxpat-Quellen, v8/Node-JS, Build-Skript → .amxd)
 ├─ tools/codegen/                      (Katalog → Manifest, MCP, TS-Typen)
 ├─ tests/{unit,contract,live_smoke}/
@@ -184,7 +186,7 @@ MidiShower/
 - **Unit:** `compose/` (deterministisch über Seed, Theorie-Checks), Katalog-Schemas, Codegen-Snapshots (`uv run pytest`).
 - **Contract:** Eine Fake-LOM (Python 3.11) lädt das echte Remote Script, und jede Katalog-Op wird gegen Schema und Fehlercodes getestet. Das schließt die Lücke von ableton-mcp, wo das Remote Script ungetestet war.
 - **Live-Smoke:** Ein Skript verbindet sich mit dem laufenden Live 12.4.6 und führt Ops in einem Test-Set aus: anlegen → prüfen → Undo → prüfen.
-- **MCP:** Abnahme mit MCP Inspector und Claude Code (`claude mcp add midishower …`), dabei Prompts wie „4-taktiges Deep-House-Pattern in der Session-Scale“.
+- **MCP:** Abnahme mit MCP Inspector und Claude Code (`claude mcp add midibakery …`), dabei Prompts wie „4-taktiges Deep-House-Pattern in der Session-Scale“.
 - **M4L:** Die AMXDs in Live laden und Chat sowie MIDI-Tool-Apply im Clip-View testen.
 - **Stabilität:** 1.000 Ops im Batch ohne Crash, keine LOM-Aufrufe außerhalb des Main-Threads (Assertion im Executor).
 

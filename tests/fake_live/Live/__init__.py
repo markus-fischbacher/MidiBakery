@@ -1,6 +1,6 @@
 """Minimal stand-in for Live's embedded `Live` module, for contract tests.
 
-Only what the MidiShower Remote Script touches is modelled. Every attribute
+Only what the MidiBakery Remote Script touches is modelled. Every attribute
 access on a LiveObject asserts it happens on the thread registered as Live's
 main thread, so tests catch LOM calls from socket threads.
 """

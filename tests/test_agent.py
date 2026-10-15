@@ -5,15 +5,15 @@ import json
 import httpx2 as httpx
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
 
-from midishower.agent import REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, Agent, ToolHost
-from midishower.agent.providers.anthropic import FALLBACK_BETA, AnthropicProvider
-from midishower.agent.providers.base import Provider, ToolCall, Turn
-from midishower.agent.providers import make_provider
-from midishower.agent.providers.base import ToolResult
-from midishower.agent.providers.ollama import OllamaProvider, inline_refs
-from midishower.agent.providers.openai_compat import OpenAICompatProvider
-from midishower.agent.tools import ToolSpec, compact_schema, compact_session
-from midishower.mcp import build_server
+from midibakery.agent import REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, Agent, ToolHost
+from midibakery.agent.providers.anthropic import FALLBACK_BETA, AnthropicProvider
+from midibakery.agent.providers.base import Provider, ToolCall, Turn
+from midibakery.agent.providers import make_provider
+from midibakery.agent.providers.base import ToolResult
+from midibakery.agent.providers.ollama import OllamaProvider, inline_refs
+from midibakery.agent.providers.openai_compat import OpenAICompatProvider
+from midibakery.agent.tools import ToolSpec, compact_schema, compact_session
+from midibakery.mcp import build_server
 
 
 class ScriptedProvider(Provider):
@@ -82,7 +82,7 @@ async def test_loop_runs_tools_and_streams_events(client, live):
     kinds = [e["type"] for e in events]
     assert kinds == ["tool_call", "tool_result", "tool_call", "tool_result", "plan", "text", "done"]
     assert provider.users == ["Make drums"]
-    assert "MidiShower" in provider.system and "get_session" in {t.name for t in provider.tools}
+    assert "MidiBakery" in provider.system and "get_session" in {t.name for t in provider.tools}
     session_result = provider.results[0][0]
     assert not session_result.is_error and json.loads(session_result.content)["song"]["tempo"] == 120
     assert events[4]["roll"]["applied"] is True
@@ -245,7 +245,7 @@ async def test_anthropic_request_shape_streaming_and_history():
     assert all(t["eager_input_streaming"] for t in request["tools"])
     assert provider.messages[-1]["role"] == "assistant" and provider.messages[-1]["content"][1] is tool_use
 
-    from midishower.agent.providers.base import ToolResult
+    from midibakery.agent.providers.base import ToolResult
 
     provider.add_tool_results([ToolResult("tu_1", "a_tool", "ok")])
     assert provider.messages[-1] == {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu_1", "content": "ok", "is_error": False}]}
@@ -330,7 +330,7 @@ async def test_ollama_streams_text_and_tool_calls():
     assert body["messages"][0] == {"role": "system", "content": "SYS"} and body["stream"] is True
     assert body["tools"][0]["function"]["name"] == "b_tool"
 
-    from midishower.agent.providers.base import ToolResult
+    from midibakery.agent.providers.base import ToolResult
 
     provider.add_tool_results([ToolResult(turn.tool_calls[0].id, "a_tool", "boom", is_error=True)])
     assert provider.messages[-2]["tool_calls"][0]["function"]["name"] == "a_tool"

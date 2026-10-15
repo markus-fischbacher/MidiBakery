@@ -32,7 +32,7 @@ jobs:
         run: uv sync --locked
 
       - name: Op manifest matches the catalog
-        run: uv run midishower manifest --check
+        run: uv run midibakery manifest --check
 
       - name: Lint (errors only)
         run: uvx ruff check --select F,E9 packages tests

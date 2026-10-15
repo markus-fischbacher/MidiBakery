@@ -4,17 +4,17 @@ import subprocess
 
 import pytest
 
-from midishower.catalog import OPS
-from midishower.cli import MANIFEST_PATH, SCRIPT_SOURCE, manifest_json
+from midibakery.catalog import OPS
+from midibakery.cli import MANIFEST_PATH, SCRIPT_SOURCE, manifest_json
 
 
 def test_manifest_is_up_to_date():
-    assert MANIFEST_PATH.read_text() == manifest_json(), "run `uv run midishower manifest`"
+    assert MANIFEST_PATH.read_text() == manifest_json(), "run `uv run midibakery manifest`"
 
 
 def test_every_op_has_a_handler_and_vice_versa():
-    from MidiShower.registry import HANDLERS
-    import MidiShower.ops  # noqa: F401
+    from MidiBakery.registry import HANDLERS
+    import MidiBakery.ops  # noqa: F401
 
     assert set(HANDLERS) == set(OPS)
 

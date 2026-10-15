@@ -7,10 +7,10 @@ import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from midishower.agent.providers.base import ToolCall, Turn
-from midishower.api.server import api_info_path, build_app, write_api_info
-from midishower.bridge import BridgeClient
-from midishower.compose.theory import Scale
+from midibakery.agent.providers.base import ToolCall, Turn
+from midibakery.api.server import api_info_path, build_app, write_api_info
+from midibakery.bridge import BridgeClient
+from midibakery.compose.theory import Scale
 from test_agent import ScriptedProvider
 
 TOKEN = "test-token"
@@ -257,7 +257,7 @@ def test_models_lists_default_and_claude_and_skips_unreachable_local_servers(app
 async def test_local_models_are_listed_and_embeddings_dropped():
     import httpx2 as httpx
 
-    from midishower.api.models import list_models
+    from midibakery.api.models import list_models
 
     def handler(request):
         if request.url.path == "/v1/models":
