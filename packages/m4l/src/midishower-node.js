@@ -38,7 +38,9 @@ const LOG_FILE = path.join(configDir(), `device-${MODE}.log`);
 // Small rolling log next to api.json, for diagnosing devices without the Max console.
 function log(...parts) {
   try {
-    const line = `${new Date().toISOString()} ${parts.map((p) => (typeof p === "string" ? p : JSON.stringify(p))).join(" ")}\n`;
+    const text = parts.map((p) => (typeof p === "string" ? p : JSON.stringify(p))).join(" ");
+    // Never write the API token (it shows up in URLs jweb reports back).
+    const line = `${new Date().toISOString()} ${text.replace(/token=[^\s"&]*/g, "token=***")}\n`;
     if (fs.existsSync(LOG_FILE) && fs.statSync(LOG_FILE).size > 256 * 1024) fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);
     fs.appendFileSync(LOG_FILE, line);
   } catch (_) {
@@ -95,7 +97,7 @@ async function loadPage() {
   }
   loadAttempts += 1;
   if (loadAttempts > 1) await Max.outlet("status", `Loading chat page (attempt ${loadAttempts})...`);
-  log("send url", chatUrl().replace(/token=.*/, "token=***"), "attempt", loadAttempts);
+  log("send url", chatUrl(), "attempt", loadAttempts);
   await Max.outlet("url", chatUrl());
 }
 
