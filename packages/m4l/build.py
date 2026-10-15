@@ -209,6 +209,12 @@ def chat_device() -> dict[str, Any]:
     p.connect(node, 0, route)
     p.connect(route, 0, set_url)
     p.connect(set_url, 0, web)
+    # The page reports "loaded" through window.max; node.script stops re-sending the URL.
+    loaded = p.obj("route loaded", 120, 400, outlets=["", ""], width=90)
+    loaded_msg = p.message("loaded", 120, 440)
+    p.connect(web, 0, loaded)
+    p.connect(loaded, 0, loaded_msg)
+    p.connect(loaded_msg, 0, node)
     set_status = p.obj("prepend set", 260, 100)
     status = p.comment("Starting...", (260, 140, 74, 120), presentation=(564, 32, 74, 120),
                        linecount=8, fontsize=9.0, textcolor=[0.6, 0.6, 0.6, 1.0])
