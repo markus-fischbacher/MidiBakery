@@ -77,6 +77,8 @@ const $ = (id) => document.getElementById(id);
 const log = $("log");
 const hash = new URLSearchParams(location.hash.slice(1));
 const token = hash.get("token");
+// The token is read once; a new one (the API restarted) needs a fresh page.
+addEventListener("hashchange", () => location.reload());
 const CHOICE_KEY = "midibakery.choice";
 
 let ws = null;

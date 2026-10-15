@@ -26,6 +26,7 @@ import itertools
 import json
 import os
 import secrets
+import socket
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -201,6 +202,10 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
 def serve(provider_factory: ProviderFactory, port: int = 8766) -> None:
     import uvicorn
 
+    with socket.socket() as probe:
+        if probe.connect_ex(("127.0.0.1", port)) == 0:
+            # Keep the running API's discovery file: overwriting it would lock its clients out.
+            raise SystemExit(f"Port {port} is already in use; is the MidiBakery API already running?")
     token = secrets.token_urlsafe(32)
     bridge = BridgeClient()
     app = build_app(bridge, provider_factory, token)

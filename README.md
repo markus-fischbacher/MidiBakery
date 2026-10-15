@@ -40,8 +40,12 @@ The Anthropic provider reads `ANTHROPIC_API_KEY` (or an `ant auth login` profile
 
 ```bash
 uv run python packages/m4l/build.py --install   # builds the .amxd files into Live's User Library
-uv run midibakery api --provider lmstudio       # the devices talk to this API
+uv run midibakery install-script --api-provider lmstudio  # the devices talk to the API, which now starts with Live
 ```
+
+The Remote Script starts the API when Live loads it and stops it when Live quits (`launcher.json` and
+`api.log` in the config folder; `--no-api` turns this off). An API that already runs on the port is used as is.
+Live does not see your shell's environment, so the Anthropic provider needs an `ant auth login` profile there.
 
 - **MidiBakery Chat** (Max for Live > Max MIDI Effect > MidiBakery): chat with the agent in the device view;
   MIDI passes through. *Pop out* opens the same chat in the browser.

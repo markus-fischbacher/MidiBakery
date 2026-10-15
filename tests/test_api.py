@@ -216,6 +216,14 @@ def test_chat_page_is_served_without_token_and_holds_no_secret(app_factory):
     assert "location.hash" in page.text and TOKEN not in page.text
 
 
+def test_chat_page_reloads_for_a_new_token(app_factory):
+    # The device adds ?key=... so a new token is a real navigation in jweb.
+    api, _ = app_factory()
+    page = api.get("/ui?key=0123abcd")
+    assert page.status_code == 200
+    assert 'addEventListener("hashchange", () => location.reload())' in page.text
+
+
 @pytest.mark.parametrize("kind, params", [
     ("drums", {"swing": 0, "density": 0.5, "style": "house", "chance": 0.5}),
     ("bass", {"swing": 0.2, "density": 0.5, "style": "syncopated"}),
@@ -280,3 +288,17 @@ async def test_local_models_are_listed_and_embeddings_dropped():
     labels = [m["label"] for m in models]
     assert "LM Studio · google/gemma-4-e4b" in labels and "Ollama · qwen3:8b" in labels
     assert not any("embedding" in label for label in labels)
+
+
+def test_second_api_on_a_busy_port_keeps_the_running_apis_token(bridge_env):
+    import socket
+
+    from midibakery.api.server import serve
+
+    write_api_info(8766, "running-token")
+    with socket.socket() as running:
+        running.bind(("127.0.0.1", 0))
+        running.listen()
+        with pytest.raises(SystemExit):
+            serve(lambda options: None, port=running.getsockname()[1])
+    assert json.loads(api_info_path().read_text())["token"] == "running-token"

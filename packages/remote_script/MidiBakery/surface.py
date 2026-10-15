@@ -11,6 +11,7 @@ import traceback
 
 from . import ops  # noqa: F401  (registers handlers)
 from .protocol import ErrorCode, OpError, load_manifest, validate
+from .launcher import ApiLauncher
 from .registry import HANDLERS, Context
 from .server import BridgeServer
 
@@ -50,6 +51,9 @@ class MidiBakerySurface(object):
         except Exception as exc:
             self.log("could not start bridge: %s" % exc)
             self.show_message("MidiBakery: bridge failed to start (%s)" % exc)
+
+        self._api = ApiLauncher(self.log)
+        self._api.start()
 
     # ------------------------------------------------------------------
     # Executor (main thread only)
@@ -111,6 +115,7 @@ class MidiBakerySurface(object):
 
     def disconnect(self):
         self._server.stop()
+        self._api.stop()
 
     def log(self, message):
         self._c_instance.log_message("MidiBakery: " + str(message))
