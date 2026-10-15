@@ -32,7 +32,14 @@ class AnthropicProvider(Provider):
         # On a safety decline the API re-runs the request on a fallback model
         # chosen by refusal category (Claude API only).
         self.fallbacks = fallbacks
-        self._client = client or anthropic.AsyncAnthropic()
+        if client is None:
+            from midibakery.credentials import MissingKey, anthropic_key, status
+
+            key = anthropic_key()
+            if key is None and not status()["configured"]:
+                raise MissingKey("Claude needs an API key: add it with the Key button or `midibakery auth set-key`")
+            client = anthropic.AsyncAnthropic(api_key=key)  # None: the SDK uses an `ant auth login` profile
+        self._client = client
         self._system: list[dict[str, Any]] = []
         self._tools: list[dict[str, Any]] = []
         self.messages: list[dict[str, Any]] = []

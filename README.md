@@ -33,7 +33,7 @@ uv run midibakery chat --provider lmstudio --model google/gemma-4-e4b  # LM Stud
 uv run midibakery api                                   # HTTP/WebSocket API for the Max for Live devices
 ```
 
-The Anthropic provider reads `ANTHROPIC_API_KEY` (or an `ant auth login` profile). The API listens on
+Claude needs an API key: click **Key** in the chat (device or browser) or run `uv run midibakery auth set-key`. It is checked with the Claude API and stored in the macOS Keychain (service "MidiBakery"), so the API that Live starts finds it too; `auth status` / `auth remove` show or delete it. `ANTHROPIC_API_KEY` and an `ant auth login` profile work as well. The API listens on
 127.0.0.1:8766 and writes its port and token to `api.json` in the MidiBakery config folder.
 
 ### Max for Live devices
@@ -45,7 +45,7 @@ uv run midibakery install-script --api-provider lmstudio  # the devices talk to 
 
 The Remote Script starts the API when Live loads it and stops it when Live quits (`launcher.json` and
 `api.log` in the config folder; `--no-api` turns this off). An API that already runs on the port is used as is.
-Live does not see your shell's environment, so the Anthropic provider needs an `ant auth login` profile there.
+Live does not see your shell's environment; that is why the Claude key lives in the Keychain.
 
 - **MidiBakery Chat** (Max for Live > Max MIDI Effect > MidiBakery): chat with the agent in the device view;
   MIDI passes through. *Pop out* opens the same chat in the browser.

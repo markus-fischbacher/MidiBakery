@@ -38,6 +38,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from midibakery import credentials
 from midibakery.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
@@ -95,6 +96,28 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             default.update(provider=provider.name, model=provider.model)
         return JSONResponse({"models": await list_models(default["provider"], default["model"])})
 
+    async def auth(request: Request) -> JSONResponse:
+        """Claude's API key: GET status, PUT {"api_key"} stores it in the Keychain, DELETE removes it.
+        The key is never sent back."""
+        store = credentials.store()
+        if request.method == "PUT":
+            try:
+                key = str((await request.json()).get("api_key", "")).strip()
+            except (ValueError, AttributeError):
+                key = ""
+            try:
+                if not credentials.valid_format(key):
+                    raise credentials.InvalidKey("That does not look like a Claude API key")
+                await credentials.verify(key)
+                await asyncio.to_thread(store.save, key)
+            except credentials.InvalidKey as exc:
+                return JSONResponse({"error": "INVALID_KEY", "message": str(exc)}, status_code=422)
+            except OSError as exc:
+                return JSONResponse({"error": "STORE_FAILED", "message": str(exc)}, status_code=500)
+        elif request.method == "DELETE":
+            await asyncio.to_thread(store.delete)
+        return JSONResponse(await asyncio.to_thread(credentials.status))
+
     async def ui(request: Request) -> HTMLResponse:
         # no-store: a reloaded device always gets the page matching this API version
         return HTMLResponse(UI_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
@@ -144,6 +167,11 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         options = {k: v for k, v in ws.query_params.items() if k in ("provider", "model", "tools")}
         try:
             provider = provider_factory(options)
+        except credentials.MissingKey as exc:
+            # Not a connection problem: the page asks for the key instead of reconnecting.
+            await emit({"type": "error", "code": "NO_API_KEY", "message": str(exc)})
+            await ws.close(code=4402)
+            return
         except ValueError as exc:
             await emit({"type": "error", "message": str(exc)})
             await ws.close()
@@ -192,6 +220,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/health", guard(health), methods=["GET"]),
             Route("/ui", ui, methods=["GET"]),
             Route("/models", guard(models), methods=["GET"]),
+            Route("/auth/anthropic", guard(auth), methods=["GET", "PUT", "DELETE"]),
             Route("/miditool/generate", guard(notes_endpoint(GenerateRequest, generate)), methods=["POST"]),
             Route("/miditool/transform", guard(notes_endpoint(TransformRequest, transform)), methods=["POST"]),
             WebSocketRoute("/chat", chat),
