@@ -7,7 +7,7 @@ import json
 from typing import Any
 
 from midishower.agent.providers.base import Emit, Provider, ToolResult
-from midishower.agent.tools import ToolHost, compact_tools
+from midishower.agent.tools import COMPACT_RESULTS, ToolHost, compact_tools
 from midishower.mcp.server import INSTRUCTIONS
 
 SYSTEM_PROMPT = (
@@ -29,10 +29,12 @@ SMALL_SYSTEM_PROMPT = (
     "Answer in the user's language, briefly.\n"
     "- Call get_session first. Tracks and clip slots are zero-based indices.\n"
     "- Times are in beats (quarter notes); pitch 60 = C3. Stay in the song scale.\n"
-    "- compose_drums/bass/chords/melody write a new clip into an EMPTY slot; pick an empty slot from get_session. "
-    "Give bass and melody chords_from (the chord clip), the bass follow_kick (the drum clip). Never set if_exists or overwrite a clip unless the user asks for it.\n"
-    "- edit_notes and transform_notes change existing notes by note_id from get_clip.\n"
-    "- Every write can be undone with undo. If a tool fails, read the error and fix the call. "
+    "- compose_drums/bass/chords/melody write a new clip into a free slot (omit slot for the first free one). "
+    "Give bass and melody chords_from = the chord clip (never a drums track), the bass follow_kick = the drum clip. "
+    "Never overwrite a clip unless the user asks for it.\n"
+    "- edit_notes and transform_notes change existing notes by note_id from get_clip. "
+    "Transpose by half steps/semitones/octaves with semitones (12 = octave); steps means scale steps.\n"
+    "- Every write can be undone with undo. If a tool fails, read the error, fix the call and retry it yourself. "
     "If the user declined a change (CANCELLED), nothing was written: say so, never claim it was done."
 )
 
@@ -43,10 +45,12 @@ class Agent:
     """One conversation: a provider (the model) plus a tool host (Live via MCP)."""
 
     def __init__(self, provider: Provider, host: ToolHost, system: str = SYSTEM_PROMPT, max_steps: int = MAX_STEPS, compact: bool = False):
-        """`compact` sends short descriptions and lean schemas (see compact_tools) for small local models."""
+        """`compact` sends short descriptions and lean schemas (see compact_tools) and shorter
+        results (COMPACT_RESULTS) for small local models."""
         self.provider = provider
         self.host = host
         self.max_steps = max_steps
+        self.compact = compact
         provider.configure(system, compact_tools(host.tools) if compact else host.tools)
         self._lock = asyncio.Lock()
 
@@ -84,7 +88,10 @@ class Agent:
                     await emit(event)
                     if outcome.roll:
                         await emit({"type": "plan", "id": call.id, "name": call.name, "roll": outcome.roll})
-                    results.append(ToolResult(call.id, call.name, outcome.text, outcome.is_error))
+                    text = outcome.text
+                    if self.compact and not outcome.is_error and outcome.structured and call.name in COMPACT_RESULTS:
+                        text = COMPACT_RESULTS[call.name](outcome.structured)
+                    results.append(ToolResult(call.id, call.name, text, outcome.is_error))
                 self.provider.add_tool_results(results)
             await emit({"type": "error", "message": f"Stopped after {self.max_steps} tool rounds without an answer."})
 

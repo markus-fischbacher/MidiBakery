@@ -121,7 +121,7 @@ def run_transform(spec: TransformSpec, notes: list[dict[str, Any]], scale: Scale
     if op == "invert":
         return tf.invert(notes, scale, spec.axis)
     if op == "transpose":
-        return tf.transpose(notes, scale, spec.steps)
+        return tf.transpose(notes, scale, spec.steps, spec.semitones)
     if op == "arpeggiate":
         diff = tf.arpeggiate(notes, rng, spec.rate, spec.direction, octaves=spec.octaves)
         diff.add = fit_to_length(diff.add, length or float("inf"))

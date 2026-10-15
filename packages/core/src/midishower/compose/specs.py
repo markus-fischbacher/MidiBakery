@@ -35,7 +35,9 @@ class ClipLocation(Spec):
 
 class Generate(Spec):
     track: TrackIndex
-    slot: SlotIndex
+    slot: Annotated[
+        int | None, Field(ge=0, description="Zero-based clip slot (= scene) index. Default: the track's first free slot")
+    ] = None
     bars: Annotated[int, Field(ge=1, le=64, description="Length in bars of the song's time signature")] = 4
     seed: Seed = None
     if_exists: Literal["error", "replace", "merge"] = Field(
@@ -120,11 +122,24 @@ class TransformSpec(Spec):
     swing: Swing = 0.0
     swing_unit: SwingUnit = "1/16"
     axis: Pitch | None = Field(None, description="invert: mirror pitch (default: middle of the notes' range)")
-    steps: int = Field(0, ge=-24, le=24, description="transpose: scale steps (in key)")
+    semitones: int = Field(
+        0, ge=-48, le=48,
+        description="transpose: chromatic half steps (12 = one octave). Use this for 'n semitones / half steps / up an octave'",
+    )
+    steps: int = Field(
+        0, ge=-24, le=24,
+        description="transpose: diatonic scale steps in the song key (2 = up a third, not 2 semitones). Only for 'n scale steps'",
+    )
     rate: Annotated[float, Field(gt=0, le=4, description="arpeggiate: step length in beats")] = 0.25
     direction: ArpDirection = "up"
     octaves: Annotated[int, Field(ge=1, le=3)] = 1
     seed: Seed = None
+
+    @model_validator(mode="after")
+    def _transpose_amount(self) -> TransformSpec:
+        if self.operation == "transpose" and bool(self.semitones) == bool(self.steps):
+            raise ValueError("transpose needs either semitones (chromatic, 12 = octave) or steps (scale steps in key), not both")
+        return self
 
 
 Step = Annotated[DrumsSpec | BassSpec | ChordsSpec | MelodySpec | TransformSpec, Field(discriminator="kind")]
