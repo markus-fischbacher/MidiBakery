@@ -42,6 +42,7 @@ INSTALL_DIRS = {
 }
 
 # live.* parameter types and unit styles (Max parameter attributes)
+# Max parameter types. INT is "Int (0-255)": anything wider must be FLOAT with an integer unit style.
 FLOAT, INT, ENUM = 0, 1, 2
 UNIT_INT, UNIT_PERCENT = 0, 5
 
@@ -287,7 +288,7 @@ def _param_to_v8(p: Patcher, box: str, name: str, v8: str, x: float, y: float) -
 
 
 def _seed_controls(p: Patcher, v8: str, feedback: str, numbox_rect, dice_rect, label_rect) -> None:
-    seed = p.parameter("live.numbox", (760, 300, 50, 15), numbox_rect, name="Seed", short="Seed", ptype=INT,
+    seed = p.parameter("live.numbox", (760, 300, 50, 15), numbox_rect, name="Seed", short="Seed", ptype=FLOAT,
                        inlets=1, outlets=["", "float"], parameter_mmin=1, parameter_mmax=9999, parameter_initial=[1],
                        parameter_initial_enable=1, parameter_unitstyle=UNIT_INT)
     _param_to_v8(p, seed, "seed", v8, 760, 330)
@@ -365,7 +366,7 @@ def transform_device() -> dict[str, Any]:
     amount = _dial(p, (760, 80, 44, 48), (2, 24, 48, 48), "Amount", "Amount", 50.0)
     _param_to_v8(p, amount, "amount", v8, 760, 140)
     p.comment("Semis", (820, 60, 40, 18), presentation=(52, 24, 46, 14), fontsize=9.0)
-    semis = p.parameter("live.numbox", (820, 80, 44, 15), (52, 40, 46, 16), name="Semitones", short="Semis", ptype=INT,
+    semis = p.parameter("live.numbox", (820, 80, 44, 15), (52, 40, 46, 16), name="Semitones", short="Semis", ptype=FLOAT,
                         inlets=1, outlets=["", "float"], parameter_mmin=-48, parameter_mmax=48, parameter_initial=[12],
                         parameter_initial_enable=1, parameter_unitstyle=UNIT_INT)
     _param_to_v8(p, semis, "semitones", v8, 820, 110)

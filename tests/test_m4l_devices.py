@@ -66,6 +66,16 @@ def test_midi_tool_controls_fit_the_clip_view_panel(devices):
             assert x >= 0 and y >= 0 and x + w <= build.TOOL_WIDTH and y + h <= build.TOOL_HEIGHT, (name, x, y, w, h)
 
 
+def test_int_parameters_fit_maxs_int_type(devices):
+    """Max's Int parameter type only holds 0..255; wider ranges must use Float with an int unit style."""
+    for path in devices.values():
+        _, patcher = build.read_amxd(path)
+        for box in _boxes(patcher).values():
+            valueof = box.get("saved_attribute_attributes", {}).get("valueof", {})
+            if valueof.get("parameter_type") == build.INT:
+                assert 0 <= valueof.get("parameter_mmin", 0) and valueof.get("parameter_mmax", 255) <= 255, valueof
+
+
 def test_chat_device_passes_midi_through(devices):
     _, patcher = build.read_amxd(devices["MidiShower Chat"])
     texts = {b.get("text") for b in _boxes(patcher).values()}

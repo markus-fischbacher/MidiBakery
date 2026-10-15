@@ -44,6 +44,10 @@ var instance = Math.floor(Math.random() * 1e9);
 // Request and result dicts must outlive this call: node.script uses them asynchronously.
 var requestDict = null;
 var resultDict = null;
+// "Working..." only for slow requests; fast ones (a few ms) would just flicker.
+var showWorking = new Task(function () {
+  if (pending.id) status("Working...");
+});
 // If Live ignores the self-triggered re-apply (e.g. Auto off), ask for a second click.
 var waitForApply = new Task(function () {
   if (cache.key !== null && reapplied) status("Ready - click " + (MODE === "generate" ? "Generate" : "Transform") + " again");
@@ -91,7 +95,7 @@ function msg_dictionary(d) {
   pending = { id: requestCounter, key: key };
   requestedAt = Date.now();
   reapplied = false;
-  status("Working...");
+  showWorking.schedule(300);
   var name = "midishower_" + instance + "_req" + requestCounter;
   requestDict = new Dict(name);
   requestDict.parse(key);
@@ -141,9 +145,11 @@ function failed(id, message) {
   status("Error: " + message);
 }
 
+var INTEGER_PARAMS = { seed: 1, semitones: 1, kind: 1, operation: 1, rate: 1, drums: 1, bass: 1, chords: 1, replace: 1 };
+
 function param(name, value) {
   if (!(name in params)) return;
-  params[name] = value;
+  params[name] = INTEGER_PARAMS[name] ? Math.round(Number(value)) : Number(value);
   if (name === "kind") showStyleMenu();
   if (lastInput) outlet(2, "bang");
 }
