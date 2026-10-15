@@ -50,6 +50,7 @@
   /* Inside the Max for Live device the input is a native Max text field below this page:
      Live does not pass keystrokes to jweb. */
   body.device form { display: none; }
+  body.device #providers { display: none; }  /* the device has a native Model menu */
   /* jweb in Live can render a little taller than the device; keep the last lines clear of the edge. */
   body.device #log { padding-bottom: 22px; }
 </style>
@@ -269,17 +270,21 @@ const stop = () => ws && ws.send(JSON.stringify({ type: "cancel" }));
 $("stop").onclick = stop;
 $("stopTop").onclick = stop;
 $("reset").onclick = () => ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "reset" }));
-for (const b of document.querySelectorAll("#providers button")) {
-  b.onclick = () => {
-    if (b.dataset.provider === provider) return;
-    provider = b.dataset.provider;
-    try { localStorage.setItem(PROVIDER_KEY, provider); } catch (_) {}
-    showProvider();
-    log.textContent = "";
-    if (ws) { ws.onclose = null; ws.close(); }
-    connect();
-  };
+function setProvider(value) {
+  if (value === provider) return;
+  provider = value;
+  try { localStorage.setItem(PROVIDER_KEY, provider); } catch (_) {}
+  showProvider();
+  log.textContent = "";
+  if (ws) { ws.onclose = null; ws.close(); }
+  connect();
 }
+
+for (const b of document.querySelectorAll("#providers button")) b.onclick = () => setProvider(b.dataset.provider);
+
+// The device's Model menu sends "provider_index <n>" (order of its items).
+const PROVIDER_ORDER = ["", "anthropic", "ollama", "lmstudio"];
+if (inDevice) window.max.bindInlet("provider_index", (n) => setProvider(PROVIDER_ORDER[Number(n)] ?? ""));
 
 // The device's Max text field sends "chat_input <words...>" on Enter.
 if (inDevice) window.max.bindInlet("chat_input", (...words) => sendText(words.join(" ")));
