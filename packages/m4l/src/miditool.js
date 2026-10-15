@@ -40,8 +40,9 @@ var reapplied = false;
 var REQUEST_TIMEOUT_MS = 20000;
 var requestedAt = 0;
 var instance = Math.floor(Math.random() * 1e9);
-// The request dict must outlive this call: node.script reads it asynchronously.
+// Request and result dicts must outlive this call: node.script uses them asynchronously.
 var requestDict = null;
+var resultDict = null;
 // If Live ignores the self-triggered re-apply (e.g. Auto off), ask for a second click.
 var waitForApply = new Task(function () {
   if (cache.key !== null && reapplied) status("Ready - click " + (MODE === "generate" ? "Generate" : "Transform") + " again");
@@ -79,6 +80,7 @@ function msg_dictionary(d) {
   var name = "midishower_" + instance + "_req" + requestCounter;
   requestDict = new Dict(name);
   requestDict.parse(key);
+  resultDict = new Dict(name + "_res");
   dbg("request", requestCounter, (d.notes || []).length, "notes in");
   outlet(1, "request", requestCounter, MODE, name);
 }
