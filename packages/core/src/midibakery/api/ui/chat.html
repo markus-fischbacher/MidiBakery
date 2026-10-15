@@ -61,6 +61,22 @@
   #keyInput { flex: 1; min-width: 160px; padding: 2px 6px; }
   body.device #keyInput, body.device #keySave { display: none; }
   body:not(.device) #keyTypeHint { display: none; }
+  /* Plan diff: a small before/after piano roll per clip. Green = added, orange = changed,
+     red outline = removed, grey = kept. Click a roll to make it taller. */
+  .plan { align-self: stretch; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; display: flex; flex-direction: column; gap: 2px; }
+  .plan.open { border-color: var(--accent); }
+  .plan .head { display: flex; gap: 6px; align-items: center; }
+  .plan .head .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plan .head .state { color: var(--dim); font-size: 11px; white-space: nowrap; }
+  .plan .head .state.ok { color: var(--ok); }
+  .plan .clip { color: var(--dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plan svg { display: block; width: 100%; height: 34px; background: var(--bg); border-radius: 2px; cursor: zoom-in; }
+  .plan svg.tall { height: 110px; cursor: zoom-out; }
+  .plan .n-keep { fill: #6a6a6a; }
+  .plan .n-add { fill: var(--ok); }
+  .plan .n-mod { fill: var(--accent); }
+  .plan .n-del { fill: none; stroke: var(--err); stroke-dasharray: 2 1.5; }
+  .plan .bar { stroke: var(--line); }
   /* jweb in Live can render a little taller than the device; keep the last lines clear of the edge. */
   body.device #log { padding-bottom: 22px; }
 </style>
@@ -72,6 +88,7 @@
   <!-- Browser only: dropdowns do not open inside jweb; the device shows the same list in a Max menu. -->
   <select id="modelSelect" title="Model"></select>
   <button id="stopTop" type="button" title="Stop the current answer" hidden>Stop</button>
+  <button id="undo" type="button" title="Undo the last change in Live" disabled>Undo</button>
   <button id="keyButton" type="button" title="Claude API key">Key</button>
   <button id="reset" type="button" title="Forget the conversation">New</button>
 </header>
@@ -105,6 +122,8 @@ let current = null;      // assistant message element being streamed
 let thinking = null;     // thinking element being streamed
 let retry = 0;
 let keyMode = false;     // device: the next line from the Max text field is the API key
+const plans = new Map();  // plan_id -> plan card, to mark it applied
+const calls = new Map();  // tool call id -> { name, input, result } for the plan card and Apply
 
 const inDevice = Boolean(window.max && window.max.bindInlet);
 if (inDevice) document.body.classList.add("device");
@@ -181,6 +200,7 @@ function setBusy(value) {
   $("send").disabled = $("input").disabled;
   $("stop").hidden = !busy;
   $("stopTop").hidden = !busy || !inDevice;
+  $("undo").disabled = $("input").disabled;
   if (!busy) $("input").focus();
 }
 
@@ -241,15 +261,23 @@ function handle(ev) {
       break;
     case "tool_call":
       current = null; thinking = null;
-      add("tool", `→ ${ev.name} ${brief(ev.input)}`);
-      showPending(`Running ${ev.name}`);
+      calls.set(ev.id, { name: ev.name, input: ev.input || {} });
+      // The page's own buttons (Apply, Undo) say what happened when the result comes in.
+      if (ev.source !== "user") add("tool", `→ ${ev.name} ${brief(ev.input)}`);
+      showPending(ev.source === "user" ? (ev.name === "undo" ? "Undoing" : "Applying") : `Running ${ev.name}`);
       break;
-    case "tool_result":
-      if (ev.is_error) add("tool err", `✗ ${brief(ev.result, 220)}`);
-      showPending("Thinking");
+    case "tool_result": {
+      if (!calls.has(ev.id)) calls.set(ev.id, { name: ev.name, input: {} });
+      const call = calls.get(ev.id);
+      call.result = ev.result;
+      if (ev.is_error) add("tool err", `✗ ${ev.name === "undo" && ev.source === "user" ? "Undo: " : ""}${brief(ev.result, 220)}`);
+      if (ev.name === "apply_plan") planApplied(call.input.plan_id, ev.is_error);
+      if (ev.name === "undo" && ev.source === "user" && !ev.is_error) add("note", "↶ Undone in Live");
+      if (ev.source !== "user") showPending("Thinking");
       break;
+    }
     case "plan":
-      add("tool", `◇ preview from ${ev.name}`);
+      showPlan(ev);
       break;
     case "confirm":
       hidePending();  // waiting for the user, not the model
@@ -272,10 +300,128 @@ function handle(ev) {
       break;
     case "reset":
       hidePending();
+      plans.clear(); calls.clear();
       log.textContent = "";
       add("note", "New conversation");
       break;
   }
+}
+
+// --- Plan diff ---------------------------------------------------------------
+
+const svgEl = (tag, attrs, parent) => {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (parent) parent.appendChild(node);
+  return node;
+};
+const NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const pitchName = (p) => NAMES[p % 12] + (Math.floor(p / 12) - 2);  // 60 = C3 as in Live
+
+// Notes of one clip before and after: kept, removed, changed (new position) and added.
+function clipNotes(clip) {
+  const removed = new Set(clip.remove || []);
+  const changes = new Map((clip.modify || []).map((m) => [m.note_id, m]));
+  const notes = [];
+  for (const [id, pitch, start, dur, vel] of clip.existing || []) {
+    if (removed.has(id)) notes.push({ pitch, start, dur, vel, kind: "del" });
+    else if (changes.has(id)) {
+      const c = changes.get(id);
+      notes.push({ pitch, start, dur, vel, kind: "del" });
+      notes.push({ pitch: c.pitch ?? pitch, start: c.start_time ?? start, dur: c.duration ?? dur, vel: c.velocity ?? vel, kind: "mod" });
+    } else notes.push({ pitch, start, dur, vel, kind: "keep" });
+  }
+  for (const [pitch, start, dur, vel] of clip.add || []) notes.push({ pitch, start, dur, vel, kind: "add" });
+  return notes;
+}
+
+function drawRoll(clip, beatsPerBar) {
+  const notes = clipNotes(clip);
+  if (!notes.length) return null;
+  const lo = Math.max(0, Math.min(...notes.map((n) => n.pitch)) - 1);
+  const hi = Math.min(127, Math.max(...notes.map((n) => n.pitch)) + 1);
+  const length = Math.max(clip.length || 0, ...notes.map((n) => n.start + n.dur), 1);
+  // viewBox units: 16 per beat, 4 per semitone; the SVG stretches to the card (preserveAspectRatio none).
+  const W = length * 16, H = (hi - lo + 1) * 4;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", role: "img" });
+  for (let b = beatsPerBar; b < length; b += beatsPerBar) {
+    svgEl("line", { class: "bar", x1: b * 16, x2: b * 16, y1: 0, y2: H, "vector-effect": "non-scaling-stroke" }, svg);
+  }
+  const order = { keep: 0, del: 1, mod: 2, add: 3 };
+  for (const n of notes.sort((a, b) => order[a.kind] - order[b.kind])) {
+    const rect = svgEl("rect", {
+      class: `n-${n.kind}`, x: n.start * 16, y: (hi - n.pitch) * 4 + 0.5, width: Math.max(1.5, n.dur * 16 - 0.5), height: 3,
+      "vector-effect": "non-scaling-stroke", opacity: n.kind === "del" ? 1 : (0.45 + 0.55 * Math.min(127, n.vel) / 127).toFixed(2),
+    }, svg);
+    svgEl("title", {}, rect).textContent =
+      `${{ keep: "kept", del: "removed", mod: "changed", add: "added" }[n.kind]} ${pitchName(n.pitch)} · beat ${+n.start.toFixed(3)} · len ${+n.dur.toFixed(3)}`;
+  }
+  svg.onclick = () => svg.classList.toggle("tall");
+  return svg;
+}
+
+function showPlan(ev) {
+  const roll = ev.roll || {};
+  const clips = roll.clips || [];
+  const summary = ((calls.get(ev.id) || {}).result || {}).changes || [];
+  const [num, den] = String(roll.time_signature || "4/4").split("/").map(Number);
+  const card = add("plan", "");
+  const head = document.createElement("div");
+  head.className = "head";
+  const title = document.createElement("span");
+  title.className = "title";
+  const added = clips.reduce((sum, c) => sum + (c.add || []).length, 0);
+  const removed = clips.reduce((sum, c) => sum + (c.remove || []).length, 0);
+  const changed = clips.reduce((sum, c) => sum + (c.modify || []).length, 0);
+  title.textContent = `◇ ${ev.name}: ${clips.length} clip(s) · +${added} ~${changed} −${removed}` + (roll.scale ? ` · ${roll.scale}` : "");
+  const state = document.createElement("span");
+  state.className = "state";
+  head.append(title, state);
+  card.append(head);
+  for (const [i, clip] of clips.entries()) {
+    const change = summary[i] || {};
+    const line = document.createElement("div");
+    line.className = "clip";
+    const bits = [`Track ${clip.track + 1} · slot ${clip.slot + 1} · ${clip.kind}`, change.action,
+      `+${(clip.add || []).length} ~${(clip.modify || []).length} −${(clip.remove || []).length}`];
+    if (change.chords) bits.push(change.chords.join(" – "));
+    line.textContent = bits.filter(Boolean).join(" · ");
+    card.append(line);
+    const svg = drawRoll(clip, (num * 4) / den || 4);
+    if (svg) card.append(svg);
+  }
+  if (roll.applied || !roll.plan_id) {
+    state.textContent = roll.applied ? "✓ written" : "";
+    state.classList.add("ok");
+    return;
+  }
+  card.classList.add("open");
+  state.textContent = "preview";
+  const apply = document.createElement("button");
+  apply.className = "primary";
+  apply.textContent = "Apply";
+  apply.title = "Write this plan to Live as one undo step";
+  apply.onclick = () => {
+    if (busy) { add("note", "Still answering - press Stop first."); return; }
+    if (!ws || ws.readyState !== 1) { add("note", "Not connected yet."); return; }
+    apply.disabled = true;
+    ws.send(JSON.stringify({ type: "tool", name: "apply_plan", input: { plan_id: roll.plan_id } }));
+    setBusy(true);
+    showPending("Applying");
+  };
+  head.append(apply);
+  plans.set(roll.plan_id, { card, state, apply });
+}
+
+function planApplied(planId, failed) {
+  const plan = plans.get(planId);
+  if (!plan) return;
+  if (failed) { plan.apply.disabled = false; return; }
+  plans.delete(planId);
+  plan.apply.remove();
+  plan.card.classList.remove("open");
+  plan.state.textContent = "✓ applied · Undo reverts it";
+  plan.state.classList.add("ok");
 }
 
 function askConfirm(ev) {
@@ -380,6 +526,12 @@ $("form").onsubmit = (event) => {
 const stop = () => ws && ws.send(JSON.stringify({ type: "cancel" }));
 $("stop").onclick = stop;
 $("stopTop").onclick = stop;
+$("undo").onclick = () => {
+  if (busy || !ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: "tool", name: "undo", input: { action: "undo" } }));
+  setBusy(true);
+  showPending("Undoing");
+};
 $("reset").onclick = () => ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "reset" }));
 function setChoice(next) {
   if (!next || sameChoice(next, choice)) return;

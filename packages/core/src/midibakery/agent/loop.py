@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 from typing import Any
 
-from midibakery.agent.providers.base import Emit, Provider, ToolResult
-from midibakery.agent.tools import COMPACT_RESULTS, ToolHost, compact_tools
+from midibakery.agent.providers.base import Emit, Provider, ToolCall, ToolResult
+from midibakery.agent.tools import COMPACT_RESULTS, ToolHost, ToolOutcome, compact_tools
 from midibakery.mcp.server import INSTRUCTIONS
 
 SYSTEM_PROMPT = (
@@ -41,6 +42,8 @@ SMALL_SYSTEM_PROMPT = (
 )
 
 MAX_STEPS = 24
+# Tools the chat page runs itself (Apply on a plan preview, the Undo button).
+UI_TOOLS = frozenset({"apply_plan", "undo"})
 
 
 class Agent:
@@ -55,13 +58,46 @@ class Agent:
         self.compact = compact
         provider.configure(system, compact_tools(host.tools) if compact else host.tools)
         self._lock = asyncio.Lock()
+        self._notes: list[str] = []  # what the user did through the UI, told to the model with the next message
+        self._ui_ids = itertools.count(1)
 
     def reset(self) -> None:
         self.provider.reset()
+        self._notes.clear()
+
+    async def run_tool(self, name: str, arguments: dict[str, Any], emit: Emit) -> None:
+        """A tool the user started from the UI (Apply, Undo): the same events as a model's call,
+        and the model hears about it with the next message so it does not apply or undo twice."""
+        async with self._lock:
+            if name not in UI_TOOLS:
+                await emit({"type": "error", "message": f"{name} cannot be run from the chat"})
+                return
+            outcome = await self._call(ToolCall(f"ui{next(self._ui_ids)}", name, arguments), emit, source="user")
+            status = "failed: " + outcome.text[:200] if outcome.is_error else "done"
+            self._notes.append(f"[The user ran {name} {json.dumps(arguments)} from the chat buttons: {status}]")
+            await emit({"type": "done", "stop_reason": "user_tool", "usage": {}})
+
+    async def _call(self, call: ToolCall, emit: Emit, source: str = "model") -> ToolOutcome:
+        await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": source})
+        outcome = await self.host.call(call.name, call.input)
+        await emit({
+            "type": "tool_result",
+            "id": call.id,
+            "name": call.name,
+            "source": source,
+            "is_error": outcome.is_error,
+            "result": outcome.structured if outcome.structured is not None else outcome.text,
+        })
+        if outcome.roll:
+            await emit({"type": "plan", "id": call.id, "name": call.name, "roll": outcome.roll})
+        return outcome
 
     async def send(self, text: str, emit: Emit) -> None:
         """Handle one user message until the model stops calling tools. Events go to `emit`."""
         async with self._lock:
+            if self._notes:
+                text = "\n".join(self._notes) + "\n\n" + text
+                self._notes.clear()
             self.provider.add_user(text)
             for _ in range(self.max_steps):
                 try:
@@ -78,18 +114,7 @@ class Agent:
                 results = []
                 # Sequential on purpose: Live ops depend on each other's order (create, then fill).
                 for call in turn.tool_calls:
-                    await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input})
-                    outcome = await self.host.call(call.name, call.input)
-                    event: dict[str, Any] = {
-                        "type": "tool_result",
-                        "id": call.id,
-                        "name": call.name,
-                        "is_error": outcome.is_error,
-                        "result": outcome.structured if outcome.structured is not None else outcome.text,
-                    }
-                    await emit(event)
-                    if outcome.roll:
-                        await emit({"type": "plan", "id": call.id, "name": call.name, "roll": outcome.roll})
+                    outcome = await self._call(call, emit)
                     text = outcome.text
                     if self.compact and not outcome.is_error and outcome.structured and call.name in COMPACT_RESULTS:
                         text = COMPACT_RESULTS[call.name](outcome.structured)
