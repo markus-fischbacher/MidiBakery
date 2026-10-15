@@ -334,7 +334,7 @@ def generator_device() -> dict[str, Any]:
     _param_to_v8(p, density, "density", v8, 760, 300)
     swing = _dial(p, (820, 240, 44, 48), (52, 24, 48, 48), "Swing", "Swing", 0.0)
     _param_to_v8(p, swing, "swing", v8, 820, 360)
-    chance = _dial(p, (880, 240, 44, 48), (102, 24, 48, 48), "Chance", "Chance", 50.0)
+    chance = _dial(p, (880, 240, 44, 48), (102, 24, 48, 48), "Chance", "Chance", 100.0)
     p.boxes[-1]["box"]["varname"] = "chance_dial"
     _param_to_v8(p, chance, "chance", v8, 880, 360)
     _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(52, 76, 46, 16), dice_rect=(102, 76, 48, 16),

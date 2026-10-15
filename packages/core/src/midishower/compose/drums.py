@@ -249,10 +249,11 @@ def generate_drums(
     swing: float = 0.0,
     swing_unit: float = 0.25,
     fills: bool = True,
-    chance: float = 0.5,
+    chance: float = 1.0,
 ) -> list[Note]:
-    """`chance` scales the hits that may drop out (ghost notes, some hats, extra kicks):
-    0 = every hit always plays, 0.5 = the style's own probabilities, 1 = twice the variation."""
+    """`chance` works like Live's note Chance for the hits that may drop out (ghost notes,
+    some hats, extra kicks): 1 = every hit always plays, 0.5 = the style's own
+    probabilities, 0 = twice the variation."""
     grid = Grid(meter, 0.25, swing, swing_unit)
     core = _core_choices(style, grid, rng, density)
     hits: list[Hit] = []
@@ -272,15 +273,16 @@ def generate_drums(
         pitch = drum_map.note(hit.role)
         if pitch is None:
             continue
-        notes.append(Note(pitch, hit.time, hit.duration, hit.velocity, scale_chance(hit.probability, chance), hit.velocity_deviation))
+        notes.append(Note(pitch, hit.time, hit.duration, hit.velocity, scale_chance(hit.probability, 1.0 - chance), hit.velocity_deviation))
     return dedupe(notes)
 
 
-def scale_chance(probability: float, chance: float) -> float:
-    """Map a style probability through the Chance control; hits at 1.0 always stay at 1.0."""
+def scale_chance(probability: float, variation: float) -> float:
+    """Scale a style probability: variation 0 = always plays, 0.5 = unchanged, 1 = twice as
+    likely to drop out. Hits at 1.0 always stay at 1.0."""
     if probability >= 1.0:
         return 1.0
-    return round(max(0.05, min(1.0, 1.0 - (1.0 - probability) * 2.0 * chance)), 2)
+    return round(max(0.05, min(1.0, 1.0 - (1.0 - probability) * 2.0 * variation)), 2)
 
 
 def kick_times(notes: list[dict], kick_pitch: int) -> list[float]:
