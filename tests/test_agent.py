@@ -481,6 +481,7 @@ async def test_small_profile_fits_and_is_compact(client):
     async with ToolHost(build_server(client), no, SMALL_TOOLS) as host:
         Agent(provider, host, SMALL_SYSTEM_PROMPT, compact=True)
     assert "plan_changes" not in {t.name for t in provider.tools} and len(provider.tools) == len(SMALL_TOOLS)
+    assert "launch_clip" in {t.name for t in provider.tools}  # transport alone cannot play a clip
     compact = json.dumps([t.input_schema for t in provider.tools])
     assert "$ref" not in compact and '"title"' not in compact and "if_exists" not in compact
     # Measured against Gemma 4 E4B in LM Studio: ~3.7k of 8192 tokens incl. descriptions. Keep it there.

@@ -138,11 +138,11 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
     async def run() -> int:
         bridge = BridgeClient()
-        small = provider.name in LOCAL_PROVIDERS
+        small = args.small
         allowed = SMALL_TOOLS if small else REDUCED_TOOLS if args.reduced else None
         try:
             async with ToolHost(build_server(bridge), confirm, allowed) as host:
-                agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=small)
+                agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=provider.name in LOCAL_PROVIDERS)
                 print(f"MidiBakery chat ({provider.name}, {provider.model}, {len(host.tools)} tools). Empty line or Ctrl-D quits, /reset forgets.")
                 while True:
                     try:
@@ -175,7 +175,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--provider", choices=["anthropic", "ollama", "lmstudio"], default="anthropic")
         p.add_argument("--model", help="default: claude-sonnet-5-5 (anthropic), qwen3:8b (ollama), google/gemma-4-e4b (lmstudio)")
         if name == "chat":
-            p.add_argument("--reduced", action="store_true", help="only the core tools (local providers always use the smaller, compact set)")
+            p.add_argument("--reduced", action="store_true", help="only the core tools")
+            p.add_argument("--small", action="store_true", help="the smallest tool set and prompt, for 8k-context models")
             p.set_defaults(func=cmd_chat)
         else:
             p.add_argument("--port", type=int, default=8766)

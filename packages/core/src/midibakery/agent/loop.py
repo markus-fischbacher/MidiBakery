@@ -34,6 +34,7 @@ SMALL_SYSTEM_PROMPT = (
     "Never overwrite a clip unless the user asks for it.\n"
     "- edit_notes and transform_notes change existing notes by note_id from get_clip. "
     "Transpose by half steps/semitones/octaves with semitones (12 = octave); steps means scale steps.\n"
+    "- To play a clip, launch it with launch_clip; transport only starts or stops the whole song.\n"
     "- Every write can be undone with undo. If a tool fails, read the error, fix the call and retry it yourself. "
     "If the user declined a change (CANCELLED), nothing was written: say so, never claim it was done."
 )
