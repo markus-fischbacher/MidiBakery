@@ -50,6 +50,7 @@ def _run(tmp_path, scenario):
 @pytest.mark.skipif(NODE is None, reason="no Node.js available")
 def test_replace_clears_the_range_once_per_apply_cycle(tmp_path):
     data = _run(tmp_path, "replace")
+    assert ["nested-retrigger"] not in data["log"]  # Live answers "Did not receive a note dictionary in time"
     clears = [e for e in data["log"] if e[0] == "liveapi"]
     # once after the first response, once for the new cycle; never on in-cycle re-applies
     assert clears == [["liveapi", "live_set view detail_clip", "remove_notes_extended", 0, 128, 4, 16]] * 2
