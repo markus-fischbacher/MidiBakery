@@ -193,6 +193,17 @@ class Track(LiveObject):
         self.mixer_device = Mixer()
         self.devices = []
         self.clip_slots = [ClipSlot() for _ in range(scenes)]
+        self.playing_slot_index = -1
+        self.fired_slot_index = -1  # -2: Clip Stop button fired (stop pending)
+        self.stopped_unquantized = 0
+
+    def stop_all_clips(self, quantized=True):
+        for slot in self.clip_slots:
+            if slot.clip is not None:
+                slot.clip.is_playing = slot.clip.is_triggered = False
+        self.fired_slot_index = -1
+        if not quantized:
+            self.stopped_unquantized += 1
 
     def insert_device(self, name, index):
         if name not in NATIVE_DEVICES:

@@ -88,6 +88,29 @@ async def test_fire_resumes_a_toggle_clip_left_playing_by_a_transport_stop(clien
     assert live.on_main(lambda: live.song.tracks[1].clip_slots[6].fired) == 0
 
 
+async def test_fire_after_a_pending_stop_restarts_the_toggle_clip(client, live):
+    # Stop pressed, transport stopped before the quantized stop ran: Live still counts the
+    # clip as playing, and only starting the transport would let the pending stop win.
+    await client.call("clip.create", {"track": 1, "slot": 4, "length": 4})
+    track = live.on_main(lambda: live.song.tracks[1])
+    slot = live.on_main(lambda: track.clip_slots[4])
+    clip = live.on_main(lambda: slot.clip)
+
+    def stop_pending():
+        clip.launch_mode = 2
+        clip.is_playing = True
+        track.fired_slot_index = -2
+        live.song.is_playing = False
+
+    live.on_main(stop_pending)
+    state = await client.call("clip.get", {"track": 1, "slot": 4})
+    assert state["stop_pending"] and state["launch_mode"] == "toggle"
+    await client.call("clip.launch", {"track": 1, "slot": 4})
+    assert live.on_main(lambda: track.stopped_unquantized) == 1
+    assert live.on_main(lambda: slot.fired) == 1
+    assert live.on_main(lambda: clip.is_triggered)
+
+
 async def test_firing_an_empty_slot_is_an_error(client, live):
     with pytest.raises(BridgeError) as exc:
         await client.call("clip.launch", {"track": 1, "slot": 7})
