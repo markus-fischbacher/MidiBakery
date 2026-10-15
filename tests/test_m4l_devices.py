@@ -88,7 +88,7 @@ def test_chat_device_types_into_a_native_field(devices):
     web_box, entry_box = boxes[web], boxes[entry]
     assert web_box["patching_rect"][2:] == web_box["presentation_rect"][2:]  # jweb renders at one size
     wx, wy, ww, wh = web_box["presentation_rect"]
-    assert wy + wh <= entry_box["presentation_rect"][1]  # the chat ends above the text field
+    assert wx + ww <= entry_box["presentation_rect"][0]  # the text field sits beside the chat, never over it
     assert (by_text["prepend chat_input"], web) in lines
     assert (entry, by_text["route text"]) in lines
     page = (ROOT / "packages/core/src/midishower/api/ui/chat.html").read_text()

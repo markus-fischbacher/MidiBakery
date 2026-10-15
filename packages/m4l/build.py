@@ -212,7 +212,10 @@ def _on_press(p: Patcher, button: str, message: str, target: str, x: float, y: f
 
 def chat_device() -> dict[str, Any]:
     p = Patcher()
-    width, height = 640.0, 169.0
+    # Layout: chat (jweb) on the left, a column with Pop out, the text field and the status on the right.
+    # Nothing sits below jweb: in Live it can render taller than its rect.
+    width, height = 700.0, 169.0
+    column_x, column_w = 506.0, 190.0
     # MIDI passes through untouched: the device sits on a MIDI track.
     midiin = p.obj("midiin", 20, 20, outlets=["int"], width=50)
     midiout = p.obj("midiout", 20, 60, outlets=[], width=50)
@@ -220,14 +223,13 @@ def chat_device() -> dict[str, Any]:
 
     node = p.obj("node.script midishower-chat.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=300)
     route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
-    # Same size in patching and presentation: jweb may render at its patching size, which would put
-    # the bottom of the chat behind the text field.
-    web_rect = (0, 0, 560, height - 24)
+    # Same size in patching and presentation: jweb may render at its patching size.
+    web_rect = (0, 0, 500, height)
     web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url="")
     # Live does not pass keystrokes to jweb, so typing happens in a native Max text field.
     # Enter sends "chat_input <words>" to the page (window.max.bindInlet), then clears the field.
-    entry = p.box("textedit", (700, 200, 400, 22), inlets=1, outlets=["", "int", "", ""],
-                  presentation=(0, height - 20, 560, 20), keymode=1, lines=1, wordwrap=0, fontsize=12.0,
+    entry = p.box("textedit", (700, 200, 190, 96), inlets=1, outlets=["", "int", "", ""],
+                  presentation=(column_x, 26, column_w, 96), keymode=1, lines=0, wordwrap=1, fontsize=12.0,
                   bgcolor=[0.165, 0.165, 0.165, 1.0], textcolor=[0.85, 0.85, 0.85, 1.0],
                   bordercolor=[0.3, 0.3, 0.3, 1.0], varname="chat_entry")
     on_text = p.obj("route text", 700, 240, outlets=["", ""], width=70)
@@ -262,12 +264,14 @@ def chat_device() -> dict[str, Any]:
     p.connect(loaded, 1, other)
     p.connect(other, 0, node)
     set_status = p.obj("prepend set", 260, 100)
-    status = p.comment("Starting...", (260, 140, 74, 120), presentation=(564, 32, 74, 120),
-                       linecount=8, fontsize=9.0, textcolor=[0.6, 0.6, 0.6, 1.0])
+    p.comment("Enter sends", (700, 300, 100, 14), presentation=(column_x, 124, column_w, 14), fontsize=9.0,
+              textcolor=[0.5, 0.5, 0.5, 1.0])
+    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 138, column_w, 30),
+                       linecount=2, fontsize=9.0, textcolor=[0.6, 0.6, 0.6, 1.0])
     p.connect(route, 1, set_status)
     p.connect(set_status, 0, status)
 
-    popout = p.parameter("live.text", (440, 60, 70, 16), (564, 8, 72, 18), name="Pop out", short="Pop out", ptype=ENUM,
+    popout = p.parameter("live.text", (440, 60, 70, 16), (column_x, 4, column_w, 18), name="Pop out", short="Pop out", ptype=ENUM,
                          inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
     _on_press(p, popout, "popout", node, 440, 100)
