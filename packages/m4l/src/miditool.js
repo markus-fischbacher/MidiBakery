@@ -11,6 +11,9 @@
  *
  * Inlet 0: joined notes + context dict from live.miditool.in (via dict.join)
  * Inlet 1: `param <name> <value>` from the UI; response / failed / status from node.script
+ *
+ * Requests and responses travel as named Max dictionaries, not as message
+ * symbols: a clip's notes make the payload too large for a single symbol.
  * Outlets: 0 live.miditool.out, 1 node.script, 2 bang -> live.miditool.in,
  *          3 status text, 4 UI feedback (seed, style menu visibility)
  */
@@ -34,6 +37,17 @@ var cache = { key: null, notes: null, info: "" };
 var pending = { id: 0, key: null };
 var requestCounter = 0;
 var reapplied = false;
+var REQUEST_TIMEOUT_MS = 20000;
+var requestedAt = 0;
+var instance = Math.floor(Math.random() * 1e9);
+// If Live ignores the self-triggered re-apply (e.g. Auto off), ask for a second click.
+var waitForApply = new Task(function () {
+  if (cache.key !== null && reapplied) status("Ready - click " + (MODE === "generate" ? "Generate" : "Transform") + " again");
+});
+
+function dbg() {
+  outlet(1, ["log", MODE].concat(Array.prototype.slice.call(arguments)));
+}
 
 function status(text) {
   outlet(3, "set", text);
@@ -45,6 +59,8 @@ function msg_dictionary(d) {
   var body = buildBody(d);
   var key = JSON.stringify(body);
   if (cache.key === key) {
+    dbg("apply cached", cache.notes.length, "notes");
+    waitForApply.cancel();
     outlet_dictionary(0, { notes: cache.notes });
     status(cache.info);
     reapplied = false;
@@ -52,26 +68,37 @@ function msg_dictionary(d) {
   }
   // Synchronous no-op answer keeps Live in sync while the API computes.
   outlet_dictionary(0, { notes: MODE === "generate" ? [] : toLive(d.notes || []) });
-  if (pending.key === key) return; // already asked
+  if (pending.key === key && Date.now() - requestedAt < REQUEST_TIMEOUT_MS) return; // already asked
   requestCounter += 1;
   pending = { id: requestCounter, key: key };
+  requestedAt = Date.now();
   reapplied = false;
   status("Working...");
-  outlet(1, "request", requestCounter, MODE, key);
+  var name = "midishower_" + instance + "_req" + requestCounter;
+  var request = new Dict(name);
+  request.parse(key);
+  dbg("request", requestCounter, (d.notes || []).length, "notes in");
+  outlet(1, "request", requestCounter, MODE, name);
 }
 
-function response(id, json) {
-  if (id !== pending.id) return; // superseded by a newer request
-  var result = JSON.parse(json);
+function response(id, dictName) {
+  if (id !== pending.id) {
+    dbg("stale response", id);
+    return; // superseded by a newer request
+  }
+  var result = JSON.parse(new Dict(dictName).stringify());
   cache = { key: pending.key, notes: toLive(result.notes || []), info: describe(result) };
   pending = { id: 0, key: null };
+  dbg("response", id, cache.notes.length, "notes out");
   if (!reapplied) {
     reapplied = true;
     outlet(2, "bang");
+    waitForApply.schedule(1500);
   }
 }
 
 function failed(id, message) {
+  dbg("failed", id, message);
   if (id !== pending.id) return;
   pending = { id: 0, key: null };
   status("Error: " + message);
