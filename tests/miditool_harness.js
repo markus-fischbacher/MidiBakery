@@ -5,13 +5,16 @@ const fs = require("fs");
 const vm = require("vm");
 
 const log = [];
+let inApply = false; // true while msg_dictionary (Live's synchronous apply call) runs
 const dicts = {};
 function Dict(name) {
   this.parse = (text) => { dicts[name] = JSON.parse(text); };
   this.stringify = () => JSON.stringify(dicts[name]);
 }
+// Tasks run after the current call returns, like Max's scheduler (see flush()).
+const queue = [];
 function Task(fn) {
-  this.schedule = () => log.push(["task", "schedule"]);
+  this.schedule = () => { log.push(["task", "schedule"]); queue.push(fn); };
   this.cancel = () => {};
 }
 function LiveAPI(path) {
@@ -21,14 +24,25 @@ function LiveAPI(path) {
 const sandbox = {
   LiveAPI, Dict, Task, Date, Array, String,
   inlet: 0,
-  outlet: (...args) => log.push(["outlet", ...args]),
+  outlet: (...args) => {
+    if (inApply && args[0] === 2) log.push(["nested-retrigger"]); // re-triggering inside Live's apply call
+    log.push(["outlet", ...args]);
+  },
   outlet_dictionary: (n, d) => log.push(["dict", n, JSON.parse(JSON.stringify(d))]),
   post: () => {},
   Math, JSON, Number, String, Boolean,
 };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), sandbox);
-const call = (inletIndex, fn, ...args) => { sandbox.inlet = inletIndex; return vm.runInContext(fn, sandbox)(...args); };
+const flush = () => { while (queue.length) queue.shift()(); };
+const call = (inletIndex, fn, ...args) => {
+  sandbox.inlet = inletIndex;
+  inApply = fn === "msg_dictionary";
+  const result = vm.runInContext(fn, sandbox)(...args);
+  inApply = false;
+  flush();
+  return result;
+};
 
 const input = {
   notes: [{ note_id: 7, pitch: 60, start_time: 0, duration: 1, velocity: 100, mute: 0, probability: 1, velocity_deviation: 0, release_velocity: 64 }],

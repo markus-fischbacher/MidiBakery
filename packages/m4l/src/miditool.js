@@ -86,8 +86,9 @@ function msg_dictionary(d) {
   // Synchronous no-op answer keeps Live in sync while the API computes.
   outlet_dictionary(0, { notes: MODE === "generate" ? [] : toLive(d.notes || []) });
   if (cache.key === key) {
-    // Same settings, new cycle: no new request, just clear and re-apply.
-    applyResult();
+    // Same settings, new cycle: no new request, just clear and re-apply. Deferred: re-triggering
+    // the tool from inside Live's apply call nests cycles ("Did not receive a note dictionary in time").
+    deferredApply.schedule(5);
     return;
   }
   if (pending.key === key && Date.now() - requestedAt < REQUEST_TIMEOUT_MS) return; // already asked
@@ -115,6 +116,8 @@ function response(id, dictName) {
   dbg("response", id, cache.notes.length, "notes out");
   if (!reapplied) applyResult();
 }
+
+var deferredApply = new Task(function () { applyResult(); });
 
 // Clear the time selection (Replace), then re-trigger the tool so Live applies the cache.
 function applyResult() {
