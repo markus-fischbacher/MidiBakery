@@ -57,6 +57,37 @@ async def test_track_and_clip_lifecycle(client, live):
     assert exc.value.code == "NOT_FOUND"
 
 
+@pytest.mark.parametrize("launch_mode", [0, 2])
+async def test_fire_starts_a_clip_live_already_counts_as_playing(client, live, launch_mode):
+    await client.call("clip.create", {"track": 1, "slot": 5, "length": 4})
+    clip = live.on_main(lambda: live.song.tracks[1].clip_slots[5].clip)
+
+    def stale_playing():
+        clip.launch_mode = launch_mode
+        clip.is_playing = True
+
+    live.on_main(stale_playing)
+    await client.call("clip.launch", {"track": 1, "slot": 5})
+    assert live.on_main(lambda: clip.is_playing or clip.is_triggered)
+    assert live.on_main(lambda: clip.launch_mode) == launch_mode
+
+
+async def test_fire_resumes_a_toggle_clip_left_playing_by_a_transport_stop(client, live):
+    await client.call("clip.create", {"track": 1, "slot": 6, "length": 4})
+    clip = live.on_main(lambda: live.song.tracks[1].clip_slots[6].clip)
+
+    def stopped_with_clip_playing():
+        clip.launch_mode = 2
+        clip.is_playing = True
+        live.song.is_playing = False
+
+    live.on_main(stopped_with_clip_playing)
+    await client.call("clip.launch", {"track": 1, "slot": 6})
+    assert live.on_main(lambda: clip.is_playing)
+    assert live.on_main(lambda: live.song.is_playing)
+    assert live.on_main(lambda: live.song.tracks[1].clip_slots[6].fired) == 0
+
+
 async def test_notes_diff_keeps_untouched_notes(client, live):
     await client.call("clip.create", {"track": 0, "slot": 1, "length": 4})
     added = (await client.call("notes.apply", {
