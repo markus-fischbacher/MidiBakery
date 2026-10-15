@@ -7,6 +7,7 @@ same schemas, validation, plan previews and confirmations. Confirmations
 
 from __future__ import annotations
 
+import difflib
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -96,11 +97,17 @@ class ToolHost:
     def names(self) -> set[str]:
         return {t.name for t in self.tools}
 
+    def _spec(self, name: str) -> ToolSpec:
+        return next(t for t in self.tools if t.name == name)
+
     async def call(self, name: str, arguments: Any) -> ToolOutcome:
         if name not in self.names():
             return ToolOutcome(f"Unknown tool '{name}'. Available: {', '.join(sorted(self.names()))}", is_error=True)
         if not isinstance(arguments, dict):
             return ToolOutcome(f"Arguments for '{name}' must be a JSON object, got {json.dumps(arguments)}", is_error=True)
+        unknown = _unknown_arguments(self._spec(name).input_schema, arguments)
+        if unknown:
+            return ToolOutcome(unknown, is_error=True)
         assert self._client is not None, "use ToolHost as an async context manager"
         result = await self._client.call_tool(name, arguments)
         text = "\n".join(c.text for c in result.content if getattr(c, "type", None) == "text")
@@ -118,6 +125,22 @@ class ToolHost:
         if accepted:
             return ElicitResult(action="accept", content={"confirm": True})
         return ElicitResult(action="decline")
+
+
+def _unknown_arguments(schema: dict[str, Any], arguments: dict[str, Any]) -> str | None:
+    """MCP drops unknown arguments silently; a misspelled 'semitones' would then
+    run as a no-op that the model reports as done. Name them, with a guess."""
+    known = schema.get("properties")
+    if not isinstance(known, dict):
+        return None
+    unknown = [k for k in arguments if k not in known]
+    if not unknown:
+        return None
+    hints = []
+    for key in unknown:
+        close = difflib.get_close_matches(key, known, n=1)
+        hints.append(f"'{key}' (did you mean '{close[0]}'?)" if close else f"'{key}'")
+    return f"INVALID_PARAMS: unknown parameter {', '.join(hints)}; nothing was done. Parameters: {', '.join(known)}"
 
 
 # Schema keys that cost context but do not change what a valid call looks like.
@@ -161,8 +184,82 @@ def compact_schema(node: Any, limit: int = 90) -> Any:
     return out
 
 
+# Hidden from small models, which set them unasked (if_exists='replace' on occupied slots);
+# the CONFLICT error names if_exists, so an explicit overwrite still works, with confirmation.
+SMALL_HIDDEN_PARAMS = frozenset({"if_exists"})
+
+
+def _hide(schema: dict[str, Any]) -> dict[str, Any]:
+    props = schema.get("properties")
+    if not isinstance(props, dict) or not SMALL_HIDDEN_PARAMS & props.keys():
+        return schema
+    return {**schema, "properties": {k: v for k, v in props.items() if k not in SMALL_HIDDEN_PARAMS}}
+
+
 def compact_tools(tools: list[ToolSpec]) -> list[ToolSpec]:
     """Short descriptions and lean schemas, for local models with a small context."""
     from midishower.agent.providers.ollama import inline_refs
 
-    return [ToolSpec(t.name, _first_sentence(t.description, 160), compact_schema(inline_refs(t.input_schema)), t.read_only) for t in tools]
+    return [
+        ToolSpec(t.name, _first_sentence(t.description, 160), _hide(compact_schema(inline_refs(t.input_schema))), t.read_only)
+        for t in tools
+    ]
+
+
+_NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
+
+def _num(value: Any) -> Any:
+    return int(value) if isinstance(value, float) and value.is_integer() else value
+
+
+def compact_session(result: dict[str, Any]) -> str:
+    """get_session as a few lines of text for small context windows.
+
+    Keeps what a small model needs to pick a track and an empty slot: tempo,
+    signature, scale, and per track its index, name, kind, instrument and clips
+    (slot, name, length in bars); drops ids, mixer state, colors and transport.
+    """
+    song = result.get("song", {})
+    num, den = song.get("signature_numerator", 4), song.get("signature_denominator", 4)
+    root = song.get("root_note")
+    scale = f"{_NOTE_NAMES[root % 12]} {song.get('scale_name', '')}".strip() if isinstance(root, int) else "unknown"
+    scenes = int(song.get("scene_count", 0))
+    beats_per_bar = num * 4 / den if den else 4
+    lines = [
+        f"Song: {_num(round(song.get('tempo', 0), 2))} BPM, {num}/{den}, scale {scale}, {scenes} slots per track (0-{max(0, scenes - 1)}).",
+        "Tracks (index 'name' [kind, devices]; free slots; clips as slot 'name' length):",
+    ]
+    for track in result.get("tracks", []):
+        devices = [d.get("name", "?") for d in track.get("devices", [])]
+        drums = any(d.get("class_name") == "DrumGroupDevice" for d in track.get("devices", []))
+        kind = "drums" if drums else track.get("kind", "?")
+        head = f"{track.get('index')} '{track.get('name')}' [{', '.join([kind, *devices])}]"
+        clips = sorted(track.get("clips", []), key=lambda c: c["slot"])
+        used = {c["slot"] for c in clips}
+        parts = []
+        for c in clips:
+            bars = _num(round((c.get("length") or 0) / beats_per_bar, 2))
+            audio = "" if c.get("is_midi", True) else " audio"
+            parts.append(f"{c['slot']} '{c.get('name', '')}' {bars} bars{audio}")
+        # Free slots first: small models otherwise pick an occupied slot from the clip list.
+        free = [i for i in range(scenes) if i not in used]
+        free_text = f"free slots {_ranges(free)}" if free else "no free slot"
+        clip_text = f"clips {', '.join(parts)}" if parts else "no clips"
+        lines.append(f"{head}; {free_text}; {clip_text}")
+    return "\n".join(lines)
+
+
+def _ranges(values: list[int]) -> str:
+    """[0, 1, 2, 5] -> '0-2,5'."""
+    runs: list[list[int]] = []
+    for v in values:
+        if runs and v == runs[-1][-1] + 1:
+            runs[-1].append(v)
+        else:
+            runs.append([v])
+    return ",".join(str(r[0]) if len(r) == 1 else f"{r[0]}-{r[-1]}" for r in runs)
+
+
+# Small profile: tool results rewritten to save context (the UI still gets the structured result).
+COMPACT_RESULTS: dict[str, Callable[[dict[str, Any]], str]] = {"get_session": compact_session}

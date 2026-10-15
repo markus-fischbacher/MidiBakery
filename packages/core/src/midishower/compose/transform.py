@@ -94,16 +94,18 @@ def invert(notes: list[dict], scale: Scale | None, axis: int | None = None) -> D
     return _collect(changes)
 
 
-def transpose(notes: list[dict], scale: Scale | None, steps: int) -> Diff:
-    """Move by scale steps (in key; off-scale notes keep their offset), or by semitones without a scale."""
+def transpose(notes: list[dict], scale: Scale | None, steps: int, semitones: int = 0) -> Diff:
+    """Move by scale steps (in key; off-scale notes keep their offset), or by semitones
+    without a scale, then by `semitones` chromatically."""
     changes = []
     for n in notes:
-        if scale:
-            snapped = scale.snap(n["pitch"])
-            pitch = scale.step(snapped, steps) + (n["pitch"] - snapped)
+        pitch = n["pitch"]
+        if steps and scale:
+            snapped = scale.snap(pitch)
+            pitch = scale.step(snapped, steps) + (pitch - snapped)
         else:
-            pitch = n["pitch"] + steps
-        changes.append(_change(n, pitch=clamp_pitch(pitch)))
+            pitch += steps
+        changes.append(_change(n, pitch=clamp_pitch(pitch + semitones)))
     return _collect(changes)
 
 

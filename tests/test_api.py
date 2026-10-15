@@ -115,6 +115,11 @@ def test_transform_returns_the_full_note_list(app_factory):
     assert [n["pitch"] for n in arp["notes"]] == [60, 64, 67, 60]
     assert all("note_id" not in n for n in arp["notes"])
 
+    up = api.post("/miditool/transform", headers=AUTH, json={
+        "notes": notes, "operation": "transpose", "params": {"semitones": 2}, "context": {"start": 4.0, "length": 4.0},
+    }).json()
+    assert [n["pitch"] for n in up["notes"]] == [62, 66]
+
 
 def test_transform_rejects_duplicate_ids(app_factory):
     api, _ = app_factory()

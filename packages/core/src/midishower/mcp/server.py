@@ -52,14 +52,16 @@ MidiShower controls the Ableton Live 12 set that is open right now.
 - Every write is undoable with the undo tool.
 Composition:
 - compose_drums / compose_bass / compose_chords / compose_melody write a new
-  clip into an empty slot (if_exists='replace' or 'merge' for existing clips).
+  clip into an empty slot, by default the track's first free one
+  (if_exists='replace' or 'merge' for existing clips).
   They follow the song scale and time signature and are reproducible: pass the
   returned seed again to get the same notes, or a new seed for a new idea.
 - Make parts fit together: give bass and melody chords_from (the chord clip)
   and the bass follow_kick (the drum clip), or use plan_changes, where later
   steps see earlier ones and share their chords.
 - transform_notes edits an existing clip by note_id (humanize, quantize,
-  invert, arpeggiate, variation, transpose).
+  invert, arpeggiate, variation, transpose). transpose takes semitones
+  (chromatic, 12 = octave) or steps (scale steps in key, 2 = a third).
 - preview=true (or plan_changes) returns a diff without touching Live;
   apply_plan(plan_id) then writes it as one undo step. Clients with MCP Apps
   show the diff as a piano roll with an Apply button.
@@ -129,8 +131,8 @@ COMPOSE_TOOLS: list[tuple[str, type[BaseModel], str, str]] = [
         "transform_notes",
         TransformSpec,
         "Transform notes",
-        "Change an existing MIDI clip as a diff by note_id: humanize, quantize, invert (diatonic), "
-        "arpeggiate chords, seeded variation, or transpose in key.",
+        "Change a MIDI clip as a diff by note_id: humanize, quantize, invert (diatonic), "
+        "arpeggiate, variation, or transpose (semitones chromatic, steps in key).",
     ),
 ]
 
@@ -181,7 +183,10 @@ def _make_tool(
             hint = f" Details: {exc.details}" if exc.details else ""
             raise ToolError(f"{exc.code}: {exc.message}.{hint}") from None
         except ValidationError as exc:
-            errors = exc.errors(include_url=False, include_context=False)
+            # loc + msg only: echoing the full input costs context and buries the message.
+            errors = "; ".join(
+                f"{'.'.join(map(str, e['loc'])) or 'arguments'}: {e['msg']}" for e in exc.errors(include_url=False, include_context=False)
+            )
             raise ToolError(f"INVALID_PARAMS: {errors}") from None
         if isinstance(result, dict | CallToolResult | InputRequiredResult):
             return result

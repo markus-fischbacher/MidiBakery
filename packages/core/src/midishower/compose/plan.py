@@ -123,6 +123,15 @@ class Session:
         self._clips[key] = state
         return state
 
+    def free_slot(self, track: int, taken: set[tuple[int, int]]) -> int:
+        """The track's first slot without a clip and not targeted by this plan."""
+        used = {c["slot"] for c in self.track(track).get("clips", [])} | {s for t, s in taken if t == track}
+        scenes = int(self.song.get("scene_count", 0))
+        free = next((s for s in range(scenes) if s not in used), None)
+        if free is None:
+            raise BridgeError("CONFLICT", f"Track {track} has no free clip slot; create a scene first or pick a slot", {"track": track})
+        return free
+
     async def drum_pads(self, track: int, device: int | None = None) -> list[dict] | None:
         """Pads of the track's Drum Rack, or None (no rack, or an older Remote Script)."""
         key = (track, device)
@@ -318,12 +327,34 @@ async def _target(session: Session, spec: Generate) -> tuple[ClipState, float, d
     return state, min(length, state.length or length), None, remove
 
 
+def _is_drum_track(track: dict[str, Any]) -> bool:
+    return any(d.get("class_name") == "DrumGroupDevice" for d in track.get("devices", []))
+
+
+def _not_drums(session: Session, index: int) -> None:
+    """chords_from on a drum clip detects nonsense chords; small models pick it by mistake."""
+    track = session.track(index)
+    if not _is_drum_track(track):
+        return
+    candidates = [
+        f"{t['index']} '{t.get('name')}'" for t in session.tracks
+        if t.get("kind") == "midi" and not _is_drum_track(t) and any(c.get("is_midi") for c in t.get("clips", []))
+    ]
+    hint = f"; MIDI tracks with clips: {', '.join(candidates)}" if candidates else ""
+    raise BridgeError(
+        "INVALID_PARAMS",
+        f"chords_from points to track {index} '{track.get('name')}', a drum track (Drum Rack) without chords. "
+        f"Use the chord clip's track and slot, or omit chords_from{hint}",
+    )
+
+
 async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harmony:
     meter, scale = session.meter, session.scale
     try:
         if spec.progression:
             result = harmony_mod.from_progression(spec.progression, scale, meter, spec.bars, spec.chords_per_bar)
         elif spec.chords_from is not None:
+            _not_drums(session, spec.chords_from.track)
             source = await session.clip(spec.chords_from.track, spec.chords_from.slot)
             if not source.exists or not source.is_midi:
                 raise BridgeError("NOT_FOUND", f"chords_from: no MIDI clip at {spec.chords_from.track}/{spec.chords_from.slot}")
@@ -491,6 +522,8 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
     changes = []
     targets: set[tuple[int, int]] = set()
     for step in steps:
+        if isinstance(step, Generate) and step.slot is None:
+            step = step.model_copy(update={"slot": session.free_slot(step.track, targets)})
         key = (step.track, step.slot)  # type: ignore[attr-defined]
         if key in targets:
             raise BridgeError("INVALID_PARAMS", f"Two steps target clip {key[0]}/{key[1]}; use one step per clip")
