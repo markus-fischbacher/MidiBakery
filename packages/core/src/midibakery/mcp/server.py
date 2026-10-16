@@ -84,6 +84,7 @@ TOOL_OPS: list[tuple[str, str, str]] = [
     ("find_browser_items", "browser.search", "Find presets, kits and devices"),
     ("load_browser_item", "browser.load", "Load preset, kit or device onto a track"),
     ("get_device_parameters", "device.params", "Get device parameters"),
+    ("write_clip_envelope", "clip.envelope", "Write clip automation"),
     ("get_drum_pads", "drum_rack.pads", "Get Drum Rack pads"),
     ("set_device_parameter", "device.set_param", "Set device parameter"),
     ("get_mixer", "mixer.get", "Get mixer and routing"),

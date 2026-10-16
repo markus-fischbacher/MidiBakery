@@ -166,7 +166,7 @@ async def test_clip_automation_goes_through_a_session_slot(client, live):
     def check():
         track = live.song.tracks[0]
         clip = track.arrangement_clips[0]
-        envelope = clip.automation_envelope(track.devices[0].parameters[2])  # Filter Freq, 20-20000
+        envelope = clip.envelopes[id(track.devices[0].parameters[2])]  # Filter Freq, 20-20000 (hidden from scripts in Live)
         return (
             (clip.name, clip.start_time, clip.end_time, clip.color_index, len(clip.notes)),
             [envelope.value_at_time(t) for t in (0, 4, 8)],
@@ -188,7 +188,7 @@ async def test_a_full_track_gets_a_scene_for_the_automation_and_loses_it_again(c
 
     def check():
         track = live.song.tracks[0]
-        envelope = track.arrangement_clips[0].automation_envelope(track.devices[0].parameters[0])
+        envelope = track.arrangement_clips[0].envelopes[id(track.devices[0].parameters[0])]
         return len(live.song.scenes), len(track.clip_slots), [envelope.value_at_time(t) for t in (0, 3)]
 
     assert live.on_main(check) == (scenes, scenes, [1.0, 0.0])  # a quantized parameter steps

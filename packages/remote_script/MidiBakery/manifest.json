@@ -172,6 +172,41 @@
         "track"
       ]
     },
+    "clip.envelope": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "arrangement_clip": [
+          "integer",
+          "null"
+        ],
+        "clear": [
+          "boolean"
+        ],
+        "envelopes": [
+          "array"
+        ],
+        "replace_envelopes": [
+          "boolean"
+        ],
+        "slot": [
+          "integer",
+          "null"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "envelopes",
+        "track"
+      ]
+    },
     "clip.get": {
       "destructive": false,
       "min_live": [
