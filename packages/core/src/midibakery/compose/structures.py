@@ -309,3 +309,39 @@ def sized(template: Template, length: str = "standard", minutes: float | None = 
     if length == "extended":
         return tuple(_resize(s, s.bars * 2) if s.kind in ("intro", "outro") else s for s in sections)
     return sections
+
+
+# A reference section kind the genre has no section for plays the first kind the genre has.
+KIND_FALLBACKS = {"groove": ("groove", "verse", "drop"), "verse": ("verse", "groove", "drop"), "break": ("break", "intro"), "build": ("build", "break")}
+
+
+def bar_grid(template: Template) -> int:
+    """The template's phrase grid: the largest of 16, 8, 4 bars that all its sections fill."""
+    return next(g for g in (16, 8, 4) if all(s.bars % g == 0 for s in template.sections)) if template.sections else 4
+
+
+def from_reference(template: Template, sections: list[dict]) -> tuple[Section, ...]:
+    """A reference song's sections (name, kind, bars) with the template's parts: the n-th drop of the
+    reference plays the template's n-th drop (its last one when it has fewer). Section borders
+    snap to the template's bar grid; a section never gets shorter than one grid step."""
+    grid = bar_grid(template)
+    by_kind: dict[str, list[Section]] = {}
+    for s in template.sections:
+        by_kind.setdefault(s.kind, []).append(s)
+    seen: dict[str, int] = {}
+    out, total, end = [], 0.0, 0
+    for i, ref in enumerate(sections):
+        kind = str(ref.get("kind") or "drop")
+        kind = next((k for k in KIND_FALLBACKS.get(kind, (kind,)) if k in by_kind), "drop" if "drop" in by_kind else template.sections[0].kind)
+        total += max(0.0, float(ref.get("bars") or 0))
+        bars = max(grid, int(total / grid + 0.5) * grid - end)  # half up: round() would snap 18.5 grid steps down
+        end += bars
+        n = seen.get(kind, 0)
+        seen[kind] = n + 1
+        source = by_kind[kind][min(n, len(by_kind[kind]) - 1)]
+        names = {s.name for s in out}
+        name = str(ref.get("name") or source.name)
+        if name in names:
+            name = f"{name} {i + 1}"
+        out.append(replace(_resize(source, bars), name=name))
+    return tuple(out)

@@ -5,6 +5,10 @@ tracks, generates every section's parts with the existing generators and
 returns a :class:`SongPlan`: new tracks, arrangement clips with notes, locators.
 Nothing changes in Live until ``apply_song``.
 
+- A ``reference`` (a song the Reference Analyzer device analyzed) sets the section
+  order and lengths, snapped to the genre's bar grid; each section plays the genre's
+  section of the same kind. With ``set_tempo`` the song takes the reference's tempo and key.
+  Without ``start_bar`` it starts under the reference's clip when its tracks are free there.
 - Roles go to existing tracks first: drums to a track with a Drum Rack, the
   others by track name (bass/sub/808, chord/pad/keys, lead/melody/synth).
   Missing roles get a new track with the genre's Core Library kit or preset
@@ -48,7 +52,8 @@ from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
-from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, parse_segments, sized
+from midibakery.compose.references import find_reference, reference_scale
+from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, from_reference, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
 NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator"}
@@ -81,7 +86,7 @@ class SongRequest(BaseModel):
     genre: Literal["house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"]
     length: Literal["radio", "standard", "extended"] = "standard"
     minutes: Annotated[float, Field(ge=0.5, le=20, description="Target duration; overrides length")] | None = None
-    start_bar: Annotated[int, Field(ge=1, description="Arrangement bar to start at (default: after the last clip)")] | None = None
+    start_bar: Annotated[int, Field(ge=1, description="Arrangement bar to start at (default: after the last clip, or under the reference)")] | None = None
     roles: dict[Literal["drums", "bass", "chords", "lead", "riser", "impact", "sidechain"], Annotated[int, Field(ge=0)]] = Field(
         default_factory=dict, description="Role -> track index; others are found by Drum Rack or track name"
     )
@@ -92,7 +97,8 @@ class SongRequest(BaseModel):
     fx: bool = Field(True, description="A riser before each drop and an impact on its first beat (needs sounds)")
     sidechain: bool = Field(True, description="Bass and pads duck under the kick: Compressors keyed from a silent trigger track")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
-    set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174)")
+    set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174); with a reference its tempo and key")
+    reference: str | None = Field(None, description="Follow the sections of a song from get_reference (part of its name); overrides length")
     seed: Annotated[int, Field(ge=0)] | None = None
 
 
@@ -147,6 +153,8 @@ class SongPlan:
     returns: dict[str, ReturnPlan] = field(default_factory=dict)
     return_identity: tuple = ()
     fx: dict[str, dict[str, str]] = field(default_factory=dict)  # section name -> FX role -> what plays
+    key: Scale | None = None  # set in Live with the plan (a reference's key with set_tempo)
+    reference: str | None = None  # the analyzed song the sections follow
 
     def mix_info(self) -> dict[str, Any]:
         if self.mix is None:
@@ -210,6 +218,7 @@ class SongPlan:
         return {
             "plan_id": self.id,
             "genre": self.template.label,
+            **({"reference": self.reference} if self.reference else {}),
             "scale": self.scale,
             "time_signature": self.meter,
             "tempo": self.tempo,
@@ -473,6 +482,15 @@ def _overlap(arrangement: dict[str, Any], track: int, start: float, end: float) 
     return None
 
 
+def _under_reference(reference: dict[str, Any], bpb: float) -> float:
+    """The arrangement beat of the reference's first section, on a bar line."""
+    first = reference["sections"][0]
+    beat = first.get("beat")
+    if beat is None:
+        beat = (int(reference.get("first_bar") or 1) - 1) * bpb
+    return max(0.0, round(float(beat) / bpb) * bpb)
+
+
 def _from(harmony: Harmony, start: float, length: float) -> Harmony:
     """The part of a harmony from `start` for `length` beats, shifted to begin at 0."""
     segments = []
@@ -514,23 +532,48 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         raise BridgeError("INVALID_PARAMS", f"plan_song needs 4/4 (the Set is {meter.numerator}/{meter.denominator}); set_song to 4/4 first")
     bpb = meter.beats_per_bar
     tempo = float(session.song.get("tempo", style.tempo))
-    if request.set_tempo:
-        tempo = style.tempo
-    sections = sized(template, request.length, request.minutes, bpb, tempo)
+    new_tempo = style.tempo if request.set_tempo else None
+    reference, key = None, None
+    if request.reference:
+        reference = find_reference(request.reference)
+        if reference is None:
+            raise BridgeError("NOT_FOUND", f"No analyzed reference matches '{request.reference}'; get_reference lists them")
+        if not reference.get("sections"):
+            raise BridgeError("INVALID_PARAMS", f"The reference '{reference.get('name')}' has no sections")
+        if request.set_tempo:
+            new_tempo = float(reference.get("tempo") or style.tempo)
+            key = reference_scale(reference.get("key"))
+            if key is not None:
+                scale = key
+    if new_tempo is not None:
+        tempo = new_tempo
+    if reference is not None:
+        sections = from_reference(template, reference["sections"])
+    else:
+        sections = sized(template, request.length, request.minutes, bpb, tempo)
     seed = request.seed if request.seed is not None else new_seed()
 
     roles, warnings = _assign_roles(session, request)
+    if reference is not None and request.minutes is not None:
+        warnings.append("minutes ignored: the reference sets the song's length")
     returns = _plan_returns(mixer["returns"]) if request.mix else {}
     throws = _throw_levels(roles, style, returns, mixer)
     for role in throws:
         roles[role].throws = style.throws[role]
     existing = {t.index for t in roles.values() if not t.new}
+    length = sum(s.bars for s in sections) * bpb
+    under = _under_reference(reference, bpb) if reference is not None and request.start_bar is None else None
     if request.start_bar is not None:
         start = (request.start_bar - 1) * bpb
+    elif under is not None and not any(
+            _overlap(arrangement, t.index, under, under + length) for t in roles.values() if not t.new):
+        start = under  # under the reference's clip: solo one or the other to compare
     else:
         # After the last clip on any track: songs follow each other, they never play over one another.
         free = _free_from(arrangement, {t["index"] for t in arrangement.get("tracks", [])})
         start = -(-free // bpb) * bpb  # next bar line
+        if under is not None:
+            warnings.append(f"Not under the reference at bar {int(under / bpb) + 1}: the song's tracks have clips there")
     starts, cursor = [], start
     for section in sections:
         starts.append(cursor)
@@ -714,7 +757,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         raise BridgeError("INVALID_PARAMS", f"The song needs {len(actions)} clips; use a shorter length or fewer copied clips (max 256)")
     return SongPlan(
         secrets.token_hex(4), template, sections, starts, start, end, roles, actions, locators,
-        style.tempo if request.set_tempo else None, seed, scale.describe(), f"{meter.numerator}/{meter.denominator}", bpb,
+        new_tempo, seed, scale.describe(), f"{meter.numerator}/{meter.denominator}", bpb,
         tuple((t.get("id"), t.get("name"), t.get("kind")) for t in session.tracks),
         tempo,
         {"main": main.describe()[: max(1, round(8 * style.chords_per_bar))], "break": alt.describe()[: max(1, round(8 * style.chords_per_bar))]},
@@ -723,6 +766,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         returns,
         tuple(r.get("name") for r in mixer["returns"]),
         fx_plays,
+        key,
+        str(reference.get("name")) if reference is not None else None,
     )
 
 
@@ -879,8 +924,11 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
                 else:
                     actions = _move_to_kit(actions, t.index, kit)
         undo_steps += await _route_sidechains(call, plan, warnings)
-        if plan.tempo is not None:
-            await call("song.set", {"tempo": plan.tempo})
+        song_set: dict[str, Any] = {"tempo": plan.tempo} if plan.tempo is not None else {}
+        if plan.key is not None:
+            song_set.update(root_note=plan.key.root, scale_name=plan.key.name)
+        if song_set:
+            await call("song.set", song_set)
             undo_steps += 1
         result = await call("arrangement.edit", {"actions": actions})
         undo_steps += 1
