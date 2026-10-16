@@ -40,7 +40,7 @@ def device_insert(ctx, params):
 
 @op("device.params")
 def device_params(ctx, params):
-    device = ctx.device(params["track"], params["device"], params.get("chain_path"))
+    device = ctx.device(params)
     return {
         "name": device.name,
         "class_name": device.class_name,
@@ -50,7 +50,7 @@ def device_params(ctx, params):
 
 @op("device.set_param")
 def device_set_param(ctx, params):
-    device = ctx.device(params["track"], params["device"], params.get("chain_path"))
+    device = ctx.device(params)
     key = params["parameter"]
     parameters = list(device.parameters)
     if isinstance(key, int):
@@ -115,7 +115,7 @@ def drum_rack_pads(ctx, params):
     track = ctx.track(params["track"])
     index = params.get("device")
     if index is not None:
-        device = ctx.device(params["track"], index)
+        device = ctx.device({"track": params["track"], "device": index})
         if not getattr(device, "can_have_drum_pads", False):
             raise OpError(ErrorCode.INVALID_PARAMS, "Device %d on track %d is not a Drum Rack" % (index, params["track"]))
         rack = device

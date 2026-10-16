@@ -22,6 +22,10 @@ Nothing changes in Live until ``apply_song``.
   else a new one at the end of its chain) and every one of its clips an envelope
   of the cutoff, so a sweep never carries over into the next section. A track
   that has an Auto Filter already gets open envelopes where the style has no sweep.
+- Mix (``mix``): a Reverb and a Delay return, the Set's own if it has them, else new
+  ones set to the genre's decay and delay time. New tracks get the genre's fader
+  levels and sends; existing tracks keep their faders and get sends only to returns
+  the song creates.
 """
 
 from __future__ import annotations
@@ -44,7 +48,7 @@ from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
-from midibakery.compose.structures import ROLES, TEMPLATES, Section, Template, parse_segments, sized
+from midibakery.compose.structures import ROLES, TEMPLATES, Mix, Section, Template, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
 NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator"}
@@ -80,6 +84,7 @@ class SongRequest(BaseModel):
     clips: list[UseClip] = Field(default_factory=list, description="Session clips to use for a role instead of generating it")
     create_missing: bool = Field(True, description="New tracks for roles no track has")
     sounds: bool = Field(True, description="New tracks get the genre's kit and presets; false: empty Drum Rack and native synths")
+    mix: bool = Field(True, description="Reverb and Delay returns, sends and fader levels for new tracks")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174)")
     seed: Annotated[int, Field(ge=0)] | None = None
@@ -96,6 +101,14 @@ class RoleTrack:
     filter: str | None = None  # Auto Filter type the song sweeps
     filter_device: int | None = None  # its index on the track
     filter_new: bool = False
+
+
+@dataclass
+class ReturnPlan:
+    kind: str  # "reverb" or "delay"
+    index: int
+    name: str
+    new: bool = False
 
 
 @dataclass
@@ -119,6 +132,57 @@ class SongPlan:
     harmony: dict[str, list[str]] = field(default_factory=dict)
     notes: dict[str, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    mix: Mix | None = None
+    returns: dict[str, ReturnPlan] = field(default_factory=dict)
+    return_identity: tuple = ()
+
+    def mix_info(self) -> dict[str, Any]:
+        if self.mix is None:
+            return {}
+        mix = self.mix
+        returns = {}
+        for kind, r in self.returns.items():
+            setting = f"{mix.decay:g} s" if kind == "reverb" else f"{mix.delay_16ths}/16, feedback {round(mix.feedback * 100)} %"
+            returns[kind] = f"return index {r.index} '{r.name}'" + (f" (new, {setting})" if r.new else " (the Set's)")
+        levels = {}
+        for role, t in self.roles.items():
+            parts = [f"fader {mix.volume[role]:g} dB"] if t.new and role in mix.volume else []
+            parts += [f"{kind} {db:g} dB" for kind, db in self._sends(role, t)]
+            if parts:
+                levels[role] = ", ".join(parts)
+        return {"mix": {"returns": returns, "levels": levels}}
+
+    def _sends(self, role: str, t: RoleTrack) -> list[tuple[str, float]]:
+        """(return kind, dB) a role's track sends: a new track to both returns, an existing one only to new returns."""
+        assert self.mix is not None
+        sends = []
+        for kind, levels in (("reverb", self.mix.reverb), ("delay", self.mix.delay)):
+            r = self.returns.get(kind)
+            if r is not None and role in levels and (t.new or r.new):
+                sends.append((kind, levels[role]))
+        return sends
+
+    def mix_ops(self) -> list[dict[str, Any]]:
+        """New returns with their device settings, then faders and sends: part of the tracks batch."""
+        if self.mix is None:
+            return []
+        ops: list[dict[str, Any]] = []
+        for kind, r in sorted(self.returns.items(), key=lambda kv: kv[1].index):
+            if not r.new:
+                continue
+            ops.append({"op": "return.create", "params": {"name": r.name, "device": RETURN_DEVICES[kind]}})
+            for parameter, value in _return_params(kind, self.mix):
+                ops.append({"op": "device.set_param", "params": {"return_track": r.index, "device": 0, "parameter": parameter, "value": value}})
+        for role, t in self.roles.items():
+            params: dict[str, Any] = {}
+            if t.new and role in self.mix.volume:
+                params["volume_db"] = self.mix.volume[role]
+            sends = [{"return_track": self.returns[kind].index, "db": db} for kind, db in self._sends(role, t)]
+            if sends:
+                params["sends"] = sends
+            if params:
+                ops.append({"op": "mixer.set", "params": {"track": t.index, **params}})
+        return ops
 
     def preview(self) -> dict[str, Any]:
         bpb = self.beats_per_bar
@@ -143,6 +207,7 @@ class SongPlan:
             "from_bar": int(self.start / bpb) + 1,
             "seed": self.seed,
             "tracks": {r: {"track": t.index, "name": t.name, **({"new": True, "device": _sound_name(t.sound) if t.sound else t.device} if t.new else {}), **_filter_info(t)} for r, t in self.roles.items()},
+            **self.mix_info(),
             "sections": sections,
             "harmony": self.harmony,
             "notes": self.notes,
@@ -150,6 +215,36 @@ class SongPlan:
             "warnings": self.warnings,
             "next": "apply_plan(plan_id) writes the song to the Arrangement View",
         }
+
+
+RETURN_DEVICES = {"reverb": "Reverb", "delay": "Delay"}
+RETURN_MATCH = {"reverb": ("reverb",), "delay": ("delay", "echo")}
+
+
+DELAY_16THS = (1, 2, 3, 4, 5, 6, 8, 16)  # Delay's "L 16th" choices
+
+
+def _return_params(kind: str, mix: Mix) -> list[tuple[str, float]]:
+    """Raw values for a new return's device, fully wet (measured in Live 12.4): Reverb's
+    Decay Time is 200 ms * 300^value, Delay's Feedback 0-1 is 0-95 %."""
+    if kind == "reverb":
+        decay = min(1.0, max(0.0, math.log(mix.decay / 0.2) / math.log(300)))
+        return [("Dry/Wet", 1.0), ("Decay Time", round(decay, 4))]
+    return [("Dry/Wet", 1.0), ("Link", 1.0), ("L Sync", 1.0), ("L 16th", float(DELAY_16THS.index(mix.delay_16ths))),
+            ("Feedback", round(min(1.0, mix.feedback / 0.95), 4))]
+
+
+def _plan_returns(returns: list[dict[str, Any]]) -> dict[str, ReturnPlan]:
+    """The Set's first Reverb and Delay (or Echo) returns; new returns, appended, for what it lacks."""
+    plans: dict[str, ReturnPlan] = {}
+    for kind, words in RETURN_MATCH.items():
+        found = next((r for r in returns if any(w in d.lower() for d in r.get("devices", []) for w in words)), None)
+        if found is not None:
+            plans[kind] = ReturnPlan(kind, found["index"], found.get("name", ""))
+    for kind in RETURN_DEVICES:
+        if kind not in plans:
+            plans[kind] = ReturnPlan(kind, len(returns) + sum(r.new for r in plans.values()), RETURN_DEVICES[kind], new=True)
+    return plans
 
 
 def _duration(seconds: float) -> str:
@@ -292,7 +387,7 @@ def _is_minor(scale: Scale) -> bool:
 
 
 async def build_song(call: Call, request: SongRequest) -> SongPlan:
-    session, arrangement = await asyncio.gather(Session(call).load(), call("arrangement.get", {}))
+    session, arrangement, mixer = await asyncio.gather(Session(call).load(), call("arrangement.get", {}), call("mixer.get", {}))
     template = TEMPLATES[request.genre]
     style = template.style
     meter, scale = session.meter, session.scale
@@ -468,6 +563,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         tempo,
         {"main": main.describe()[: max(1, round(8 * style.chords_per_bar))], "break": alt.describe()[: max(1, round(8 * style.chords_per_bar))]},
         counts, warnings,
+        style.mix if request.mix else None,
+        _plan_returns(mixer["returns"]) if request.mix else {},
+        tuple(r.get("name") for r in mixer["returns"]),
     )
 
 
@@ -519,13 +617,25 @@ async def _undo(call: Call, error: BridgeError, steps: int) -> None:
     error.message += f"; the song's {steps} step(s) that had already run were undone, Live is unchanged"
 
 
+def _batch_steps(ops: list[dict[str, Any]], done: int) -> int:
+    """Undo steps the first `done` ops of a batch left: one, but Live 12.4 closes the step when it
+    creates a return track, so what follows the last new return is a second one (measured)."""
+    if not done:
+        return 0
+    last_return = max((i for i, o in enumerate(ops[:done]) if o["op"] == "return.create"), default=None)
+    return 2 if last_return is not None and last_return < done - 1 else 1
+
+
 async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
-    """New tracks (one undo step), their kits and presets (one step each), then tempo, all clips
-    (one undo step) and locators."""
-    listed, arrangement, song = await asyncio.gather(call("tracks.list", {}), call("arrangement.get", {}), call("song.get", {}))
+    """New tracks, returns and mix (one undo step), the kits and presets (one step each), then
+    tempo, all clips (one undo step) and locators."""
+    listed, arrangement, song, mixer = await asyncio.gather(
+        call("tracks.list", {}), call("arrangement.get", {}), call("song.get", {}), call("mixer.get", {}))
     tracks = listed["tracks"]
     if tuple((t.get("id"), t.get("name"), t.get("kind")) for t in tracks) != plan.track_identity:
         raise BridgeError("CONFLICT", f"Tracks changed since song plan {plan.id} was made; plan again")
+    if tuple(r.get("name") for r in mixer["returns"]) != plan.return_identity:
+        raise BridgeError("CONFLICT", f"Return tracks changed since song plan {plan.id} was made; plan again")
     for role_track in plan.roles.values():
         if not role_track.new and _overlap(arrangement, role_track.index, plan.start, plan.end) is not None:
             raise BridgeError("CONFLICT", f"Track index {role_track.index} '{role_track.name}' has new arrangement clips in the song's range; plan again")
@@ -544,14 +654,15 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         if t.filter_new:
             ops.append({"op": "device.insert", "params": {"track": t.index, "name": "Auto Filter"}})
         ops.append({"op": "device.set_param", "params": {"track": t.index, "device": t.filter_device, "parameter": "Filter Type", "value": FILTER_TYPES[t.filter]}})
+    ops += plan.mix_ops()
     try:
         if ops:
             try:
                 await call("batch", {"ops": ops, "label": f"MidiBakery song {plan.id}: tracks"})
             except BridgeError as exc:
-                await _undo(call, exc, 1 if exc.details.get("completed") else 0)
+                await _undo(call, exc, _batch_steps(ops, len(exc.details.get("completed") or [])))
                 raise
-            undo_steps += 1
+            undo_steps += _batch_steps(ops, len(ops))
         for t in sorted(new, key=lambda t: t.index):
             if t.sound is None:
                 continue
@@ -590,8 +701,9 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         "clips": len(result["results"]),
         "new_tracks": [{"track": t.index, "name": t.name, "device": _sound_name(t.sound) if t in loaded else t.device} for t in new],
         "automation": {r: f"track index {t.index}, device index {t.filter_device}" for r, t in plan.roles.items() if t.filter is not None},
+        **plan.mix_info(),
         "locators": len(plan.locators) if not song["is_playing"] else "skipped: stop the transport and plan again for locators",
-        "undo": f"{undo_steps} undo step(s) for tracks/sounds/tempo/clips; each locator is its own step",
+        "undo": f"{undo_steps} undo step(s) for tracks/mix/sounds/tempo/clips; each locator is its own step",
         **({"warnings": warnings} if warnings else {}),
     }
 

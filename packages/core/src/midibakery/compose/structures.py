@@ -11,6 +11,9 @@ Automation: a style names an Auto Filter type per role (`filters`), a section mo
 its cutoff with `sweeps`, in Hz and in the segment syntax of the parts: "20:8,20>300"
 holds 20 Hz for 8 bars, then sweeps to 300 Hz. A filtered role without a sweep
 stays open (Low-pass 20 kHz, High-pass 20 Hz).
+
+Mix: a style's `mix` sets the faders of new tracks and the sends to a Reverb and a
+Delay return, in dB as Live shows them; a role without a send stays dry.
 """
 
 from __future__ import annotations
@@ -55,6 +58,18 @@ TRAP_PROGRESSIONS = {"major": ((5, 3, 0, 4), (5, 4, 3, 4)), "minor": ((0, 5, 4, 
 
 
 @dataclass(frozen=True)
+class Mix:
+    """Start levels of a song's new tracks and its two returns; role -> dB as Live shows it."""
+
+    volume: dict[str, float] = field(default_factory=dict)  # fader
+    reverb: dict[str, float] = field(default_factory=dict)  # send to the Reverb return
+    delay: dict[str, float] = field(default_factory=dict)  # send to the Delay return
+    decay: float = 2.0  # Reverb decay in seconds
+    delay_16ths: int = 3  # Delay time in 16th notes (3 = dotted 8th)
+    feedback: float = 0.35  # Delay feedback, 0-1
+
+
+@dataclass(frozen=True)
 class Style:
     """What a genre sets beyond its grooves (grooves.py: drums, bass and chords, with their swing)."""
 
@@ -65,6 +80,7 @@ class Style:
     devices: dict[str, str] = field(default_factory=dict)  # role -> native device for new tracks
     sounds: dict[str, tuple[str, ...]] = field(default_factory=dict)  # role -> browser path loaded onto a new track
     filters: dict[str, str] = field(default_factory=dict)  # role -> Auto Filter type ("Low-pass", "High-pass") for sweeps
+    mix: Mix = field(default_factory=Mix)
     # Scale degrees (0 = tonic) of typical loops, diatonic in the song's scale; by its third.
     progressions: dict[str, tuple[tuple[int, ...], ...]] = field(default_factory=lambda: dict(EDM_PROGRESSIONS))
 
@@ -105,6 +121,14 @@ def _kit(folder: str, name: str) -> tuple[str, ...]:
     return ("packs", "Core Library", "Racks", "Drum Racks", folder, f"{name}.adg")
 
 
+def _mix(volume: str, reverb: str, delay: str, decay: float, delay_16ths: int, feedback: float) -> Mix:
+    """Levels per role as "drums,bass,chords,lead" in dB; "-" = no send."""
+    def levels(spec: str) -> dict[str, float]:
+        return {role: float(db) for role, db in zip(ROLES, spec.split(",")) if db.strip() != "-"}
+
+    return Mix(levels(volume), levels(reverb), levels(delay), decay, delay_16ths, feedback)
+
+
 def _sounds(drums: tuple[str, ...], **presets: str) -> dict[str, tuple[str, ...]]:
     """The kit plus role -> "Category/Preset" in the browser's Sounds."""
     return {"drums": drums, **{role: ("sounds", *path.split("/")) for role, path in presets.items()}}
@@ -118,6 +142,7 @@ TEMPLATES: dict[str, Template] = {
     "house": Template("house", "House", Style(
         124, lead_range=(72, 89),
         sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic FM House Bass.adg", chords="Synth Keys/106 Organ.adg", lead="Synth Keys/Basic Pluck Keys.adg"),
+        mix=_mix("-6,-8,-12,-11", "-24,-,-14,-16", "-,-,-22,-18", decay=1.8, delay_16ths=3, feedback=0.35),
         filters={"drums": "High-pass", "chords": "Low-pass"},
     ), (
         _s("Intro", "intro", 16, 0.4, fill=True, drums="kick_hats:8,groove", chords="-:8,pad", sweeps={"chords": "-:8,400>6000"}),
@@ -132,6 +157,7 @@ TEMPLATES: dict[str, Template] = {
     "melodic_techno": Template("melodic_techno", "Melodic Techno", Style(
         122, chords_per_bar=0.5, lead_range=(60, 84), lead="arp",
         sounds=_sounds(_kit("Electronic", "AG Techno Kit"), bass="Bass/Analogue Bass.adv", chords="Pad/Analog Soft Pad.adv", lead="Synth Lead/Basic Waves Lead.adg"),
+        mix=_mix("-6,-8,-13,-12", "-26,-,-8,-12", "-,-,-20,-12", decay=4.5, delay_16ths=3, feedback=0.45),
         progressions=MELODIC_PROGRESSIONS, devices={"lead": "Wavetable", "chords": "Wavetable", "bass": "Drift"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
     ), (
@@ -154,6 +180,7 @@ TEMPLATES: dict[str, Template] = {
     "peak_time_techno": Template("peak_time_techno", "Peak-Time Techno", Style(
         128, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
         sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic Sub Boom.adg", chords="Pad/Butter Knife Stab.adg", lead="Bass/Basic 303 Bass.adg"),
+        mix=_mix("-5,-9,-12,-12", "-24,-,-12,-20", "-,-,-16,-16", decay=2.5, delay_16ths=3, feedback=0.4),
         progressions=DRONE_PROGRESSIONS, devices={"lead": "Drift", "chords": "Wavetable", "bass": "Analog"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
     ), (
@@ -181,6 +208,7 @@ TEMPLATES: dict[str, Template] = {
     "drum_and_bass": Template("drum_and_bass", "Drum & Bass", Style(
         174, chords_per_bar=0.5, lead_range=(72, 89),
         sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead="Synth Lead/Basic Glide Lead.adg"),
+        mix=_mix("-5,-8,-13,-11", "-26,-,-10,-16", "-,-,-,-16", decay=2.0, delay_16ths=3, feedback=0.3),
         progressions=DNB_PROGRESSIONS, devices={"bass": "Operator", "chords": "Wavetable", "lead": "Operator"},
     ), (
         _s("Intro", "intro", 32, 0.3, fill=True, drums="kick_hats:16,groove", chords="pad"),
@@ -196,6 +224,7 @@ TEMPLATES: dict[str, Template] = {
     "trap": Template("trap", "Trap", Style(
         145, chords_per_bar=0.5, lead_range=(69, 86),
         sounds=_sounds(_kit("Drum Machines", "808 Core Kit"), bass="Bass/808 Pure.adg", chords="Synth Keys/Basic Bell Keys.adg", lead="Synth Lead/Basic Sine Drive Lead.adg"),
+        mix=_mix("-6,-7,-12,-11", "-28,-,-12,-16", "-,-,-18,-16", decay=2.2, delay_16ths=2, feedback=0.3),
         progressions=TRAP_PROGRESSIONS, devices={"bass": "Operator", "chords": "Drift", "lead": "Wavetable"},
     ), (
         _s("Intro", "intro", 8, 0.3, chords="pad", lead="tease"),

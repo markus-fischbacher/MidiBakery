@@ -79,12 +79,24 @@ class Context(object):
             raise OpError(ErrorCode.INVALID_PARAMS, "Clip %d/%d is not a MIDI clip" % (track_index, slot_index))
         return clip
 
-    def device(self, track_index, device_index, chain_path=()):
-        """A device on the track, or inside racks: chain_path alternates chain and device
-        indices below it, e.g. (1, 0) = the first device in the rack's second chain."""
-        devices = self.track(track_index).devices
+    def return_track(self, index):
+        returns = self.song.return_tracks
+        if not 0 <= index < len(returns):
+            raise OpError(ErrorCode.NOT_FOUND, "No return track %d (song has %d)" % (index, len(returns)), return_track=index)
+        return returns[index]
+
+    def device(self, params):
+        """The device params name: on params["track"] or params["return_track"], or inside racks:
+        chain_path alternates chain and device indices below it, e.g. (1, 0) = the first device
+        in the rack's second chain."""
+        if params.get("return_track") is not None:
+            owner, where = self.return_track(params["return_track"]), "return track %d" % params["return_track"]
+        else:
+            owner, where = self.track(params["track"]), "track %d" % params["track"]
+        devices = owner.devices
+        device_index, chain_path = params["device"], params.get("chain_path")
         if not 0 <= device_index < len(devices):
-            raise OpError(ErrorCode.NOT_FOUND, "No device %d on track %d" % (device_index, track_index), device=device_index)
+            raise OpError(ErrorCode.NOT_FOUND, "No device %d on %s" % (device_index, where), device=device_index)
         device = devices[device_index]
         path = list(chain_path or ())
         if len(path) % 2:
