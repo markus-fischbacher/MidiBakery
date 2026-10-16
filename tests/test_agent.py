@@ -5,7 +5,7 @@ import json
 import httpx2 as httpx
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
 
-from midibakery.agent import REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, Agent, ToolHost
+from midibakery.agent import REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost
 from midibakery.agent.providers.anthropic import FALLBACK_BETA, AnthropicProvider
 from midibakery.agent.providers.base import Provider, ToolCall, Turn
 from midibakery.agent.providers import make_provider
@@ -532,3 +532,18 @@ async def test_small_profile_shortens_get_session(client, live):
         results[compact] = provider.results[0][0].content
     assert json.loads(results[False])["song"]["tempo"] == 120  # full JSON for Claude
     assert results[True].startswith("Song: 120 BPM, 4/4") and "0 '1-MIDI' [midi]; free slots 0-7; no clips" in results[True]
+
+
+async def test_full_tool_set_stays_within_the_local_budget(client):
+    # Local models get every tool (compact). With a 32k context the prompt must leave room for the
+    # conversation: ~33k characters for 30 tools was ~10k tokens with Gemma 4 E4B. Grow tools, not this.
+    provider = ScriptedProvider([Turn("end_turn", text="ok")])
+
+    async def no(message):
+        return False
+
+    async with ToolHost(build_server(client), no, None) as host:
+        Agent(provider, host, SYSTEM_PROMPT, compact=True)
+    payload = json.dumps([{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in provider.tools])
+    assert {"get_mixer", "update_mixer", "create_return_track"} <= {t.name for t in provider.tools}
+    assert len(payload) + len(SYSTEM_PROMPT) < 36000

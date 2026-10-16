@@ -280,6 +280,98 @@
       "read_only": true,
       "required": []
     },
+    "mixer.get": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "master": [
+          "boolean"
+        ],
+        "options": [
+          "boolean"
+        ],
+        "return_track": [
+          "integer",
+          "null"
+        ],
+        "track": [
+          "integer",
+          "null"
+        ]
+      },
+      "read_only": true,
+      "required": []
+    },
+    "mixer.set": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "crossfade": [
+          "string",
+          "null"
+        ],
+        "input_channel": [
+          "string",
+          "null"
+        ],
+        "input_routing": [
+          "string",
+          "null"
+        ],
+        "master": [
+          "boolean"
+        ],
+        "mute": [
+          "boolean",
+          "null"
+        ],
+        "output_channel": [
+          "string",
+          "null"
+        ],
+        "output_routing": [
+          "string",
+          "null"
+        ],
+        "pan": [
+          "number",
+          "null"
+        ],
+        "return_track": [
+          "integer",
+          "null"
+        ],
+        "sends": [
+          "array"
+        ],
+        "solo": [
+          "boolean",
+          "null"
+        ],
+        "track": [
+          "integer",
+          "null"
+        ],
+        "volume": [
+          "number",
+          "null"
+        ],
+        "volume_db": [
+          "number",
+          "null"
+        ]
+      },
+      "read_only": false,
+      "required": []
+    },
     "notes.apply": {
       "destructive": true,
       "min_live": [
@@ -343,6 +435,26 @@
         "slot",
         "track"
       ]
+    },
+    "return.create": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "device": [
+          "string",
+          "null"
+        ],
+        "name": [
+          "string",
+          "null"
+        ]
+      },
+      "read_only": false,
+      "required": []
     },
     "scene.create": {
       "destructive": false,
