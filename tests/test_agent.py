@@ -75,7 +75,7 @@ async def run(server, provider, text, confirm=None, allowed=None):
 async def test_loop_runs_tools_and_streams_events(client, live):
     provider = ScriptedProvider([
         tool_turn(("get_session", {})),
-        tool_turn(("compose_drums", {"track": 0, "slot": 0, "seed": 3, "bars": 2})),
+        tool_turn(("compose", {"kind": "drums", "track": 0, "slot": 0, "seed": 3, "bars": 2})),
         Turn("end_turn", text="Done: 2 bars of house drums on track 1."),
     ])
     events = await run(build_server(client), provider, "Make drums")

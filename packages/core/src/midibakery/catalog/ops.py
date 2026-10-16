@@ -397,13 +397,11 @@ class SongPosition(Params):
 
 
 class ArrangementTool(Params):
-    """Clip actions first (one undo step), then locators (transport must be stopped). A clip never lands on an existing one."""
+    """Clip actions first (one undo step), then locators (transport must be stopped). A clip never lands on an existing one.
+    For take lanes use compose_takes."""
 
     actions: list[
-        Annotated[
-            AddClip | CopySessionClip | DeleteArrangementClip | AddTakeLane | AddTakeClip | SetLocator | DeleteLocator,
-            Field(discriminator="action"),
-        ]
+        Annotated[AddClip | CopySessionClip | DeleteArrangementClip | SetLocator | DeleteLocator, Field(discriminator="action")]
     ] = Field(min_length=1, max_length=256)
 
 

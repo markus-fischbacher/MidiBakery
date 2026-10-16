@@ -16,13 +16,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from midibakery.compose import harmony as harmony_mod
 from midibakery.compose import transform as tf
-from midibakery.compose.bass import generate_bass
-from midibakery.compose.chords import generate_chords
-from midibakery.compose.drums import generate_drums, map_pads
-from midibakery.compose.melody import generate_melody
+from midibakery.compose.drums import map_pads
 from midibakery.compose.notes import Note, fit_to_length
+from midibakery.compose.parts import generate_part
 from midibakery.compose.rhythm import Grid, Meter
-from midibakery.compose.specs import SWING_UNITS, BassSpec, ChordsSpec, DrumsSpec, MelodySpec, TransformSpec
+from midibakery.compose.specs import PART_SPECS, SWING_UNITS, TransformSpec
 from midibakery.compose.theory import MAJOR, Scale
 
 
@@ -74,7 +72,7 @@ class NoteIO(_Model):
     release_velocity: Annotated[float, Field(ge=0, le=127)] = 64.0
 
 
-GENERATORS = {"drums": DrumsSpec, "bass": BassSpec, "chords": ChordsSpec, "melody": MelodySpec}
+GENERATORS = PART_SPECS
 # Fields that only make sense against a live set.
 _SET_ONLY = {"track", "slot", "bars", "seed", "if_exists", "clip_name", "chords_from", "follow_kick", "device", "kind", "note_ids"}
 
@@ -139,10 +137,9 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
     rng = random.Random(seed)
     scale, meter, bars = ctx.scale_obj(), ctx.meter(), ctx.bars()
     info: dict[str, Any] = {}
-    unit = SWING_UNITS[spec.swing_unit]
     if request.kind == "drums":
         drum_map = map_pads([p.model_dump() for p in ctx.pads] if ctx.pads else None)
-        notes = generate_drums(meter, bars, spec.style, rng, drum_map, density=spec.density, swing=spec.swing, swing_unit=unit, fills=spec.fills, chance=spec.chance)
+        notes = generate_part(spec, None, scale, meter, bars, rng, drum_map)
         info["drum_map"] = drum_map.source
     else:
         if spec.progression:
@@ -150,12 +147,7 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
         else:
             harmony = harmony_mod.auto(scale, meter, bars, spec.chords_per_bar, rng, getattr(spec, "sevenths", False))
         info["chords"] = harmony.describe()
-        if request.kind == "bass":
-            notes = generate_bass(harmony, scale, meter, bars, spec.style, rng, spec.octave, density=spec.density, swing=spec.swing, swing_unit=unit)
-        elif request.kind == "chords":
-            notes = generate_chords(harmony, meter, bars, spec.rhythm, rng, spec.low, spec.high, spec.voices, swing=spec.swing, swing_unit=unit)
-        else:
-            notes = generate_melody(harmony, scale, meter, bars, rng, spec.low, spec.high, spec.density, swing=spec.swing, swing_unit=unit)
+        notes = generate_part(spec, harmony, scale, meter, bars, rng)
     notes = fit_to_length(notes, ctx.length)
     return {"seed": seed, "notes": [_note_out(n, ctx.start) for n in notes], **info}
 

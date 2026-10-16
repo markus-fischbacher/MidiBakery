@@ -17,6 +17,8 @@ from mcp import Client
 from mcp.server import MCPServer
 from mcp_types import ElicitResult
 
+from midibakery.compose.plan import is_drum_track
+
 Confirm = Callable[[str], Awaitable[bool]]
 
 # For small local models: few, coarse tools work better than the full set.
@@ -26,10 +28,7 @@ REDUCED_TOOLS = frozenset({
     "create_track",
     "create_clip",
     "edit_notes",
-    "compose_drums",
-    "compose_bass",
-    "compose_chords",
-    "compose_melody",
+    "compose",
     "transform_notes",
     "plan_changes",
     "apply_plan",
@@ -145,7 +144,11 @@ def _unknown_arguments(schema: dict[str, Any], arguments: dict[str, Any]) -> str
 
 
 # Schema keys that cost context but do not change what a valid call looks like.
-_DROP_KEYS = frozenset({"title", "additionalProperties", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "examples"})
+# The discriminator mapping repeats what each variant's `const` already says.
+_DROP_KEYS = frozenset({
+    "title", "additionalProperties", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "examples",
+    "discriminator", "minItems", "maxItems", "minLength", "maxLength",
+})
 
 
 def _first_sentence(text: str, limit: int) -> str:
@@ -160,7 +163,7 @@ def _first_sentence(text: str, limit: int) -> str:
 def compact_schema(node: Any, limit: int = 90) -> Any:
     """Shrink an inlined JSON schema for small context windows.
 
-    Drops titles and bounds, folds Optional (anyOf [X, null]) into X, removes
+    Drops titles, bounds and discriminator mappings, folds Optional (anyOf [X, null]) into X, removes
     null/empty defaults and cuts descriptions to their first sentence.
     """
     if isinstance(node, list):
@@ -233,8 +236,7 @@ def compact_session(result: dict[str, Any]) -> str:
     ]
     for track in result.get("tracks", []):
         devices = [d.get("name", "?") for d in track.get("devices", [])]
-        drums = any(d.get("class_name") == "DrumGroupDevice" for d in track.get("devices", []))
-        kind = "drums" if drums else track.get("kind", "?")
+        kind = "drums" if is_drum_track(track) else track.get("kind", "?")
         head = f"{track.get('index')} '{track.get('name')}' [{', '.join([kind, *devices])}]"
         clips = sorted(track.get("clips", []), key=lambda c: c["slot"])
         used = {c["slot"] for c in clips}

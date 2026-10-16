@@ -147,4 +147,51 @@ class TransformSpec(Spec):
         return self
 
 
+PART_SPECS: dict[str, type[Generate]] = {"drums": DrumsSpec, "bass": BassSpec, "chords": ChordsSpec, "melody": MelodySpec}
+
+
+class ComposeRequest(Generate):
+    """The compose tool: one schema for every part, so the shared fields are listed once.
+    A field tagged (drums), (bass) ... belongs to those kinds; `spec()` checks the
+    request against the kind's own model, which also rejects another kind's fields."""
+
+    kind: Literal["drums", "bass", "chords", "melody"]
+    progression: str | None = Field(
+        None,
+        description="(bass, chords, melody) Chords as roman numerals in the song scale ('i VI III VII', 'ii7 V7 I') or names "
+        "('Am F C G'). Default: chords_from, else a generated functional progression.",
+    )
+    chords_from: ClipLocation | None = Field(None, description="(bass, chords, melody) Follow the chords of an existing MIDI clip")
+    chords_per_bar: Annotated[float, Field(gt=0, le=4, description="(bass, chords, melody) 1 = a chord per bar, 0.5 = one per two bars")] | None = None
+    style: Literal[DrumStyle, BassStyle] | None = Field(  # type: ignore[valid-type]
+        None,
+        description="(drums) house, techno, hiphop, trap, rock, breakbeat; (bass) sustained, pulse, offbeat, octave, walking, syncopated",
+    )
+    density: Annotated[float, Field(ge=0, le=1, description="(drums, bass, melody) 0 sparse - 1 busy")] | None = None
+    swing: Swing = 0.0
+    swing_unit: SwingUnit = "1/16"
+    fills: bool | None = Field(None, description="(drums) Fill at the end of each 4-bar phrase, default true")
+    chance: Annotated[float, Field(ge=0, le=1, description="(drums) Note chance of ghost notes and some hats: 1 always (default), 0.5 natural")] | None = None
+    device: Annotated[int, Field(ge=0, description="(drums) Drum Rack device index; default: first Drum Rack")] | None = None
+    octave: Annotated[int, Field(ge=-1, le=4, description="(bass) Live octave of the root, C1 = 36; default 1")] | None = None
+    follow_kick: ClipLocation | None = Field(None, description="(bass) Drum clip whose kick the bass locks to or avoids")
+    kick_relation: KickRelation | None = Field(None, description="(bass) lock (default) or avoid the kick")
+    rhythm: ChordRhythm | None = Field(None, description="(chords) sustain (default), pulse, offbeat, stabs")
+    voices: Literal[3, 4] | None = Field(None, description="(chords) 3 (default) or 4")
+    sevenths: bool | None = Field(None, description="(chords) Seventh chords for a generated progression")
+    low: Pitch | None = Field(None, description="(chords, melody) Lowest pitch; default 52 chords, 60 melody")
+    high: Pitch | None = Field(None, description="(chords, melody) Highest pitch; default 76 chords, 84 melody")
+
+    @model_validator(mode="after")
+    def _fields_of_the_kind(self) -> ComposeRequest:
+        own = PART_SPECS[self.kind].model_fields
+        foreign = [name for name in self.model_fields_set if name not in own and getattr(self, name) is not None]
+        if foreign:
+            raise ValueError(f"{', '.join(sorted(foreign))} not for kind '{self.kind}'")
+        return self
+
+    def spec(self) -> Generate:
+        return PART_SPECS[self.kind].model_validate(self.model_dump(exclude_none=True))
+
+
 Step = Annotated[DrumsSpec | BassSpec | ChordsSpec | MelodySpec | TransformSpec, Field(discriminator="kind")]

@@ -108,7 +108,7 @@ M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
   - `edit_tracks`, `edit_clips`, `edit_notes` (Diff über Note-IDs: add/modify/remove)
   - `devices` (insert/param/rack), `transport`, `scenes`, `mixer`, `arrangement`
 - **Kompositions-Tools:**
-  - `compose_drums`, `compose_bass`, `compose_chords`, `compose_melody`, `transform_notes` (humanize, quantize, invert, arpeggiate, variation)
+  - `compose` (kind drums, bass, chords oder melody; bis Teil B des Reviews vier eigene Tools), `transform_notes` (humanize, quantize, invert, arpeggiate, variation)
   - Alle sind scale- und kontextbewusst und reproduzierbar über einen Seed.
 - **Plan/Apply:**
   - `plan_changes` liefert eine Vorschau als Diff (bei MCP Apps auch als Piano-Roll).

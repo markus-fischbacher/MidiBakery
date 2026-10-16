@@ -59,7 +59,8 @@ flowchart LR
 ### Core: Engine, MCP-Server, Agent, API
 
 - **Kompositions-Engine** (`compose/`): Drums, Bass, Akkorde, Melodie und Transformationen. Sie ist skalen- und taktbewusst, und mit demselben Seed entstehen dieselben Noten. Sie berechnet nur Noten und weiß nichts von Live.
-- **MCP-Server** (`mcp/`): stellt rund 27 Tools für Claude bereit, darunter `get_session`, `compose_drums`, `edit_notes`, `plan_changes` und `apply_plan`. Die Schemas kommen aus dem Op-Katalog, Kompositions-Tools rufen die Engine auf, und alles, was Live verändert, geht über den Bridge-Client ans Remote Script.
+- **MCP-Server** (`mcp/`): stellt 33 Tools für Claude bereit, darunter `get_session`, `compose`, `edit_notes`, `plan_changes` und `apply_plan`. Die Schemas kommen aus dem Op-Katalog, Kompositions-Tools rufen die Engine auf, und alles, was Live verändert, geht über den Bridge-Client ans Remote Script.
+  - Tool-Budget für lokale Modelle: Tool-Schemas plus Systemprompt bleiben unter 36.000 Zeichen (geprüft in `tests/test_agent.py`), derzeit etwa 28.200. Neue Tools sollten bestehende Schemas teilen, statt Felder zu wiederholen.
 - **Agent-Loop** (`agent/`): ein Gespräch mit einem LLM, also Claude über die Anthropic API, LM Studio oder Ollama. Er ruft **dieselben** MCP-Tools auf, nur in-process statt über stdio. Claude Code und das Chat-Gerät haben damit exakt dieselben Fähigkeiten. Lokale Modelle bekommen ebenfalls alle Tools, nur mit knapperen Schemas und Ergebnissen; eine reduzierte Auswahl gibt es auf Wunsch (`tools=small` / `--small`).
 - **Lokale API** (`api/`, `127.0.0.1:8766`): das Tor für die Max-Geräte. Das Remote Script startet sie als eigenen Prozess, wenn Live es lädt, und beendet sie mit Live. In Lives Python läuft sie nicht: Sie braucht Python 3.12 und Pakete außerhalb der Standardbibliothek. Läuft auf dem Port schon eine API, etwa von Hand gestartet, bleibt es bei dieser.
   - `GET /ui`: die Chat-Seite (ohne Geheimnisse)
@@ -106,7 +107,7 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 
 **1. Claude Code komponiert:** „Leg auf Spur 1 vier Takte House-Drums an.“
 
-1. Claude ruft das MCP-Tool `compose_drums` auf.
+1. Claude ruft das MCP-Tool `compose` mit `kind: "drums"` auf.
 2. Der MCP-Server liest per `song.get` und `tracks.list` die Session (Tempo, Skala, Drum-Rack-Pads), und die Engine erzeugt die Noten.
 3. Der MCP-Server schickt einen `batch` mit `clip.create` und `notes.apply` ans Remote Script.
 4. Live legt den Clip in einem einzigen Undo-Schritt an.
@@ -114,7 +115,7 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 **2. Chat im Gerät:** gleicher Wunsch, im Chat-Gerät getippt.
 
 1. `textedit` schickt `chat_input` an die Seite, die Seite per WebSocket an die API.
-2. Der Agent fragt das gewählte LLM, und das LLM ruft `compose_drums` auf.
+2. Der Agent fragt das gewählte LLM, und das LLM ruft `compose` mit `kind: "drums"` auf.
 3. Von hier an ist es derselbe Weg wie in Ablauf 1, nur in-process.
 4. Destruktive Änderungen fragt die Seite mit „Apply / Cancel“ ab.
 
