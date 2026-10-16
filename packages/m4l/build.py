@@ -8,6 +8,8 @@ Devices:
   view (jweb shows the API's /ui page). MIDI passes through unchanged.
 - MidiBakery Generator / MidiBakery Transform (MIDI Tools, Live 12.2+): the
   composition engine in the clip view's Generate / Transform panels.
+- MidiBakery Reference Analyzer (Audio Effect): analyzes the reference song on its track
+  (sections, kick, energy per bar), shows the structure and sets locators.
 
 Patchers are generated here instead of hand-saved in Max, so they stay
 reviewable in git and every device shares one node helper (src/midibakery-node.js).
@@ -31,11 +33,13 @@ DIST = HERE / "dist"
 NODE_SCRIPT = "midibakery-node.js"
 # node.script entry files per device kind; each sets its mode and loads NODE_SCRIPT.
 NODE_ENTRIES = ("midibakery-chat.js", "midibakery-miditool.js")
-NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES)
+REFERENCE_FILES = ("midibakery-reference.js", "reference-analysis.js")  # the Reference device's node.script
+NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES)
 
 # Four-character device type codes, as found in Live's own device templates.
-DEVICE_TYPES = {"midi_effect": b"mmmm", "generator": b"nagg", "transformation": b"natt"}
+DEVICE_TYPES = {"midi_effect": b"mmmm", "audio_effect": b"aaaa", "generator": b"nagg", "transformation": b"natt"}
 INSTALL_DIRS = {
+    "audio_effect": Path("Presets/Audio Effects/Max Audio Effect/MidiBakery"),
     "midi_effect": Path("Presets/MIDI Effects/Max MIDI Effect/MidiBakery"),
     "generator": Path("MIDI Tools/Max Generators"),
     "transformation": Path("MIDI Tools/Max Transformations"),
@@ -427,8 +431,58 @@ def transform_device() -> dict[str, Any]:
     return p.to_json(kind="transformation", title="MidiBakery Transform", width=TOOL_WIDTH, height=TOOL_HEIGHT)
 
 
+REFERENCE_WIDTH, REFERENCE_HEIGHT = 700.0, 169.0
+
+
+def reference_device() -> dict[str, Any]:
+    """Layout (700 x 169): the view (sections and lanes) on the left, Analyze and Locators on the right.
+    Audio passes through: the device sits on the reference song's own audio track."""
+    p = Patcher()
+    plugin = p.obj("plugin~", 20, 20, inlets=2, outlets=["signal", "signal"], width=60)
+    plugout = p.obj("plugout~", 20, 60, inlets=2, outlets=["signal", "signal"], width=60)
+    p.connect(plugin, 0, plugout, 0)
+    p.connect(plugin, 1, plugout, 1)
+
+    code = (SRC / "reference.js").read_text(encoding="utf-8")
+    v8 = p.box("v8.codebox", (120, 140, 420, 300), inlets=1, outlets=["", ""], code=code, filename="none",
+               fontface=0, fontname="<Monospaced>", fontsize=10.0)
+    node = p.obj("node.script midibakery-reference.js @autostart 1 @watch 0", 120, 480, outlets=["", ""], width=320)
+    p.connect(v8, 0, node)
+    p.connect(node, 0, v8)
+    # The Live API answers once the device is in place: init a moment after live.thisdevice.
+    this_device = p.obj("live.thisdevice", 120, 20, outlets=["bang", "int", "int"], width=90)
+    later = p.obj("deferlow", 120, 50, width=60)
+    init = p.message("init", 120, 80)
+    p.connect(this_device, 0, later)
+    p.connect(later, 0, init)
+    p.connect(init, 0, v8)
+
+    view_rect = (0, 0, 600, REFERENCE_HEIGHT)
+    view_code = (SRC / "reference-view.js").read_text(encoding="utf-8")
+    view = p.box("v8ui", (560, 140, view_rect[2], view_rect[3]), inlets=1, outlets=[""], presentation=view_rect,
+                 filename="none", parameter_enable=0,
+                 textfile={"text": view_code, "filename": "none", "flags": 0, "embed": 1, "autowatch": 0})
+    p.connect(v8, 1, view)
+
+    buttons = (("Analyze", "analyze"), ("Set Locators", "locators"), ("Remove Locators", "unlocators"))
+    for i, (label, message) in enumerate(buttons):
+        button = p.parameter("live.text", (300 + 90 * i, 20, 80, 18), (606, 6 + 24 * i, 90, 20), name=label, short=label,
+                             ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
+        p.boxes[-1]["box"].update({"mode": 0, "text": label, "texton": label})
+        _on_press(p, button, message, v8, 300 + 90 * i, 50)
+    genre = _menu(p, (600, 20, 110, 15), (606, 80, 90, 18), "Genre", "Genre",
+                  ["Auto", "House", "Melodic Techno", "Peak Time Techno", "Drum & Bass", "Trap"], 0)
+    to_v8 = p.obj("prepend genre", 600, 50, width=90)
+    p.connect(genre, 0, to_v8)
+    p.connect(to_v8, 0, v8)
+    p.comment("Locators land on the Arrangement's grid: zoom in to 1 bar.",
+              (300, 110, 200, 60), presentation=(606, 104, 90, 64), linecount=5, fontsize=9.0, textcolor=[0.55, 0.55, 0.55, 1.0])
+    return p.to_json(kind="audio_effect", title="MidiBakery Reference Analyzer", width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
+
+
 DEVICES = {
     "MidiBakery Chat": ("midi_effect", chat_device),
+    "MidiBakery Reference Analyzer": ("audio_effect", reference_device),
     "MidiBakery Generator": ("generator", generator_device),
     "MidiBakery Transform": ("transformation", transform_device),
 }
@@ -480,7 +534,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.install:
         for path in install(paths, args.library or user_library()):
             print(f"installed {path}")
-        print("In Live: Chat is under Max for Live > Max MIDI Effect; Generator/Transform in the clip view's Generate/Transform panels.")
+        print("In Live: Chat is under Max for Live > Max MIDI Effect, Reference Analyzer under Max Audio Effect;"
+              " Generator/Transform in the clip view's Generate/Transform panels.")
     return 0
 
 

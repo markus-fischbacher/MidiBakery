@@ -10,7 +10,7 @@ See [docs/KONZEPT.md](docs/KONZEPT.md) for the concept and roadmap, and [docs/AR
 |---|---|
 | `packages/core` | `midibakery` Python package: op catalog, bridge client, composition engine (`compose/`), agent loop (`agent/`), local API for Max for Live (`api/`), MCP server, CLI |
 | `packages/remote_script/MidiBakery` | Remote Script loaded by Live (stdlib only, Python 3.11) |
-| `packages/m4l` | Max for Live devices: build script and sources (chat device, MIDI Tools) |
+| `packages/m4l` | Max for Live devices: build script and sources (chat device, MIDI Tools, reference analysis) |
 | `tests/` | Contract tests: real Remote Script + fake Live Object Model over a real socket |
 
 ## Development
@@ -52,6 +52,15 @@ Live does not see your shell's environment; that is why the Claude key lives in 
 - **MidiBakery Generator / Transform** (clip view, Generate / Transform panels, Live 12.2+): the composition
   engine on the selected time range, in the clip's scale. MIDI Tools must answer synchronously, so the first
   apply shows "Working..." and the result follows a moment later in the same apply cycle.
+- **MidiBakery Reference Analyzer** (Max for Live > Max Audio Effect > MidiBakery): put it on an audio track that holds a
+  reference song in the Arrangement and press *Analyze*. A warped clip is analyzed on Live's bars; an unwarped one
+  gets its tempo detected and is analyzed on its own bars, with locators at the matching times. The *Genre* menu
+  (Auto, or one of plan_song's genres) sets the section names (e.g. Lift/Peak for Peak Time Techno), the phrase
+  length (16 bars for Drum & Bass) and settles half or double time. It shows the sections
+  (intro, build, drop, break, outro), key, tempo and per-bar lanes for kick, lows, mids and hats; *Set Locators*
+  sets Arrangement locators at the sections, *Remove Locators* removes all locators within the clip. Runs fully inside Live (Node for Max; decoding via macOS
+  `afconvert`, elsewhere WAV only). Results land in `references/` of the MidiBakery folder, where the MCP
+  tool `get_reference` reads them.
 
 ### Claude Code / Claude Desktop
 

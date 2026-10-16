@@ -130,7 +130,7 @@ def test_node_scripts_ship_next_to_every_device(devices, tmp_path):
 def test_each_device_starts_the_node_entry_for_its_mode(devices):
     """Node for Max does not pass script arguments in process.argv, so the mode comes from the entry file."""
     expected = {"MidiBakery Chat": "midibakery-chat.js", "MidiBakery Generator": "midibakery-miditool.js",
-                "MidiBakery Transform": "midibakery-miditool.js"}
+                "MidiBakery Transform": "midibakery-miditool.js", "MidiBakery Reference Analyzer": "midibakery-reference.js"}
     for name, path in devices.items():
         _, patcher = build.read_amxd(path)
         scripts = [b.get("text", "") for b in _boxes(patcher).values() if b.get("text", "").startswith("node.script")]
@@ -143,7 +143,8 @@ def test_javascript_parses(devices, tmp_path):
     _, patcher = build.read_amxd(devices["MidiBakery Generator"])
     code = next(b["code"] for b in _boxes(patcher).values() if b["maxclass"] == "v8.codebox")
     (tmp_path / "miditool.js").write_text(code)
-    for file in (tmp_path / "miditool.js", *(build.SRC / n for n in build.NODE_FILES)):
+    sources = [build.SRC / n for n in (*build.NODE_FILES, "reference.js", "reference-view.js")]
+    for file in (tmp_path / "miditool.js", *sources):
         result = subprocess.run([node, "--check", str(file)], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
 
@@ -175,6 +176,7 @@ def test_patcher_and_project_have_every_key_lives_templates_have(devices):
     """Max dereferences these keys while loading; a missing project.searchpath crashed Live 12.4.6."""
     templates = {
         "midi_effect": LIVE_TEMPLATES / "Max Devices/Max MIDI Effect.amxd",
+        "audio_effect": LIVE_TEMPLATES / "Max Devices/Max Audio Effect.amxd",
         "generator": LIVE_TEMPLATES / "Max MIDI Tools/Max MIDI Generator.amxd",
         "transformation": LIVE_TEMPLATES / "Max MIDI Tools/Max MIDI Transformation.amxd",
     }
@@ -186,3 +188,25 @@ def test_patcher_and_project_have_every_key_lives_templates_have(devices):
         assert not missing, (name, sorted(missing))
         missing_project = set(template["patcher"]["project"]) - set(ours["patcher"]["project"])
         assert not missing_project, (name, sorted(missing_project))
+
+
+def test_reference_device_passes_audio_and_embeds_its_code(devices):
+    kind, patcher = build.read_amxd(devices["MidiBakery Reference Analyzer"])
+    assert kind == b"aaaa"
+    boxes = _boxes(patcher)
+    by_text = {b.get("text"): i for i, b in boxes.items()}
+    lines = {(tuple(l["patchline"]["source"]), tuple(l["patchline"]["destination"])) for l in patcher["patcher"]["lines"]}
+    plugin, plugout = by_text["plugin~"], by_text["plugout~"]
+    assert ((plugin, 0), (plugout, 0)) in lines and ((plugin, 1), (plugout, 1)) in lines
+    view = next(b for b in boxes.values() if b["maxclass"] == "v8ui")
+    assert view["textfile"]["embed"] == 1 and "function paint()" in view["textfile"]["text"]
+    code = next(b for b in boxes.values() if b["maxclass"] == "v8.codebox")["code"]
+    assert "set_or_delete_cue" in code and "warp_markers" in code and "function unlocators()" in code
+    labels = sorted(b["text"] for b in boxes.values() if b["maxclass"] == "live.text")
+    assert labels == ["Analyze", "Remove Locators", "Set Locators"]
+    menu = next(b for b in boxes.values() if b["maxclass"] == "live.menu")
+    assert menu["saved_attribute_attributes"]["valueof"]["parameter_enum"][0] == "Auto"
+    to_v8 = by_text["prepend genre"]
+    assert ((next(i for i, b in boxes.items() if b is menu), 0), (to_v8, 0)) in lines
+    assert all(b["presentation_rect"][0] + b["presentation_rect"][2] <= build.REFERENCE_WIDTH
+               for b in boxes.values() if b.get("presentation"))
