@@ -12,6 +12,9 @@ its cutoff with `sweeps`, in Hz and in the segment syntax of the parts: "20:8,20
 holds 20 Hz for 8 bars, then sweeps to 300 Hz. A filtered role without a sweep
 stays open (Low-pass 20 kHz, High-pass 20 Hz). "300>8000~exp" curves (slow start; ~log:
 fast start), "400>3000~sine/2" swings between the two every 2 bars (also triangle, saw, square).
+"chords.res" rides the same Auto Filter's resonance in % ("0>40~exp"); a role with a resonance
+ride anywhere gets 0 % where a section has none. `throws`: in the named section kinds the role's
+send to the Delay return jumps up on the last beat of every 8 bars.
 
 Mix: a style's `mix` sets the faders of new tracks and the sends to a Reverb and a
 Delay return, in dB as Live shows them; a role without a send stays dry.
@@ -86,6 +89,7 @@ class Style:
     sounds: dict[str, tuple[str, ...]] = field(default_factory=dict)  # role -> browser path loaded onto a new track
     filters: dict[str, str] = field(default_factory=dict)  # role -> Auto Filter type ("Low-pass", "High-pass") for sweeps
     mix: Mix = field(default_factory=Mix)
+    throws: dict[str, tuple[str, ...]] = field(default_factory=dict)  # role -> section kinds with delay throws
     # Scale degrees (0 = tonic) of typical loops, diatonic in the song's scale; by its third.
     progressions: dict[str, tuple[tuple[int, ...], ...]] = field(default_factory=lambda: dict(EDM_PROGRESSIONS))
 
@@ -155,15 +159,15 @@ TEMPLATES: dict[str, Template] = {
         124, lead_range=(72, 89),
         sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic FM House Bass.adg", chords="Synth Keys/106 Organ.adg", lead="Synth Keys/Basic Pluck Keys.adg"),
         mix=_mix("-6,-8,-12,-11", "-24,-,-14,-16", "-,-,-22,-18", decay=1.8, delay_16ths=3, feedback=0.35),
-        filters={"drums": "High-pass", "chords": "Low-pass"},
+        filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",)},
     ), (
-        _s("Intro", "intro", 16, 0.4, fill=True, drums="kick_hats:8,groove", chords="-:8,pad", sweeps={"chords": "-:8,400>6000"}),
+        _s("Intro", "intro", 16, 0.4, fill=True, drums="kick_hats:8,groove", chords="-:8,pad", sweeps={"chords": "-:8,150>20000~exp"}),
         _s("Build", "build", 8, 0.6, fill=True, rest=1.0, drums="no_kick", chords="stabs", lead="tease", sweeps={"drums": "20>400"}),
         _s("Drop", "drop", 32, 0.9, drums="full", bass="on", chords="stabs", lead="hook"),
-        _s("Break", "break", 16, 0.4, fill=True, drums="sparse", chords="pad", lead="tease", sweeps={"drums": "150", "chords": "500>5000"}),
+        _s("Break", "break", 16, 0.4, fill=True, drums="sparse", chords="pad", lead="tease", sweeps={"drums": "150", "chords": "200>20000~exp", "chords.res": "5>40~exp"}),
         _s("Build 2", "build", 8, 0.7, fill=True, rest=1.0, drums="no_kick", chords="stabs", lead="tease", sweeps={"drums": "20>500"}),
         _s("Drop 2", "drop", 32, 1.0, variation=1, drums="full", bass="on", chords="stabs", lead="hook"),
-        _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8", sweeps={"chords": "20000>600:8"}),
+        _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8", sweeps={"chords": "20000>150:8"}),
     )),
     # docs/GENRES.md, Melodic Techno: kick/hats/pad intro, bass and pads build, arp lead, pads-only breakdown.
     "melodic_techno": Template("melodic_techno", "Melodic Techno", Style(
@@ -171,18 +175,18 @@ TEMPLATES: dict[str, Template] = {
         sounds=_sounds(_kit("Electronic", "AG Techno Kit"), bass="Bass/Analogue Bass.adv", chords="Pad/Analog Soft Pad.adv", lead="Synth Lead/Basic Waves Lead.adg", riser="Effects/Hyper Riser.adg"),
         mix=_mix("-6,-8,-13,-12", "-26,-,-8,-12", "-,-,-20,-12", decay=4.5, delay_16ths=3, feedback=0.45),
         progressions=MELODIC_PROGRESSIONS, devices={"lead": "Wavetable", "chords": "Wavetable", "bass": "Drift"},
-        filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
+        filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"}, throws={"lead": ("break",)},
     ), (
         # Sweeps: slow openings on pads and arp (the genre's long builds), a high-pass on the drums
         # before the climax, the pads close in the outro.
-        _s("Intro", "intro", 16, 0.3, fill=True, drums="kick_hats:8,groove", chords="pad", sweeps={"chords": "300>3000"}),
+        _s("Intro", "intro", 16, 0.3, fill=True, drums="kick_hats:8,groove", chords="pad", sweeps={"chords": "150>3000"}),
         _s("Build", "build", 16, 0.5, fill=True, drums="groove", bass="on", chords="pad", lead="-:8,tease",
-           sweeps={"drums": "20:12,20>200", "chords": "3000>12000", "lead": "-:8,500>2000"}),
+           sweeps={"drums": "20:12,20>200", "chords": "3000>20000~exp", "chords.res": "10>35", "lead": "-:8,500>2000"}),
         _s("Drop", "drop", 32, 0.9, drums="full", bass="on", chords="pad", lead="arp", sweeps={"lead": "800>6000:16,6000>3000"}),
-        _s("Breakdown", "break", 16, 0.4, chords="pad", lead="tease", sweeps={"chords": "400>8000", "lead": "600>2500"}),
+        _s("Breakdown", "break", 16, 0.4, chords="pad", lead="tease", sweeps={"chords": "150>8000~exp", "lead": "600>2500"}),
         _s("Build 2", "build", 8, 0.7, fill=True, rest=1.0, drums="no_kick", chords="pad", lead="tease", sweeps={"drums": "20>350", "lead": "2500>10000"}),
         _s("Climax", "drop", 32, 1.0, variation=1, drums="full", bass="on", chords="pad", lead="arp", sweeps={"lead": "2000>12000"}),
-        _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8", sweeps={"chords": "12000>500:8"}),
+        _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8", sweeps={"chords": "12000>150:8"}),
     )),
     # docs/GENRES.md, Peak-Time Techno, combined from three reference tracks (Spektre remix, Katoff,
     # T78; 128 BPM, 224 bars = 7:00): tension by taking things away. Before each big drop the bass
@@ -194,22 +198,22 @@ TEMPLATES: dict[str, Template] = {
         sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic Sub Boom.adg", chords="Pad/Butter Knife Stab.adg", lead="Bass/Basic 303 Bass.adg", riser="Effects/Hyper Riser.adg"),
         mix=_mix("-5,-9,-12,-12", "-24,-,-12,-20", "-,-,-16,-16", decay=2.5, delay_16ths=3, feedback=0.4),
         progressions=DRONE_PROGRESSIONS, devices={"lead": "Drift", "chords": "Wavetable", "bass": "Analog"},
-        filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
+        filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"}, throws={"chords": ("groove", "break")},
     ), (
         # Sweeps: the drums' high-pass thins the kick out before each peak and lets it slam back in;
         # the acid opens over a peak and closes a little, chords open out of the breakdown.
         _s("Intro", "intro", 32, 0.4, fill=True, drums="kick_hats:16,groove", bass="-:16,on"),
         _s("Groove", "groove", 16, 0.6, fill=True, pause=8, drums="groove", bass="on", chords="accent"),
         _s("Lift", "build", 16, 0.7, fill=True, rest=1.0, drums="groove:12,sparse", chords="tease:8,stabs", lead="-:8,tease",
-           sweeps={"drums": "20:8,20>300", "chords": "500>8000", "lead": "600>2500"}),
+           sweeps={"drums": "20:8,20>300", "chords": "200>20000~exp", "chords.res": "0>50~exp", "lead": "600>2500"}),
         _s("Peak", "drop", 32, 0.9, fill=True, pause=16, drums="full", bass="on", chords="stabs", lead="acid",
-           sweeps={"lead": "400>5000:24,5000>1500"}),
+           sweeps={"lead": "400>5000:24,5000>1500", "lead.res": "20>60:24,60>30"}),
         _s("Breakdown", "break", 24, 0.5, drums="sparse:8", bass="rumble:16", chords="tease:8,stabs:2,-:2,stabs:2,-:2,stabs:6", lead="-:16,tease:6",
-           sweeps={"drums": "250", "chords": "300>9000", "lead": "800>3000"}),
+           sweeps={"drums": "250", "chords": "150>9000~exp", "lead": "800>3000"}),
         _s("Peak 2", "drop", 32, 1.0, variation=1, fill=True, pause=16, drums="drive:8,full", bass="on", chords="stabs", lead="acid",
-           sweeps={"lead": "800>8000:16,8000>2000"}),
+           sweeps={"lead": "800>8000:16,8000>2000", "lead.res": "30>70:16,70>40"}),
         _s("Lift 2", "build", 8, 0.8, variation=1, fill=True, rest=1.0, drums="groove:5,sparse", chords="stabs", lead="acid",
-           sweeps={"drums": "20>400", "lead": "2000>12000"}),
+           sweeps={"drums": "20>400", "lead": "2000>12000", "lead.res": "40>75"}),
         _s("Peak 3", "drop", 16, 1.0, variation=2, drums="full", bass="on", chords="stabs", lead="acid",
            sweeps={"lead": "6000>3000"}),
         _s("Stripped", "groove", 8, 0.6, variation=1, drums="kick_only:6", bass="on:6"),
@@ -222,14 +226,15 @@ TEMPLATES: dict[str, Template] = {
         sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead="Synth Lead/Basic Glide Lead.adg", riser="Effects/ENCOM Riser.adg"),
         mix=_mix("-5,-8,-13,-11", "-26,-,-10,-16", "-,-,-,-16", decay=2.0, delay_16ths=3, feedback=0.3),
         progressions=DNB_PROGRESSIONS, devices={"bass": "Operator", "chords": "Wavetable", "lead": "Operator"},
+        filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",)},
     ), (
-        _s("Intro", "intro", 32, 0.3, fill=True, drums="kick_hats:16,groove", chords="pad"),
-        _s("Build", "build", 16, 0.6, drums="no_kick:12", chords="pad", lead="tease"),
+        _s("Intro", "intro", 32, 0.3, fill=True, drums="kick_hats:16,groove", chords="pad", sweeps={"chords": "200>20000~exp"}),
+        _s("Build", "build", 16, 0.6, drums="no_kick:12", chords="pad", lead="tease", sweeps={"drums": "20>500"}),
         _s("Drop", "drop", 64, 1.0, fill=True, drums="full", bass="on", chords="pad", lead="hook"),
-        _s("Breakdown", "break", 32, 0.4, chords="pad", lead="tease"),
-        _s("Build 2", "build", 16, 0.7, drums="no_kick:12", chords="pad", lead="tease"),
+        _s("Breakdown", "break", 32, 0.4, chords="pad", lead="tease", sweeps={"chords": "150>8000~exp", "chords.res": "0>35~exp"}),
+        _s("Build 2", "build", 16, 0.7, drums="no_kick:12", chords="pad", lead="tease", sweeps={"drums": "20>600", "chords": "8000>20000"}),
         _s("Drop 2", "drop", 64, 1.0, variation=1, fill=True, drums="full", bass="on", chords="pad", lead="hook"),
-        _s("Outro", "outro", 32, 0.3, drums="full:16,kick_hats", bass="on:8", chords="pad:16"),
+        _s("Outro", "outro", 32, 0.3, drums="full:16,kick_hats", bass="on:8", chords="pad:16", sweeps={"chords": "20000>150:16"}),
     )),
     # docs/GENRES.md, EDM Trap: short (2-3 min), half-time snare on beat 3, hat rolls, an 808 under the
     # kicks, plucks without the root, hook only in the drops, a beat of silence before each drop.
@@ -238,14 +243,15 @@ TEMPLATES: dict[str, Template] = {
         sounds=_sounds(_kit("Drum Machines", "808 Core Kit"), bass="Bass/808 Pure.adg", chords="Synth Keys/Basic Bell Keys.adg", lead="Synth Lead/Basic Sine Drive Lead.adg"),
         mix=_mix("-6,-7,-12,-11", "-28,-,-12,-16", "-,-,-18,-16", decay=2.2, delay_16ths=2, feedback=0.3),
         progressions=TRAP_PROGRESSIONS, devices={"bass": "Operator", "chords": "Drift", "lead": "Wavetable"},
+        filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",), "chords": ("verse",)},
     ), (
-        _s("Intro", "intro", 8, 0.3, chords="pad", lead="tease"),
-        _s("Build", "build", 8, 0.6, fill=True, rest=1.0, drums="sparse:4,no_kick", chords="pad", lead="tease"),
+        _s("Intro", "intro", 8, 0.3, chords="pad", lead="tease", sweeps={"chords": "200>20000~exp"}),
+        _s("Build", "build", 8, 0.6, fill=True, rest=1.0, drums="sparse:4,no_kick", chords="pad", lead="tease", sweeps={"drums": "20>300"}),
         _s("Drop", "drop", 16, 1.0, drums="full", bass="on", chords="stabs", lead="hook"),
         _s("Verse", "verse", 16, 0.6, fill=True, drums="groove", bass="on", chords="stabs"),
-        _s("Build 2", "build", 8, 0.7, fill=True, rest=1.0, drums="no_kick", chords="pad", lead="tease"),
+        _s("Build 2", "build", 8, 0.7, fill=True, rest=1.0, drums="no_kick", chords="pad", lead="tease", sweeps={"drums": "20>400"}),
         _s("Drop 2", "drop", 32, 1.0, variation=1, drums="full", bass="on", chords="stabs", lead="hook"),
-        _s("Outro", "outro", 8, 0.3, chords="pad", lead="tease"),
+        _s("Outro", "outro", 8, 0.3, chords="pad", lead="tease", sweeps={"chords": "20000>150"}),
     )),
 }
 

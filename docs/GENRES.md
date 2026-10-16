@@ -87,12 +87,12 @@ Familie aus Mainstream-, Deep- und Tech-House. Deep House ist langsamer und jazz
 
 | Abschnitt | Drums (High-pass) | Chords (Low-pass) |
 |---|---|---|
-| Intro | offen | ab Takt 9: 400 Hz → 6 kHz |
+| Intro | offen | ab Takt 9: 150 Hz → 20 kHz, öffnet spät |
 | Build, Build 2 | 20 → 400 Hz bzw. 500 Hz | offen |
-| Break | 150 Hz, dünn | 500 Hz → 5 kHz |
-| Outro | offen (Kick bleibt für den DJ) | 20 kHz → 600 Hz in 8 Takten |
+| Break | 150 Hz, dünn | 200 Hz → 20 kHz, öffnet spät |
+| Outro | offen (Kick bleibt für den DJ) | 20 kHz → 150 Hz in 8 Takten |
 
-Die Drops sind offen.
+Die Drops sind offen. Im Break steigt die Resonanz der Chords mit dem Cutoff von 5 auf 40 %. Delay-Throws: Im Drop wirft der Lead auf der letzten Zählzeit jedes 8. Takts ins Delay.
 
 **Quellen:** Ableton Learning Music (Tempo); EDMProd „Classic Deep House“; Native Instruments „Deep House Track“; Attack Magazine Beat Dissected (Soulful Deep House, Deep Tech House, Chugging Tech House, Dusted Deep House); Attack Passing Notes (Deep House Chords); Attack Deconstructed (Tiga „Bugatti“); Mixed In Key (Arrangement); Mixgraph (Intro, Riser); Loopmasters (Tech House Beat & Bass); The Producer School und Boombox (Tech-House-Basslines); Mode Audio (Deep House Chords); MusicRadar (m9-Akkorde, Hooks); EDMProd (Call and Response); Violet Recording (House); Foren: Gearspace, Elektronauts, KVR, DJTechTools (schwächer belegt).
 
@@ -140,13 +140,15 @@ Melodic Techno (etwa Afterlife: Anyma, ARTBAT, Stephan Bodzin) ist langsamer und
 
 | Abschnitt | Drums (High-pass) | Pads (Low-pass) | Arp (Low-pass) |
 |---|---|---|---|
-| Intro | offen | 300 Hz → 3 kHz | – |
-| Build | 12 Takte offen, dann 20 → 200 Hz | 3 → 12 kHz | ab Takt 9: 500 Hz → 2 kHz |
+| Intro | offen | 150 Hz → 3 kHz | – |
+| Build | 12 Takte offen, dann 20 → 200 Hz | 3 → 20 kHz, öffnet spät | ab Takt 9: 500 Hz → 2 kHz |
 | Drop | offen | offen | 800 Hz → 6 kHz in 16 Takten, zurück auf 3 kHz |
-| Breakdown | – | 400 Hz → 8 kHz | 600 Hz → 2,5 kHz |
+| Breakdown | – | 150 Hz → 8 kHz, öffnet spät | 600 Hz → 2,5 kHz |
 | Build 2 | 20 → 350 Hz | offen | 2,5 → 10 kHz |
 | Climax | offen | offen | 2 → 12 kHz |
-| Outro | offen | 12 kHz → 500 Hz in 8 Takten | – |
+| Outro | offen | 12 kHz → 150 Hz in 8 Takten | – |
+
+Im Build steigt die Resonanz der Pads von 10 auf 35 %. Delay-Throws: Im Breakdown wirft das Arp auf der letzten Zählzeit jedes 8. Takts ins Delay.
 
 **Quellen:** Beatportal (Melodic House & Techno: Anyma, Miss Monique, ARTBAT, Stephan Bodzin); Native Instruments (Melodic Techno); Attack Magazine (Deep Melodic/Progressive Techno).
 
@@ -208,12 +210,14 @@ In den Referenzen wird die Kick oft herausgefiltert, statt hart zu enden. Die En
 
 | Abschnitt | Drums (High-pass) | Chords (Low-pass) | Lead (Low-pass) |
 |---|---|---|---|
-| Lift | 8 Takte offen, dann 20 → 300 Hz | 500 Hz → 8 kHz | 600 Hz → 2,5 kHz |
+| Lift | 8 Takte offen, dann 20 → 300 Hz | 200 Hz → 20 kHz, öffnet spät | 600 Hz → 2,5 kHz |
 | Peak | offen: die Kick ist sofort voll da | offen | 400 Hz → 5 kHz in 24 Takten, zurück auf 1,5 kHz |
-| Breakdown | 250 Hz, dünn | 300 Hz → 9 kHz | 800 Hz → 3 kHz |
+| Breakdown | 250 Hz, dünn | 150 Hz → 9 kHz, öffnet spät | 800 Hz → 3 kHz |
 | Peak 2 | offen | offen | 800 Hz → 8 kHz in 16 Takten, zurück auf 2 kHz |
 | Lift 2 | 20 → 400 Hz | offen | 2 → 12 kHz |
 | Peak 3 | offen | offen | 6 → 3 kHz |
+
+Resonanz: Im Lift steigt sie bei den Chords von 0 auf 50 %. Die Acid-Line wird in den Peaks spitzer (Peak 20 → 60 % in 24 Takten, zurück auf 30 %; Peak 2 30 → 70 %, zurück auf 40 %; Lift 2 40 → 75 %). Delay-Throws: Die Chords werfen in Groove und Breakdown auf der letzten Zählzeit jedes 8. Takts ins Delay.
 
 Jeder Clip einer gefilterten Spur bekommt eine Hüllkurve, auch wenn sie nur „offen“ ist. So bleibt kein Filter aus dem vorigen Abschnitt hängen.
 
@@ -343,6 +347,18 @@ Drei Spielarten:
 - Bell- oder Pluck-Leads: Simpler oder Operator.
 - Breaks: Simpler im Slice-Modus.
 
+**Filterfahrten** (Auto Filter, Clip-Automation)
+
+| Abschnitt | Drums (High-pass) | Chords (Low-pass) |
+|---|---|---|
+| Intro | offen | 200 Hz → 20 kHz, öffnet spät |
+| Build | 20 → 500 Hz | offen |
+| Breakdown | – | 150 Hz → 8 kHz, öffnet spät; Resonanz 0 → 35 % |
+| Build 2 | 20 → 600 Hz | 8 → 20 kHz |
+| Outro | offen | 20 kHz → 150 Hz in 16 Takten |
+
+Delay-Throws: Im Drop wirft der Lead auf der letzten Zählzeit jedes 8. Takts ins Delay.
+
 **Quellen:** KAN Samples (DnB Drums, Arrangement, Chord Progressions); DnB Academy (Drum Patterns, BPM & Structure); EDMProd (How to Make DnB, Liquid DnB); Attack Magazine (Raw DnB, Incessant DnB Beat, Reese Bass Redux); Unison (DnB Drum Patterns, How to Make DnB); Violet Recording (DnB); Beatportal (Sub Focus / Delta Heavy); iZotope (Basslines); Beat Kitchen (Swing); MusicRadar (Liquid Chords, nur Ausschnitt); Foren: DnB Forum, DJTechTools (schwächer belegt).
 
 ---
@@ -402,6 +418,16 @@ Festival-Trap, nicht Hip-Hop-Trap, mit denselben Wurzeln. Die Quellenlage ist d�
 - Pads: Drift oder Wavetable.
 - Vocal-Chops: Simpler.
 
+**Filterfahrten** (Auto Filter, Clip-Automation)
+
+| Abschnitt | Drums (High-pass) | Chords (Low-pass) |
+|---|---|---|
+| Intro | offen | 200 Hz → 20 kHz, öffnet spät |
+| Build, Build 2 | 20 → 300 Hz bzw. 400 Hz | offen |
+| Outro | offen | 20 kHz → 150 Hz |
+
+Delay-Throws: Der Lead wirft im Drop, die Chords im Verse, jeweils auf der letzten Zählzeit jedes 8. Takts.
+
 **Quellen:** Future Proof Music School (Festival Trap, Trap Beat in 10 Minutes, Genre Explorer); EDMProd (How to Make Trap); Cymatics (How to Make Trap); eMastered (Trap Drum Patterns, Trap Chord Progressions); Violet Recording (Trap Beats, 808 Patterns); Loopmasters (Top 10 Trap Tips); RouteNote (Build-ups, Drops); UJAM (Swells & Brass Stabs); Native Instruments (Hip-Hop Chord Progressions).
 
 ---
@@ -422,13 +448,14 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 | Struktur | Vorlagen nach den Rezepten, Längen Radio/Standard/Extended oder Minuten |
 | Sounds | Neue Spuren bekommen Kit und Presets des Genres aus der Core Library; die Drum-Noten landen auf den Pads des Kits |
 | Mix | Ein Reverb- und ein Delay-Return (vorhandene nutzt der Song), Fader-Pegel und Sends pro Rolle für neue Spuren; vorhandene Spuren behalten ihren Fader und senden nur in neue Returns. Nachhall und Delay-Zeit pro Genre, z. B. Melodic Techno 4,5 s, House 1,8 s |
+| Automation | Auto-Filter-Fahrten pro Clip in allen Genres, dazu Resonanz-Fahrten (Acid in Peak-Time, Pads in Breaks und Builds). Delay-Throws: Der Send einer Rolle springt auf der letzten Zählzeit jedes 8. Takts auf -4 dB und fällt danach auf seinen Pegel zurück |
 | FX | Ein Riser füllt die letzten Takte (höchstens 8) vor jedem Drop, der auf einen anderen Abschnitt folgt, und endet an der Pause davor; Lautstärke und Filter-Makro steigen exponentiell. Ein Impact (Sub 808 Pitch Boom) trifft die Eins des Drops. Riser-Presets: House und Trap Riser Basic, Melodic und Peak-Time Hyper Riser, D&B ENCOM Riser |
 
 **Noch offen**
 
 | Thema | Warum |
 |---|---|
-| Sidechain, Filterfahrten in anderen Genres | Filterfahrten gibt es in House, Melodic und Peak-Time Techno; Sidechain braucht Routing |
+| Sidechain | braucht Routing zur Kick |
 | Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr; Referenztracks (Abschnitte und Elemente eines Songs, der gefällt) sind als nächster Schritt dafür gedacht |
 | Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
 | Andere Taktarten | die Grooves sind 16-Schritt-Takte; `plan_song` braucht deshalb 4/4 und meldet das sonst |
@@ -437,5 +464,5 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 
 - **Lead-Dichte und Stab-Länge** nennen die Quellen kaum in Zahlen. Die Werte oben sind Konventionen (○) und gehören nach Gehör justiert.
 - **Notenraster aus Attacks „Beat Dissected“** liegen nur als Bilder vor. Die Schrittpositionen stammen aus den Texten und aus anderen Quellen.
-- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an. Filterfahrten schreibt sie als Clip-Automation eines Auto Filters (House, Melodic und Peak-Time Techno), Riser als Preset mit Hüllkurven auf Lautstärke und Filter-Makro.
+- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an. Filterfahrten und Resonanz schreibt sie als Clip-Automation eines Auto Filters, Delay-Throws als Send-Automation, Riser als Preset mit Hüllkurven auf Lautstärke und Filter-Makro.
 - **Breaks und Samples** (Amen, Vocal-Chops, 808-Samples) kann Lives API nicht laden.
