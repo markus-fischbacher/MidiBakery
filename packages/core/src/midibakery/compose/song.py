@@ -48,14 +48,16 @@ from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
-from midibakery.compose.structures import ROLES, TEMPLATES, Mix, Section, Template, parse_segments, sized
+from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
-NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator"}
+NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator"}
 ROLE_WORDS = {
     "bass": ("bass", "sub", "808"),
     "chords": ("chord", "pad", "keys", "piano", "stab"),
     "lead": ("lead", "melody", "synth", "arp", "pluck"),
+    "riser": ("riser", "uplift"),
+    "impact": ("impact", "boom"),
 }
 PHRASE = 8  # bars
 FILTER_TYPES = {"Low-pass": 0, "High-pass": 1}  # Auto Filter (Live 12) "Filter Type" values
@@ -78,13 +80,14 @@ class SongRequest(BaseModel):
     length: Literal["radio", "standard", "extended"] = "standard"
     minutes: Annotated[float, Field(ge=0.5, le=20, description="Target duration; overrides length")] | None = None
     start_bar: Annotated[int, Field(ge=1, description="Arrangement bar to start at (default: after the last clip)")] | None = None
-    roles: dict[Literal["drums", "bass", "chords", "lead"], Annotated[int, Field(ge=0)]] = Field(
+    roles: dict[Literal["drums", "bass", "chords", "lead", "riser", "impact"], Annotated[int, Field(ge=0)]] = Field(
         default_factory=dict, description="Role -> track index; others are found by Drum Rack or track name"
     )
     clips: list[UseClip] = Field(default_factory=list, description="Session clips to use for a role instead of generating it")
     create_missing: bool = Field(True, description="New tracks for roles no track has")
     sounds: bool = Field(True, description="New tracks get the genre's kit and presets; false: empty Drum Rack and native synths")
     mix: bool = Field(True, description="Reverb and Delay returns, sends and fader levels for new tracks")
+    fx: bool = Field(True, description="A riser before each drop and an impact on its first beat (needs sounds)")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174)")
     seed: Annotated[int, Field(ge=0)] | None = None
@@ -135,6 +138,7 @@ class SongPlan:
     mix: Mix | None = None
     returns: dict[str, ReturnPlan] = field(default_factory=dict)
     return_identity: tuple = ()
+    fx: dict[str, dict[str, str]] = field(default_factory=dict)  # section name -> FX role -> what plays
 
     def mix_info(self) -> dict[str, Any]:
         if self.mix is None:
@@ -193,7 +197,7 @@ class SongPlan:
                 "bar": int(start / bpb) + 1,
                 "bars": section.bars,
                 "energy": section.energy,
-                "plays": {role: part for role, part in section.parts.items() if role in self.roles},
+                "plays": {**{role: part for role, part in section.parts.items() if role in self.roles}, **self.fx.get(section.name, {})},
             })
         return {
             "plan_id": self.id,
@@ -324,7 +328,14 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
         if clip.role not in roles:
             roles[clip.role] = RoleTrack(clip.role, clip.track, session.track(clip.track).get("name", ""))
             used.add(clip.track)
-    for role in ROLES:
+    template = TEMPLATES[request.genre]
+    wanted: tuple[str, ...] = ROLES
+    if request.fx and any(s.kind == "drop" for s in template.sections):
+        if request.sounds:
+            wanted += FX_ROLES
+        else:
+            warnings.append("No riser or impact: they need the genre's presets (sounds=false)")
+    for role in wanted:
         if role in roles:
             continue
         candidates = [t for t in tracks if t["index"] not in used and t.get("kind") == "midi"]
@@ -336,11 +347,10 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
         if match is not None:
             roles[role] = RoleTrack(role, match["index"], match.get("name", ""))
             used.add(match["index"])
-    missing = [r for r in ROLES if r not in roles]
+    missing = [r for r in wanted if r not in roles]
     if missing and not request.create_missing:
         warnings.append(f"No track for {', '.join(missing)}: those parts are left out (create_missing=false)")
         return roles, warnings
-    template = TEMPLATES[request.genre]
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     for offset, role in enumerate(missing):
         sound = template.style.sounds.get(role) if request.sounds else None
@@ -569,6 +579,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 envelope = _sweep(section.sweeps.get(role), section.bars, first, clip_length, bpb, OPEN_HZ[target.filter])
                 action["envelopes"] = [{"device": target.filter_device, "parameter": "Frequency", **envelope}]
             actions.append(action)
+    fx_plays = _fx(actions, counts, roles, sections, starts, bpb, scale, style.mix.volume.get("riser", -12.0))
     locators = [{"action": "set_locator", "time": at, "name": section.name} for section, at in zip(sections, starts)]
     if len(actions) > 256:
         raise BridgeError("INVALID_PARAMS", f"The song needs {len(actions)} clips; use a shorter length or fewer copied clips (max 256)")
@@ -582,7 +593,41 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         style.mix if request.mix else None,
         _plan_returns(mixer["returns"]) if request.mix else {},
         tuple(r.get("name") for r in mixer["returns"]),
+        fx_plays,
     )
+
+
+RISER_BARS = 8
+
+
+def _fx(actions: list[dict[str, Any]], counts: dict[str, int], roles: dict[str, RoleTrack], sections: tuple[Section, ...],
+        starts: list[float], bpb: float, scale: Scale, riser_db: float) -> dict[str, dict[str, str]]:
+    """A riser over the last bars before every drop that follows another kind of section, an impact
+    on the drop's first beat. The riser swells: volume from -30 dB and, on its preset, the Filter
+    Cutoff macro, both slow at first. Returns what plays per section, for the preview."""
+    plays: dict[str, dict[str, str]] = {}
+    for i, (section, at) in enumerate(zip(sections, starts)):
+        before = sections[i - 1] if i else None
+        after = sections[i + 1] if i + 1 < len(sections) else None
+        riser = roles.get("riser")
+        if riser is not None and after is not None and after.kind == "drop" and section.kind != "drop":
+            bars = min(RISER_BARS, section.bars)
+            length = bars * bpb - section.rest_beats
+            envelopes: list[dict[str, Any]] = [{"parameter": "Volume", "unit": "display", "shapes": [
+                {"type": "exp", "length": length, "from_value": -30.0, "to_value": riser_db}]}]
+            if riser.new and riser.sound is not None:
+                envelopes.append({"device": 0, "parameter": "Filter Cutoff", "shapes": [{"type": "exp", "length": length, "from_value": 0.15, "to_value": 1.0}]})
+            actions.append({"action": "add_clip", "track": riser.index, "start": at + (section.bars - bars) * bpb, "length": length,
+                            "name": f"{section.name} Riser", "notes": [Note(60 + scale.root, 0.0, length, 100).to_spec()], "envelopes": envelopes})
+            counts["riser"] += 1
+            plays.setdefault(section.name, {})["riser"] = f"last {bars} bars"
+        impact = roles.get("impact")
+        if impact is not None and section.kind == "drop" and before is not None and before.kind != "drop":
+            actions.append({"action": "add_clip", "track": impact.index, "start": at, "length": 2 * bpb, "name": f"{section.name} Impact",
+                            "notes": [Note(36 + scale.root, 0.0, bpb, 115).to_spec()]})
+            counts["impact"] += 1
+            plays.setdefault(section.name, {})["impact"] = "first beat"
+    return plays
 
 
 def _rumble(harmony: Harmony, meter: Meter, bars: int) -> list[Note]:
@@ -687,7 +732,11 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
             except BridgeError as exc:
                 if exc.code == "LIVE_ERROR" and exc.message.startswith("Live did not load"):
                     raise  # it may still land later: roll back rather than guess
-                warnings.append(f"{_sound_name(t.sound)} could not be loaded ({exc.message}); track index {t.index} keeps {t.device}")
+                if t.role in FX_ROLES:  # a sine instead of a riser: better none
+                    actions = [a for a in actions if a.get("track") != t.index]
+                    warnings.append(f"{_sound_name(t.sound)} could not be loaded ({exc.message}); track index {t.index} stays empty")
+                else:
+                    warnings.append(f"{_sound_name(t.sound)} could not be loaded ({exc.message}); track index {t.index} keeps {t.device}")
                 continue
             undo_steps += 1
             loaded.append(t)

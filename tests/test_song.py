@@ -33,7 +33,7 @@ def _studio(live):
 
 
 async def _plan(server, **args):
-    return _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, **args}))
+    return _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "fx": False, **args}))  # FX: test_fx_*
 
 
 async def test_house_song_on_found_and_new_tracks(client, live):
@@ -85,7 +85,7 @@ async def test_sounds_off_or_missing_keep_native_devices(client, live):
     assert preview["tracks"]["chords"]["device"] == "Wavetable" and "empty Drum Rack" in preview["warnings"][0]
     trap = _payload(await server.call_tool("plan_song", {"genre": "trap", "seed": 1}))  # its sounds are not in the fake browser
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": trap["plan_id"]}))
-    assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Wavetable"]
+    assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Wavetable", "Riser Basic", "Sub 808 Pitch Boom"]
     assert len(applied["warnings"]) == 4 and "808 Core Kit could not be loaded" in applied["warnings"][0]
 
 
@@ -144,6 +144,66 @@ async def test_the_sets_own_reverb_is_used_and_left_as_it_is(client, live):
     assert "mix" not in preview
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
     assert "mix" not in applied and len((await client.call("mixer.get", {}))["returns"]) == 2
+
+
+async def test_fx_riser_before_each_drop_and_an_impact_on_it(client, live):
+    _studio(live)
+    server = build_server(client)
+    preview = await _plan(server, fx=True)
+    plays = {s["name"]: s["plays"] for s in preview["sections"]}
+    assert plays["Build"]["riser"] == plays["Build 2"]["riser"] == "last 8 bars" and "riser" not in plays["Break"]
+    assert plays["Drop"]["impact"] == plays["Drop 2"]["impact"] == "first beat" and "impact" not in plays["Outro"]
+    assert preview["tracks"]["riser"]["device"] == "Riser Basic" and preview["tracks"]["impact"]["device"] == "Sub 808 Pitch Boom"
+    assert preview["mix"]["levels"]["riser"] == "fader -12 dB, reverb -12 dB, delay -22 dB"
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    assert "warnings" not in applied
+    tracks = {t["name"]: t["index"] for t in (await client.call("tracks.list", {}))["tracks"]}
+    arrangement = {t["index"]: t["clips"] for t in (await client.call("arrangement.get", {}))["tracks"]}
+    risers = [(c["name"], c["start"], c["end"]) for c in arrangement[tracks["House Riser"]]]
+    assert risers == [("Build Riser", 64.0, 95.0), ("Build 2 Riser", 288.0, 319.0)]  # up to the beat of silence
+    impacts = [(c["name"], c["start"]) for c in arrangement[tracks["House Impact"]]]
+    assert impacts == [("Drop Impact", 96.0), ("Drop 2 Impact", 320.0)]
+
+    def swell():
+        track = live.song.tracks[tracks["House Riser"]]
+        clip = sorted(track.arrangement_clips, key=lambda c: c.start_time)[0]
+        cutoff = clip.envelopes[id(track.devices[0].parameters[1])]  # the Filter Cutoff macro
+        volume = clip.envelopes[id(track.mixer_device.volume)]
+        return [cutoff.value_at_time(t) for t in (1, 16, 30)], [volume.value_at_time(t) for t in (1, 16, 30)]
+
+    cutoff, volume = live.on_main(swell)
+    assert cutoff[0] < 30 < cutoff[1] < cutoff[2] and cutoff[1] - cutoff[0] < cutoff[2] - cutoff[1]  # 0-127, slow first
+    assert volume[0] < volume[1] < volume[2]
+
+
+async def test_fx_need_their_presets(client, live):
+    server = build_server(client)
+    melodic = _payload(await server.call_tool("plan_song", {"genre": "melodic_techno", "seed": 2}))  # Hyper Riser: not in the fake browser
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": melodic["plan_id"]}))
+    assert any("Hyper Riser could not be loaded" in w and "stays empty" in w for w in applied["warnings"])
+    arrangement = {t["name"]: t["clips"] for t in (await client.call("arrangement.get", {}))["tracks"]}
+    assert arrangement["Melodic Techno Riser"] == [] and len(arrangement["Melodic Techno Impact"]) == 2
+    plain = await _plan(server, fx=True, sounds=False)
+    assert "riser" not in plain["tracks"] and any("No riser or impact" in w for w in plain["warnings"])
+
+
+async def test_fx_on_a_track_called_riser(client, live):
+    _studio(live)
+    await client.call("track.create", {"kind": "midi", "name": "Riser"})
+    server = build_server(client)
+    preview = await _plan(server, fx=True)
+    assert preview["tracks"]["riser"] == {"track": 2, "name": "Riser"}
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    assert [t["name"] for t in applied["new_tracks"]] == ["House Chords", "House Lead", "House Impact"]
+
+    def riser():
+        track = live.song.tracks[2]
+        clips = sorted(track.arrangement_clips, key=lambda c: c.start_time)
+        return [c.name for c in clips], [len(c.envelopes) for c in clips], track.mixer_device.volume.value
+
+    names, envelopes, fader = live.on_main(riser)
+    assert names == ["Build Riser", "Build 2 Riser"] and envelopes == [1, 1]  # its own sound: only the volume swells
+    assert fader == 0.85  # an existing track keeps its fader
 
 
 async def test_same_seed_same_song_and_variation_for_the_second_drop(client, live):
