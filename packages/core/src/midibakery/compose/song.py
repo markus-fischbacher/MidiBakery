@@ -341,7 +341,6 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         )
 
     for section, at in zip(sections, starts):
-        length = section.bars * bpb
         harmony: Harmony = (alt if section.kind == "break" else main).for_length(meter, section.bars)
         section_kick: list[float] | None = None
         for role in ROLES:
