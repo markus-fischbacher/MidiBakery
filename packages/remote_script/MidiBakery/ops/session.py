@@ -77,6 +77,8 @@ def transport(ctx, params):
         song.start_playing()
     elif action == "stop":
         song.stop_playing()
+    elif action == "stop_clips":
+        song.stop_all_clips()
     elif action == "continue":
         song.continue_playing()
     elif action == "toggle_record":

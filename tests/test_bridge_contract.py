@@ -269,3 +269,17 @@ def test_fake_lom_rejects_access_off_the_main_thread(live):
 
     with pytest.raises(OffMainThreadAccess):
         live.song.tempo
+
+
+async def test_stop_clips_stops_every_session_clip_and_keeps_the_transport(client, live):
+    await client.call("clip.create", {"track": 1, "slot": 6, "length": 4})
+    clip = live.on_main(lambda: live.song.tracks[1].clip_slots[6].clip)
+
+    def playing():
+        clip.is_playing = True
+        live.song.is_playing = True
+
+    live.on_main(playing)
+    result = await client.call("transport.control", {"action": "stop_clips"})
+    assert result["is_playing"]
+    assert not live.on_main(lambda: clip.is_playing)

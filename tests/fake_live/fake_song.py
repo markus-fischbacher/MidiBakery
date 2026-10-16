@@ -395,6 +395,10 @@ class Song(LiveObject):
     def stop_playing(self):
         self.is_playing = False
 
+    def stop_all_clips(self, quantized=True):
+        for track in self.tracks:
+            track.stop_all_clips(quantized)
+
     def continue_playing(self):
         self.is_playing = True
 

@@ -78,7 +78,7 @@ class SongSet(Params):
 
 
 class Transport(Params):
-    action: Literal["play", "stop", "continue", "toggle_record"]
+    action: Literal["play", "stop", "continue", "stop_clips", "toggle_record"] = Field(description="stop_clips = Stop All Clips in the Session View (quantized, transport keeps running)")
     from_beat: Beats | None = Field(None, description="Jump here before 'play'")
 
 
@@ -433,7 +433,7 @@ for spec in [
     OpSpec("live.health", Empty, "Bridge and Live version, supported ops", read_only=True, timeout=2.0),
     OpSpec("song.get", Empty, "Tempo, signature, scale, transport and loop state", read_only=True),
     OpSpec("song.set", SongSet, "Change tempo, signature, scale or loop settings", read_only=False),
-    OpSpec("transport.control", Transport, "Play, stop, continue or toggle arrangement record", read_only=False),
+    OpSpec("transport.control", Transport, "Play, stop, continue, stop all session clips or toggle arrangement record", read_only=False),
     OpSpec("tracks.list", Empty, "All tracks with mixer state, devices and clip slots", read_only=True),
     OpSpec("track.create", TrackCreate, "Create a MIDI or audio track", read_only=False),
     OpSpec("track.set", TrackSet, "Rename, recolor or change mixer state of a track", read_only=False),

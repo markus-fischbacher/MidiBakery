@@ -94,7 +94,7 @@ Runner = Callable[[dict[str, Any], Context | None], Awaitable[Any]]
 # (tool name, op, title); annotations come from the op spec.
 TOOL_OPS: list[tuple[str, str, str]] = [
     ("set_song", "song.set", "Set tempo, signature, scale or loop"),
-    ("transport", "transport.control", "Play / stop / record"),
+    ("transport", "transport.control", "Play / stop / stop all clips / record"),
     ("create_track", "track.create", "Create track"),
     ("update_track", "track.set", "Update track"),
     ("delete_track", "track.delete", "Delete track"),
