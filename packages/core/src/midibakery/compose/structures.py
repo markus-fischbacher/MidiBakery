@@ -56,15 +56,9 @@ TRAP_PROGRESSIONS = {"major": ((5, 3, 0, 4), (5, 4, 3, 4)), "minor": ((0, 5, 4, 
 
 @dataclass(frozen=True)
 class Style:
-    """How a genre plays its roles; values are the existing generators' styles."""
+    """What a genre sets beyond its grooves (grooves.py: drums, bass and chords, with their swing)."""
 
     tempo: float
-    drums: str
-    bass: str
-    chord_rhythm: str
-    break_chords: str = "sustain"
-    swing: float = 0.0
-    bass_octave: int = 1
     chords_per_bar: float = 1.0
     lead_range: tuple[int, int] = (64, 86)
     lead: str = "hook"  # "hook" (call/response), "arp" (Melodic Techno), "acid" (Peak-Time)
@@ -111,7 +105,7 @@ TEMPLATES: dict[str, Template] = {
     # Sweeps: the pads open out of the intro and the break, a high-pass lifts the drums in the
     # builds, the pads close again in the outro; the drops are open.
     "house": Template("house", "House", Style(
-        124, "house", "offbeat", "stabs", swing=0.6, lead_range=(72, 89),
+        124, lead_range=(72, 89),
         filters={"drums": "High-pass", "chords": "Low-pass"},
     ), (
         _s("Intro", "intro", 16, 0.4, fill=True, drums="kick_hats:8,groove", chords="-:8,pad", sweeps={"chords": "-:8,400>6000"}),
@@ -124,7 +118,7 @@ TEMPLATES: dict[str, Template] = {
     )),
     # docs/GENRES.md, Melodic Techno: kick/hats/pad intro, bass and pads build, arp lead, pads-only breakdown.
     "melodic_techno": Template("melodic_techno", "Melodic Techno", Style(
-        122, "techno", "pulse", "sustain", chords_per_bar=0.5, lead_range=(60, 84), lead="arp",
+        122, chords_per_bar=0.5, lead_range=(60, 84), lead="arp",
         progressions=MELODIC_PROGRESSIONS, devices={"lead": "Wavetable", "chords": "Wavetable", "bass": "Drift"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
     ), (
@@ -145,7 +139,7 @@ TEMPLATES: dict[str, Template] = {
     # closes many phrases; after a breakdown the hats come in late; a stripped kick-and-bass part
     # follows the last peak; the outro hands over by removing bass, then kick, then hats.
     "peak_time_techno": Template("peak_time_techno", "Peak-Time Techno", Style(
-        128, "techno", "pulse", "stabs", swing=0.15, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
+        128, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
         progressions=DRONE_PROGRESSIONS, devices={"lead": "Drift", "chords": "Wavetable", "bass": "Analog"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
     ), (
@@ -171,7 +165,7 @@ TEMPLATES: dict[str, Template] = {
     # docs/GENRES.md, Drum & Bass: 32-bar DJ intro, drums out for the last 4 bars before a drop,
     # 64-bar drops, a drumless 32-bar breakdown, liquid pads with 2 bars per chord, bass leaves the outro first.
     "drum_and_bass": Template("drum_and_bass", "Drum & Bass", Style(
-        174, "breakbeat", "syncopated", "sustain", swing=0.1, chords_per_bar=0.5, lead_range=(72, 89),
+        174, chords_per_bar=0.5, lead_range=(72, 89),
         progressions=DNB_PROGRESSIONS, devices={"bass": "Operator", "chords": "Wavetable", "lead": "Operator"},
     ), (
         _s("Intro", "intro", 32, 0.3, fill=True, drums="kick_hats:16,groove", chords="pad"),
@@ -185,7 +179,7 @@ TEMPLATES: dict[str, Template] = {
     # docs/GENRES.md, EDM Trap: short (2-3 min), half-time snare on beat 3, hat rolls, an 808 under the
     # kicks, plucks without the root, hook only in the drops, a beat of silence before each drop.
     "trap": Template("trap", "Trap", Style(
-        145, "trap", "sustained", "sustain", swing=0.12, chords_per_bar=0.5, lead_range=(69, 86),
+        145, chords_per_bar=0.5, lead_range=(69, 86),
         progressions=TRAP_PROGRESSIONS, devices={"bass": "Operator", "chords": "Drift", "lead": "Wavetable"},
     ), (
         _s("Intro", "intro", 8, 0.3, chords="pad", lead="tease"),

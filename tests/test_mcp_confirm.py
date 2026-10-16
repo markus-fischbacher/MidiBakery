@@ -72,17 +72,17 @@ async def test_batch_with_delete_asks_once(client, live):
 async def test_edits_without_removals_are_not_asked(client, live):
     answer = Answer()
     async with Client(build_server(client), elicitation_callback=answer) as mcp:
-        assert not (await mcp.call_tool("compose_drums", {"track": 0, "slot": 0, "seed": 1})).is_error
-        assert not (await mcp.call_tool("compose_drums", {"track": 0, "slot": 0, "seed": 2, "if_exists": "merge"})).is_error
+        assert not (await mcp.call_tool("compose", {"kind": "drums", "track": 0, "slot": 0, "seed": 1})).is_error
+        assert not (await mcp.call_tool("compose", {"kind": "drums", "track": 0, "slot": 0, "seed": 2, "if_exists": "merge"})).is_error
     assert answer.messages == []
 
 
 async def test_replace_asks_and_keeps_the_same_idea_across_the_round_trip(client, live):
     answer = Answer()
     async with Client(build_server(client), elicitation_callback=answer) as mcp:
-        await mcp.call_tool("compose_chords", {"track": 1, "slot": 0, "seed": 3})
+        await mcp.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 3})
         before = len(_notes(live, 1, 0))
-        result = await mcp.call_tool("compose_melody", {"track": 1, "slot": 0, "if_exists": "replace"})
+        result = await mcp.call_tool("compose", {"kind": "melody", "track": 1, "slot": 0, "if_exists": "replace"})
     assert not result.is_error
     assert answer.messages == [f"Replace {before} existing note(s) in track 2 slot 1?"]
     change = result.structured_content["changes"][0]
@@ -114,7 +114,7 @@ async def test_apply_plan_with_replacement_asks(client, live):
 async def test_piano_roll_app(client, live):
     async with Client(build_server(client)) as mcp:
         tools = {t.name: t for t in (await mcp.list_tools()).tools}
-        for name in ("compose_drums", "compose_bass", "compose_chords", "compose_melody", "transform_notes", "plan_changes"):
+        for name in ("compose", "transform_notes", "plan_changes"):
             assert tools[name].meta["ui"]["resourceUri"] == PIANO_ROLL_URI
         resource = await mcp.read_resource(PIANO_ROLL_URI)
         html = resource.contents[0].text

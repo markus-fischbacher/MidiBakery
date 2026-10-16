@@ -11,7 +11,8 @@ Nothing changes in Live until ``apply_song``.
   new track with an empty Drum Rack (Live's API cannot load a kit).
 - One harmony for the song, a second one for breaks. Sections of the same kind
   share their notes; a section with ``variation`` gets its own.
-- The bass follows the kick of its section's drums. Energy sets density and velocity.
+- Drums, bass and chords come from the genre's recipes (grooves.py), the lead from
+  hook, arp or acid. Energy sets velocity.
 - A session clip can stand in for a role (``clips``): it is copied, looped, into
   every section where that role plays.
 - Nothing lands on top of an existing arrangement clip: the plan refuses and
@@ -24,6 +25,7 @@ Nothing changes in Live until ``apply_song``.
 
 from __future__ import annotations
 
+import asyncio
 import math
 import random
 import secrets
@@ -34,12 +36,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
-from midibakery.compose.bass import generate_bass
-from midibakery.compose.chords import generate_chords
-from midibakery.compose.drums import DrumMap, generate_drums, map_pads
+from midibakery.compose.drums import map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
-from midibakery.compose.plan import Call, Session, new_seed
+from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
@@ -52,16 +52,7 @@ ROLE_WORDS = {
     "chords": ("chord", "pad", "keys", "piano", "stab"),
     "lead": ("lead", "melody", "synth", "arp", "pluck"),
 }
-DRUM_PARTS = {
-    "full": None,
-    "no_kick": {"snare", "clap", "rim", "closed_hat", "pedal_hat", "open_hat", "shaker", "perc", "ride", "crash"},
-    "kick_hats": {"kick", "closed_hat", "pedal_hat", "open_hat", "shaker"},
-    "sparse": {"kick", "closed_hat", "rim", "shaker"},
-    "kick_only": {"kick", "rim"},
-    "drive": {"kick", "clap", "rim", "open_hat"},
-}
 PHRASE = 8  # bars
-RECIPE_LOW = 0.85  # recipe bass and chords: as much velocity range as the grooves give the drums
 FILTER_TYPES = {"Low-pass": 0, "High-pass": 1}  # Auto Filter (Live 12) "Filter Type" values
 OPEN_HZ = {"Low-pass": 20000.0, "High-pass": 20.0}
 EPSILON = 1e-6
@@ -200,10 +191,6 @@ def _auto_filter(track: dict[str, Any]) -> int | None:
     return next((d.get("index", i) for i, d in reversed(list(enumerate(devices))) if str(d.get("class_name", "")).startswith("AutoFilter")), None)
 
 
-def _is_drum_track(track: dict[str, Any]) -> bool:
-    return any(d.get("class_name") == "DrumGroupDevice" for d in track.get("devices", []))
-
-
 def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, RoleTrack], list[str]]:
     tracks = session.tracks
     roles: dict[str, RoleTrack] = {}
@@ -224,10 +211,10 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
             continue
         candidates = [t for t in tracks if t["index"] not in used and t.get("kind") == "midi"]
         if role == "drums":
-            match = next((t for t in candidates if _is_drum_track(t)), None)
+            match = next((t for t in candidates if is_drum_track(t)), None)
         else:
             words = ROLE_WORDS[role]
-            match = next((t for t in candidates if not _is_drum_track(t) and any(w in t.get("name", "").lower() for w in words)), None)
+            match = next((t for t in candidates if not is_drum_track(t) and any(w in t.get("name", "").lower() for w in words)), None)
         if match is not None:
             roles[role] = RoleTrack(role, match["index"], match.get("name", ""))
             used.add(match["index"])
@@ -244,16 +231,8 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
     return roles, warnings
 
 
-def _filter_drums(notes: list[Note], drum_map: DrumMap, part: str) -> list[Note]:
-    keep = DRUM_PARTS.get(part)
-    if keep is None:
-        return notes
-    by_pitch = {pitch: role for role, pitch in drum_map.notes.items()}
-    return [n for n in notes if by_pitch.get(n.pitch) in keep]
-
-
-def _energize(notes: list[Note], energy: float, low: float = 0.75) -> list[Note]:
-    """Velocity by section energy: `low` of it at energy 0, all of it at 1."""
+def _energize(notes: list[Note], energy: float, low: float = 0.85) -> list[Note]:
+    """Velocity by section energy: `low` of it at energy 0, all of it at 1 (the grooves give the drums as much range)."""
     factor = low + (1 - low) * energy
     return [replace(n, velocity=max(1.0, min(127.0, n.velocity * factor))) for n in notes]
 
@@ -305,8 +284,7 @@ def _is_minor(scale: Scale) -> bool:
 
 
 async def build_song(call: Call, request: SongRequest) -> SongPlan:
-    session = await Session(call).load()
-    arrangement = await call("arrangement.get", {})
+    session, arrangement = await asyncio.gather(Session(call).load(), call("arrangement.get", {}))
     template = TEMPLATES[request.genre]
     style = template.style
     meter, scale = session.meter, session.scale
@@ -356,7 +334,6 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     if drums is not None and not drums.new:
         drum_map = map_pads(await session.drum_pads(drums.index))
     kick_pitch = drum_map.note("kick")
-    swing = style.swing
 
     use = {c.role: c for c in request.clips}
     for role, target in roles.items():
@@ -386,46 +363,35 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     cache: dict[tuple, list[Note]] = {}
     actions: list[dict[str, Any]] = []
     counts: dict[str, int] = {r: 0 for r in roles}
-    groove = GROOVES.get(request.genre)
-    if groove is not None:
-        swing = groove.swing
+    groove, bass_pattern, chord_pattern = GROOVES[request.genre], BASS[request.genre], CHORDS[request.genre]
+    swing = groove.swing
     hook = make_hook(rng("hook"))
     arp = make_arp(rng("arp"))
     acid = make_acid(rng("acid"))
 
-    def part_notes(role: str, part: str, section: Section, harmony: Harmony, bars: int, offset_bars: int, kick: list[float] | None) -> list[Note]:
+    def part_notes(role: str, part: str, section: Section, harmony: Harmony, bars: int, offset_bars: int) -> list[Note]:
         r = rng(section.kind, section.variation, role, part, bars, offset_bars)
         if role == "drums":
-            if groove is not None and part in groove.parts:
-                return generate_groove(
-                    groove, part, meter, bars, r, drum_map, section.energy,
-                    fill_at_end=section.fill and offset_bars + bars == section.bars,
-                    crash=section.kind == "drop" and offset_bars == 0,
-                    long_part=bars >= 16 and part == "full",
-                    phrase_offset=offset_bars,
-                )
-            notes = generate_drums(meter, bars, style.drums, r, drum_map, density=0.25 + 0.6 * section.energy, swing=swing, fills=section.fill)
-            return _energize(_filter_drums(notes, drum_map, {"groove": "full"}.get(part, part)), section.energy)
+            return generate_groove(
+                groove, part, meter, bars, r, drum_map, section.energy,
+                fill_at_end=section.fill and offset_bars + bars == section.bars,
+                crash=section.kind == "drop" and offset_bars == 0,
+                long_part=bars >= 16 and part == "full",
+                phrase_offset=offset_bars,
+            )
         if role == "bass":
             if part == "rumble":
                 return _rumble(harmony, meter, bars)
-            if request.genre in BASS:
-                return _energize(generate_recipe_bass(BASS[request.genre], harmony, meter, bars, swing, r), section.energy, RECIPE_LOW)
-            relation = "avoid" if style.bass in ("offbeat", "pulse") else "lock"
-            return _energize(generate_bass(harmony, scale, meter, bars, style.bass, r, style.bass_octave, kick or None, relation, 0.3 + 0.5 * section.energy, swing), section.energy)
+            return _energize(generate_recipe_bass(bass_pattern, harmony, meter, bars, swing, r), section.energy)
         if role == "chords":
-            if request.genre in CHORDS:
-                pattern = CHORDS[request.genre]
-                chords = seventh_harmony(harmony, scale) if pattern.sevenths else harmony
-                notes = generate_recipe_chords(pattern, chords, meter, bars, swing, stabs=part in ("stabs", "on", "tease", "accent"), pad=part not in ("tease", "accent"))
-                notes = _energize(notes, section.energy, RECIPE_LOW)
-                if part == "accent":  # one hit to open each phrase (the "signal" in a groove)
-                    notes = _accents(notes, meter, offset_bars)
-                if part == "tease":  # the hook hinted at, quieter (Peak-Time: "die Hook im Intro andeuten")
-                    notes = [replace(n, velocity=max(1.0, n.velocity - 28)) for n in notes]
-                return notes
-            rhythm = style.break_chords if part in ("sustain", "pad") else style.chord_rhythm
-            return _energize(generate_chords(harmony, meter, bars, rhythm, r, swing=swing), section.energy)
+            chords = seventh_harmony(harmony, scale) if chord_pattern.sevenths else harmony
+            notes = generate_recipe_chords(chord_pattern, chords, meter, bars, swing, stabs=part in ("stabs", "on", "tease", "accent"), pad=part not in ("tease", "accent"))
+            notes = _energize(notes, section.energy)
+            if part == "accent":  # one hit to open each phrase (the "signal" in a groove)
+                notes = _accents(notes, meter, offset_bars)
+            if part == "tease":  # the hook hinted at, quieter (Peak-Time: "die Hook im Intro andeuten")
+                notes = [replace(n, velocity=max(1.0, n.velocity - 28)) for n in notes]
+            return notes
         low, high = style.lead_range
         tease = part in ("tease", "sparse")
         if style.lead == "arp":
@@ -437,7 +403,6 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
 
     for section, at in zip(sections, starts):
         harmony: Harmony = (alt if section.kind == "break" else main).for_length(meter, section.bars)
-        section_kick: list[float] | None = None
         for role in ROLES:
             spec = section.parts.get(role)
             if spec is None or role not in roles:
@@ -462,7 +427,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 notes: list[Note] = []
                 for part, offset, bars in playing:
                     seg_harmony = _from(harmony, offset * bpb, bars * bpb)
-                    seg_notes = part_notes(role, part, section, seg_harmony, bars, offset, section_kick)
+                    seg_notes = part_notes(role, part, section, seg_harmony, bars, offset)
                     seg_notes = fit_to_length(seg_notes, bars * bpb)
                     notes += [replace(n, start_time=n.start_time + (offset - first) * bpb) for n in seg_notes]
                 if section.pause_every and role in ("drums", "bass"):
@@ -472,8 +437,6 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                     notes = fit_to_length([n for n in notes if n.start_time < cut - EPSILON], cut)
                 cache[cache_key] = fit_to_length(notes, clip_length)
             notes = cache[cache_key]
-            if role == "drums" and kick_pitch is not None:
-                section_kick = [n.start_time + first * bpb for n in notes if n.pitch == kick_pitch]
             counts[role] += len(notes)
             action = {
                 "action": "add_clip",
@@ -550,14 +513,13 @@ async def _undo(call: Call, error: BridgeError, steps: int) -> None:
 
 async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     """New tracks (one undo step), then all clips (one undo step), then locators and tempo."""
-    tracks = (await call("tracks.list", {}))["tracks"]
+    listed, arrangement, song = await asyncio.gather(call("tracks.list", {}), call("arrangement.get", {}), call("song.get", {}))
+    tracks = listed["tracks"]
     if tuple((t.get("id"), t.get("name"), t.get("kind")) for t in tracks) != plan.track_identity:
         raise BridgeError("CONFLICT", f"Tracks changed since song plan {plan.id} was made; plan again")
-    arrangement = await call("arrangement.get", {})
     for role_track in plan.roles.values():
         if not role_track.new and _overlap(arrangement, role_track.index, plan.start, plan.end) is not None:
             raise BridgeError("CONFLICT", f"Track index {role_track.index} '{role_track.name}' has new arrangement clips in the song's range; plan again")
-    song = await call("song.get", {})
     undo_steps = 0
     new = [t for t in plan.roles.values() if t.new]
     ops: list[dict[str, Any]] = []

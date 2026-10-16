@@ -100,13 +100,27 @@ async def test_apply_detects_conflicts(client, live):
 async def test_compose_tools_are_listed_and_annotated():
     tools = {t.name: t for t in await build_server().list_tools()}
     assert len(tools) <= 36  # the real guard is the character budget in test_agent (local models)
-    for name in ("compose_drums", "compose_bass", "compose_chords", "compose_melody", "transform_notes", "apply_plan"):
+    for name in ("compose", "transform_notes", "apply_plan"):
         assert tools[name].annotations.read_only_hint is False
         assert tools[name].annotations.destructive_hint is True
     assert tools["plan_changes"].annotations.read_only_hint is True
     assert tools["get_drum_pads"].annotations.read_only_hint is True
-    assert "kind" not in tools["compose_drums"].input_schema["properties"]
-    assert "preview" in tools["compose_melody"].input_schema["properties"]
+    assert "kind" in tools["compose"].input_schema["required"] and "kind" not in tools["transform_notes"].input_schema["properties"]
+    assert "preview" in tools["compose"].input_schema["properties"]
+
+
+async def test_compose_checks_the_fields_of_its_kind(client):
+    server = build_server(client)
+    with pytest.raises(ToolError) as exc:
+        await server.call_tool("compose", {"kind": "drums", "track": 0, "slot": 0, "rhythm": "stabs"})
+    assert "rhythm not for kind 'drums'" in str(exc.value)
+    with pytest.raises(ToolError) as exc:
+        await server.call_tool("compose", {"kind": "bass", "track": 1, "slot": 0, "style": "breakbeat"})
+    assert "style" in str(exc.value)  # a drum style for the bass
+    chords = _payload(await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 2, "low": 48, "high": 62, "voices": 4}))
+    assert chords["changes"][0]["kind"] == "chords"
+    notes = (await client.call("notes.get", {"track": 1, "slot": 0}))["notes"]
+    assert notes and all(48 <= n["pitch"] <= 62 for n in notes)  # the kind's own fields reach its generator
 
 
 async def test_plan_changes_schema_stays_small_but_steps_are_still_checked(client):
@@ -156,14 +170,14 @@ async def test_full_song_sketch_via_plan_changes(client, live):
 
 async def test_compose_preview_then_apply_and_if_exists(client, live):
     server = build_server(client)
-    preview = _payload(await server.call_tool("compose_chords", {"track": 1, "slot": 0, "seed": 5, "preview": True}))
+    preview = _payload(await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 5, "preview": True}))
     assert live.on_main(lambda: live.song.tracks[1].clip_slots[0].has_clip) is False
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     assert len(_clip_notes(live, 1, 0)) == preview["changes"][0]["add"]
 
     with pytest.raises(ToolError, match="CONFLICT"):
-        await server.call_tool("compose_chords", {"track": 1, "slot": 0, "seed": 6})
-    replaced = _payload(await server.call_tool("compose_melody", {"track": 1, "slot": 0, "seed": 6, "if_exists": "replace"}))
+        await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 6})
+    replaced = _payload(await server.call_tool("compose", {"kind": "melody", "track": 1, "slot": 0, "seed": 6, "if_exists": "replace"}))
     change = replaced["changes"][0]
     assert change["action"] == "replace notes" and change["remove"] == preview["changes"][0]["add"]
     assert len(_clip_notes(live, 1, 0)) == change["add"]
@@ -171,8 +185,8 @@ async def test_compose_preview_then_apply_and_if_exists(client, live):
 
 async def test_bass_follows_chords_from_existing_clip(client, live):
     server = build_server(client)
-    await server.call_tool("compose_chords", {"track": 1, "slot": 0, "seed": 1, "progression": "vi IV I V"})
-    bass = _payload(await server.call_tool("compose_bass", {
+    await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 1, "progression": "vi IV I V"})
+    bass = _payload(await server.call_tool("compose", {"kind": "bass", 
         "track": 1, "slot": 1, "seed": 1, "style": "sustained", "chords_from": {"track": 1, "slot": 0},
     }))
     assert bass["changes"][0]["chords_source"] == "clip"
@@ -223,12 +237,12 @@ async def test_transform_semitones_is_chromatic(client, live):
 async def test_chords_from_rejects_a_drum_track(client, live):
     _add_kit(live, track=0)
     server = build_server(client)
-    await server.call_tool("compose_drums", {"track": 0, "slot": 0, "seed": 1})
-    await server.call_tool("compose_chords", {"track": 1, "slot": 0, "seed": 1})
+    await server.call_tool("compose", {"kind": "drums", "track": 0, "slot": 0, "seed": 1})
+    await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 1})
     with pytest.raises(ToolError, match="drum track") as exc:
-        await server.call_tool("compose_bass", {"track": 1, "slot": 1, "chords_from": {"track": 0, "slot": 0}})
+        await server.call_tool("compose", {"kind": "bass", "track": 1, "slot": 1, "chords_from": {"track": 0, "slot": 0}})
     assert "1 '2-MIDI'" in str(exc.value)  # points at the track that has a chord clip
-    await server.call_tool("compose_bass", {"track": 1, "slot": 1, "seed": 2, "chords_from": {"track": 1, "slot": 0}})
+    await server.call_tool("compose", {"kind": "bass", "track": 1, "slot": 1, "seed": 2, "chords_from": {"track": 1, "slot": 0}})
 
 
 async def test_apply_detects_shifted_tracks(client, live):
@@ -270,11 +284,11 @@ async def test_compose_without_slot_takes_the_first_free_one(client, live):
     server = build_server(client)
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
     await client.call("clip.create", {"track": 1, "slot": 2, "length": 4})
-    result = _payload(await server.call_tool("compose_chords", {"track": 1, "seed": 1}))
+    result = _payload(await server.call_tool("compose", {"kind": "chords", "track": 1, "seed": 1}))
     assert result["changes"][0]["slot"] == 1
     plan = await build_plan(client.call, [DrumsSpec(track=1, seed=1), DrumsSpec(track=1, seed=2)])
     assert [c.slot for c in plan.changes] == [3, 4]
     for slot in range(3, 8):
         await client.call("clip.create", {"track": 1, "slot": slot, "length": 4})
     with pytest.raises(ToolError, match="no free clip slot"):
-        await server.call_tool("compose_chords", {"track": 1})
+        await server.call_tool("compose", {"kind": "chords", "track": 1})

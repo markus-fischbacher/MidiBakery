@@ -15,18 +15,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
-from midibakery.compose.bass import generate_bass
-from midibakery.compose.chords import generate_chords
-from midibakery.compose.drums import generate_drums, map_pads
+from midibakery.compose.drums import map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.hook import generate_hook, make_hook
-from midibakery.compose.melody import generate_melody
 from midibakery.compose.notes import Note, fit_to_length
+from midibakery.compose.parts import generate_part
 from midibakery.compose.plan import Call, Session, new_seed
-from midibakery.compose.specs import SWING_UNITS, BassSpec, ChordsSpec, DrumsSpec, MelodySpec
+from midibakery.compose.song import ROLE_WORDS
+from midibakery.compose.specs import PART_SPECS
 
-CHORD_WORDS = ("chord", "pad", "keys", "piano", "stab")
-SPECS = {"melody": MelodySpec, "bass": BassSpec, "chords": ChordsSpec, "drums": DrumsSpec}
 
 
 class HookParams(BaseModel):
@@ -66,7 +63,7 @@ async def _harmony(call: Call, session: Session, request: TakesRequest, start: f
         source = (request.chords_from.track, request.chords_from.arrangement_clip)
     else:
         for track in arrangement["tracks"]:
-            if track["index"] == request.track or not any(w in track["name"].lower() for w in CHORD_WORDS):
+            if track["index"] == request.track or not any(w in track["name"].lower() for w in ROLE_WORDS["chords"]):
                 continue
             clip = next((c for c in track["clips"] if c["start"] < start + length and start < c["end"] and c["is_midi"]), None)
             if clip is not None:
@@ -102,17 +99,10 @@ def _notes(request: TakesRequest, session: Session, harmony: Harmony, seed: int,
             if hook.high - hook.low < 12:
                 raise ValueError("high must be at least an octave above low")
             return generate_hook(make_hook(rng), harmony, scale, meter, bars, hook.swing, hook.low, hook.high)
-        spec = SPECS[request.kind].model_validate({"track": 0, "slot": 0, **request.params})
+        spec = PART_SPECS[request.kind].model_validate({"track": 0, "slot": 0, **request.params})
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", f"params: {exc}") from None
-    unit = SWING_UNITS[spec.swing_unit]
-    if request.kind == "drums":
-        return generate_drums(meter, bars, spec.style, rng, map_pads(pads), density=spec.density, swing=spec.swing, swing_unit=unit, fills=spec.fills, chance=spec.chance)
-    if request.kind == "bass":
-        return generate_bass(harmony, scale, meter, bars, spec.style, rng, spec.octave, density=spec.density, swing=spec.swing, swing_unit=unit)
-    if request.kind == "chords":
-        return generate_chords(harmony, meter, bars, spec.rhythm, rng, spec.low, spec.high, spec.voices, swing=spec.swing, swing_unit=unit)
-    return generate_melody(harmony, scale, meter, bars, rng, spec.low, spec.high, spec.density, swing=spec.swing, swing_unit=unit)
+    return generate_part(spec, harmony, scale, meter, bars, rng, map_pads(pads) if request.kind == "drums" else None)
 
 
 async def build_takes(call: Call, request: TakesRequest) -> tuple[list[dict[str, Any]], dict[str, Any]]:

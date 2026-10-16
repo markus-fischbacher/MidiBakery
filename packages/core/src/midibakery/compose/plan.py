@@ -13,6 +13,7 @@ chords of the first harmonic step.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import random
@@ -24,12 +25,10 @@ from typing import Any
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
-from midibakery.compose.bass import generate_bass
-from midibakery.compose.chords import generate_chords
-from midibakery.compose.drums import DrumMap, generate_drums, kick_times, map_pads
+from midibakery.compose.drums import DrumMap, kick_times, map_pads
 from midibakery.compose.harmony import Harmony
-from midibakery.compose.melody import generate_melody
 from midibakery.compose.notes import Note, fit_to_length
+from midibakery.compose.parts import generate_part
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.specs import (
     BassSpec,
@@ -40,7 +39,6 @@ from midibakery.compose.specs import (
     Harmonic,
     MelodySpec,
     Spec,
-    SWING_UNITS,
     TransformSpec,
 )
 from midibakery.compose.standalone import run_transform
@@ -90,8 +88,8 @@ class Session:
         self._pads: dict[tuple[int, int | None], list[dict] | None] = {}
 
     async def load(self) -> Session:
-        self.song = await self._call("song.get", {})
-        self.tracks = (await self._call("tracks.list", {}))["tracks"]
+        self.song, tracks = await asyncio.gather(self._call("song.get", {}), self._call("tracks.list", {}))
+        self.tracks = tracks["tracks"]
         self.scale = Scale.from_song(self.song)
         self.meter = Meter(int(self.song.get("signature_numerator", 4)), int(self.song.get("signature_denominator", 4)))
         return self
@@ -327,18 +325,19 @@ async def _target(session: Session, spec: Generate) -> tuple[ClipState, float, d
     return state, min(length, state.length or length), None, remove
 
 
-def _is_drum_track(track: dict[str, Any]) -> bool:
+def is_drum_track(track: dict[str, Any]) -> bool:
+    """A track (as tracks.list lists it) with a Drum Rack."""
     return any(d.get("class_name") == "DrumGroupDevice" for d in track.get("devices", []))
 
 
 def _not_drums(session: Session, index: int) -> None:
     """chords_from on a drum clip detects nonsense chords; small models pick it by mistake."""
     track = session.track(index)
-    if not _is_drum_track(track):
+    if not is_drum_track(track):
         return
     candidates = [
         f"{t['index']} '{t.get('name')}'" for t in session.tracks
-        if t.get("kind") == "midi" and not _is_drum_track(t) and any(c.get("is_midi") for c in t.get("clips", []))
+        if t.get("kind") == "midi" and not is_drum_track(t) and any(c.get("is_midi") for c in t.get("clips", []))
     ]
     hint = f"; MIDI tracks with clips: {', '.join(candidates)}" if candidates else ""
     raise BridgeError(
@@ -415,10 +414,7 @@ async def _plan_drums(session: Session, spec: DrumsSpec) -> ClipChange:
     seed = spec.seed if spec.seed is not None else new_seed()
     pads = await session.drum_pads(spec.track, spec.device)
     drum_map: DrumMap = map_pads(pads)
-    notes = generate_drums(
-        session.meter, spec.bars, spec.style, random.Random(seed), drum_map,
-        density=spec.density, swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit], fills=spec.fills, chance=spec.chance,
-    )
+    notes = generate_part(spec, None, session.scale, session.meter, spec.bars, random.Random(seed), drum_map)
     info = {
         "style": spec.style,
         "drum_map": drum_map.source,
@@ -440,10 +436,7 @@ async def _plan_bass(session: Session, spec: BassSpec) -> ClipChange:
     if spec.follow_kick is not None:
         kick, info = await _kick(session, spec.follow_kick, target[1])
         info["kick_relation"] = spec.kick_relation
-    notes = generate_bass(
-        harmony, session.scale, session.meter, spec.bars, spec.style, rng, spec.octave, kick, spec.kick_relation,
-        density=spec.density, swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit],
-    )
+    notes = generate_part(spec, harmony, session.scale, session.meter, spec.bars, rng, kick=kick)
     info = {"style": spec.style, "chords": harmony.describe(), "chords_source": harmony.source, **info}
     return _finish(session, spec, "bass", seed, notes, target, info)
 
@@ -454,10 +447,7 @@ async def _plan_chords(session: Session, spec: ChordsSpec) -> ClipChange:
     rng = random.Random(seed)
     harmony = await _harmony(session, spec, rng)
     try:
-        notes = generate_chords(
-            harmony, session.meter, spec.bars, spec.rhythm, rng, spec.low, spec.high, spec.voices,
-            swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit],
-        )
+        notes = generate_part(spec, harmony, session.scale, session.meter, spec.bars, rng)
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", str(exc)) from None
     info = {"rhythm": spec.rhythm, "chords": harmony.describe(), "chords_source": harmony.source}
@@ -469,10 +459,7 @@ async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
     seed = spec.seed if spec.seed is not None else new_seed()
     rng = random.Random(seed)
     harmony = await _harmony(session, spec, rng)
-    notes = generate_melody(
-        harmony, session.scale, session.meter, spec.bars, rng, spec.low, spec.high, spec.density,
-        swing=spec.swing, swing_unit=SWING_UNITS[spec.swing_unit],
-    )
+    notes = generate_part(spec, harmony, session.scale, session.meter, spec.bars, rng)
     info = {"chords": harmony.describe(), "chords_source": harmony.source}
     return _finish(session, spec, "melody", seed, notes, target, info)
 
@@ -564,13 +551,18 @@ async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, A
     """Run the plan as one batch (one undo step) after checking nothing changed underneath it."""
     if verify:
         session = await Session(call).load()
-        for (track, slot), expected in plan.fingerprints.items():
+
+        async def current(track: int, slot: int) -> Any:
             try:
-                state = await session.clip(track, slot, include_planned=False)
+                return await session.clip(track, slot, include_planned=False)
             except BridgeError as exc:
                 if exc.code != "NOT_FOUND":
                     raise
-                state = None
+                return None
+
+        targets = list(plan.fingerprints.items())
+        states = await asyncio.gather(*(current(track, slot) for (track, slot), _ in targets))  # one round trip, not one per clip
+        for ((track, slot), expected), state in zip(targets, states):
             if state is None or state.fingerprint != expected:
                 raise BridgeError(
                     "CONFLICT",

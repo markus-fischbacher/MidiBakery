@@ -7,6 +7,7 @@ trips for the model.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import json
 from collections.abc import Awaitable, Callable
@@ -25,10 +26,7 @@ from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.catalog import get_op
 from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty
 from midibakery.compose import (
-    BassSpec,
-    ChordsSpec,
-    DrumsSpec,
-    MelodySpec,
+    ComposeRequest,
     PlanStore,
     Step,
     TransformSpec,
@@ -42,46 +40,25 @@ from midibakery.mcp.confirm import confirm, request_state
 
 INSTRUCTIONS = """\
 MidiBakery controls the Ableton Live 12 set that is open right now.
-- Call get_session first: it returns tempo, time signature, the song's scale
-  (root_note 0=C..11=B, scale_name, scale_intervals) and every track with its
-  devices and clips. Tracks, clip slots, devices and scenes are addressed by
-  zero-based index; indices shift when tracks or scenes are created or deleted.
-  Users count from 1 as Live shows it: "track 1" or "the first clip" is index 0.
-- Times and lengths are in beats (quarter notes). Pitch 60 is C3 in Live.
-- Prefer notes from the song scale unless the user asks otherwise.
-- edit_notes is a diff: add new notes, modify or remove existing ones by the
-  note_id returned from get_clip. Never rewrite a whole clip to change a few notes.
-- Use run_batch for multi-step edits; it becomes a single undo step in Live.
-- Mixer: get_mixer reads tracks, returns (A = return_track 0) and master; update_mixer
-  takes volume_db and send db as Live shows them, routing by the names that
-  get_mixer(options=true) lists. create_return_track can add a Reverb or Delay.
-- Racks: get_rack lists chains and macros; update_rack sets macros (0-127), edits
-  chains or adds one (Drum Rack pad: add_chain {in_note, insert_devices}).
-  Devices inside racks: pass chain_path [chain, device, ...] to the device tools.
-- Arrangement: positions are beats from the song start (bar n starts at (n-1) * beats per bar).
-  edit_arrangement adds clips with notes, copies session clips, sets locators; it never
-  overwrites a clip. Clip tools take arrangement_clip (index from get_arrangement) instead of slot.
-- A whole track ("build me a house song"): plan_song with the genre, then apply_plan. It uses the
-  drum/bass/chords/lead tracks it finds and creates missing ones; say what it found and created.
-- Variations to choose from: compose_takes puts several takes of a part on take lanes to comp in Live.
-- Every write is undoable with the undo tool.
-Composition:
-- compose_drums / compose_bass / compose_chords / compose_melody write a new
-  clip into an empty slot, by default the track's first free one
-  (if_exists='replace' or 'merge' for existing clips).
-  They follow the song scale and time signature and are reproducible: pass the
-  returned seed again to get the same notes, or a new seed for a new idea.
-- Make parts fit together: give bass and melody chords_from (the chord clip)
-  and the bass follow_kick (the drum clip), or use plan_changes, where later
-  steps see earlier ones and share their chords.
-- transform_notes edits an existing clip by note_id (humanize, quantize,
-  invert, arpeggiate, variation, transpose). transpose takes semitones
-  (chromatic, 12 = octave) or steps (scale steps in key, 2 = a third).
-- preview=true (or plan_changes) returns a diff without touching Live;
-  apply_plan(plan_id) then writes it as one undo step. Clients with MCP Apps
-  show the diff as a piano roll with an Apply button.
-- Deleting tracks or clips and replacing a clip's notes ask the user first
-  when the client supports it; a declined change returns CANCELLED.
+- Call get_session first (tempo, signature, scale with root_note 0=C..11=B, tracks with
+  devices and clips). Tracks, slots, devices and scenes are zero-based indices that shift
+  when tracks or scenes are created or deleted; users count from 1 ("track 1" = index 0).
+- Times are beats (quarter notes); pitch 60 = C3. Prefer notes from the song scale.
+- edit_notes and transform_notes are diffs by note_id from get_clip; never rewrite a whole
+  clip to change a few notes. Transpose: semitones are chromatic (12 = octave), steps are scale steps.
+  run_batch makes several edits one undo step; undo takes back any write.
+- Mixer: volume and sends in dB as Live shows them; routing by the names get_mixer(options=true)
+  lists. Devices inside racks: chain_path [chain, device, ...].
+- Arrangement: bar n starts at beat (n-1) * beats per bar. edit_arrangement never overwrites
+  a clip; clip tools take arrangement_clip (from get_arrangement) instead of slot.
+- A whole song: plan_song, then apply_plan; say which tracks it used and created.
+  compose_takes puts variations of a part on take lanes to comp in Live.
+- compose writes one part into the track's first free slot (if_exists for occupied ones),
+  reproducible by seed. Make parts fit: bass and melody chords_from the chord clip, the bass
+  follow_kick the drum clip; or plan_changes, where later steps share the first step's chords.
+- preview=true or plan_changes return a diff (a piano roll in MCP Apps clients) and a plan_id;
+  apply_plan writes it as one undo step.
+- Deleting tracks or clips and replacing notes ask the user first; a declined change returns CANCELLED.
 """
 
 PIANO_ROLL_URI = "ui://midibakery/piano-roll.html"
@@ -123,30 +100,13 @@ TOOL_OPS: list[tuple[str, str, str]] = [
 # (tool name, request model, title, description)
 COMPOSE_TOOLS: list[tuple[str, type[BaseModel], str, str]] = [
     (
-        "compose_drums",
-        DrumsSpec,
-        "Compose drum pattern",
-        "Drum pattern in the song's time signature. Pads of the track's Drum Rack are found by name "
-        "(kick, snare, hats ...); General MIDI notes are the fallback. Uses probability and velocity deviation on hats and ghost notes.",
-    ),
-    (
-        "compose_bass",
-        BassSpec,
-        "Compose bass line",
-        "Bass line in the song scale that follows chords (progression or chords_from) and can lock to or avoid "
-        "the kick of a drum clip (follow_kick).",
-    ),
-    (
-        "compose_chords",
-        ChordsSpec,
-        "Compose chord part",
-        "Voice-led chord part. Without a progression a functional one (tonic, subdominant, dominant) is generated.",
-    ),
-    (
-        "compose_melody",
-        MelodySpec,
-        "Compose melody",
-        "Motif-based melody (A A' A B phrases) in the song scale, chord tones on strong beats.",
+        "compose",
+        ComposeRequest,
+        "Compose a part",
+        "Write one part as a new MIDI clip in the song scale and time signature. kind drums: pattern on the track's "
+        "Drum Rack pads (found by name, General MIDI fallback); bass: follows the chords and can lock to or avoid a "
+        "drum clip's kick (follow_kick); chords: voice-led, a functional progression unless given one; melody: motifs "
+        "(A A' A B), chord tones on strong beats. Fields tagged (kind) are only for those kinds.",
     ),
     (
         "transform_notes",
@@ -165,7 +125,7 @@ class PlanStep(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     kind: Literal["drums", "bass", "chords", "melody", "transform"] = Field(
-        description="drums/bass/chords/melody take the compose_<kind> fields, transform the transform_notes fields"
+        description="drums/bass/chords/melody take the compose fields, transform the transform_notes fields"
     )
 
 
@@ -276,8 +236,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
     )
 
     async def get_session(_: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
-        song = await bridge.call("song.get")
-        tracks = await bridge.call("tracks.list")
+        song, tracks = await asyncio.gather(bridge.call("song.get"), bridge.call("tracks.list"))
         return {"song": song, **tracks}
 
     async def get_clip(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
@@ -389,6 +348,8 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
                 # Keep the idea stable across a confirmation round trip.
                 args["seed"] = request_state(ctx).get("seed", new_seed())
             spec = _model.model_validate(args)
+            if isinstance(spec, ComposeRequest):
+                spec = spec.spec()
             plan = await build_plan(bridge.call, [spec])
             if preview:
                 plans.put(plan)
@@ -402,7 +363,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             return _with_roll(plan, {**result, "applied": applied["applied"]}, True)
 
         server.add_tool(
-            _make_tool(model, compose, skip=("kind",), extra={"preview": (Annotated[bool, PREVIEW_FIELD], False)}),
+            _make_tool(model, compose, skip=() if model is ComposeRequest else ("kind",), extra={"preview": (Annotated[bool, PREVIEW_FIELD], False)}),
             name=tool_name,
             title=title,
             description=description,
