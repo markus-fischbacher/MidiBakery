@@ -101,7 +101,7 @@ def browser_load(ctx, params):
                 break
             yield
         else:
-            raise OpError(ErrorCode.LIVE_ERROR, "Live did not load '%s' onto track %d" % (item.name, params["track"]))
+            raise OpError(ErrorCode.LIVE_ERROR, "Live did not load '%s' onto %s" % (item.name, ctx.where(params["track"])))
         settled, last = 0, _chain(track)
         while settled < SETTLE_TICKS:  # a kit's chains and samples fill in after the rack appears
             yield

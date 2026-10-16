@@ -90,7 +90,7 @@ def _add_take_clip(ctx, action, created):
             raise OpError(ErrorCode.INVALID_PARAMS, "lane -1 needs an add_take_lane on this track earlier in the same edit")
         index = created[action["track"]]
     if not 0 <= index < len(lanes):
-        raise OpError(ErrorCode.NOT_FOUND, "No take lane %d on track %d (it has %d)" % (index, action["track"], len(lanes)))
+        raise OpError(ErrorCode.NOT_FOUND, "No take lane index %d on %s (it has %d)" % (index, ctx.where(action["track"]), len(lanes)))
     lane = lanes[index]
     if not hasattr(lane, "create_midi_clip"):
         raise OpError(ErrorCode.UNSUPPORTED, "This Live version cannot create clips in take lanes")
@@ -100,7 +100,7 @@ def _add_take_clip(ctx, action, created):
         _validate_note(i, note, require_all=True)
     for clip in lane.arrangement_clips:
         if clip.start_time < start + length - EPSILON and start < clip.end_time - EPSILON:
-            raise OpError(ErrorCode.CONFLICT, "Take lane %d already has a clip at beats %g-%g" % (index, clip.start_time, clip.end_time))
+            raise OpError(ErrorCode.CONFLICT, "Take lane index %d already has a clip at beats %g-%g" % (index, clip.start_time, clip.end_time))
     clip = lane.create_midi_clip(start, length)
     if clip is None:
         clip = next(c for c in lane.arrangement_clips if abs(c.start_time - start) < EPSILON)
@@ -116,8 +116,8 @@ def _check_free(ctx, track_index, start, end):
         if clip.start_time < end - EPSILON and start < clip.end_time - EPSILON:
             raise OpError(
                 ErrorCode.CONFLICT,
-                "Track %d already has '%s' at beats %g-%g; delete it first or pick another start"
-                % (track_index, clip.name or "a clip", clip.start_time, clip.end_time),
+                "There is already '%s' (arrangement_clip index %d) at beats %g-%g on %s; delete it first or pick another start"
+                % (clip.name or "a clip", i, clip.start_time, clip.end_time, ctx.where(track_index)),
                 track=track_index,
                 arrangement_clip=i,
             )
@@ -127,7 +127,7 @@ def _find_clip(ctx, track_index, start):
     for clip in ctx.arrangement_clips(track_index):
         if abs(clip.start_time - start) < EPSILON:
             return clip
-    raise OpError(ErrorCode.LIVE_ERROR, "Live did not place the clip at beat %g on track %d" % (start, track_index))
+    raise OpError(ErrorCode.LIVE_ERROR, "Live did not place the clip at beat %g on %s" % (start, ctx.where(track_index)))
 
 
 def _free_slot(ctx, track):
@@ -169,7 +169,7 @@ def _add_clip(ctx, action):
     if not hasattr(track, "create_midi_clip"):
         raise OpError(ErrorCode.UNSUPPORTED, "Creating arrangement clips needs Live 12.1.10 or newer (and a MIDI track)")
     if not track.has_midi_input:
-        raise OpError(ErrorCode.INVALID_PARAMS, "Track %d is not a MIDI track" % action["track"])
+        raise OpError(ErrorCode.INVALID_PARAMS, "Not a MIDI track: %s" % ctx.where(action["track"]))
     start, length = float(action["start"]), float(action["length"])
     notes = action.get("notes") or []
     for i, note in enumerate(notes):

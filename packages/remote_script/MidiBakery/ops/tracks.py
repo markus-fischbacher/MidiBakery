@@ -58,7 +58,7 @@ def track_create(ctx, params):
     song = ctx.song
     index = params.get("index", -1)
     if index > len(song.tracks):
-        raise OpError(ErrorCode.INVALID_PARAMS, "Track index %d beyond end (%d)" % (index, len(song.tracks)))
+        raise OpError(ErrorCode.INVALID_PARAMS, "Track index %d is beyond the end (song has %d tracks)" % (index, len(song.tracks)))
     if params.get("kind", "midi") == "midi":
         song.create_midi_track(index)
     else:
@@ -80,7 +80,7 @@ def track_set(ctx, params):
             changed.append(key)
     if params.get("arm") is not None:
         if not track.can_be_armed:
-            raise OpError(ErrorCode.INVALID_PARAMS, "Track %d cannot be armed" % params["track"])
+            raise OpError(ErrorCode.INVALID_PARAMS, "Cannot arm %s" % ctx.where(params["track"]))
         track.arm = params["arm"]
         changed.append("arm")
     if params.get("volume") is not None:

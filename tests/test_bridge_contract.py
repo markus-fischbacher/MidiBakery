@@ -189,6 +189,16 @@ def test_bridge_validates_at_its_own_boundary(live):
     assert reply["error"]["code"] == "UNKNOWN_OP"
     reply = _raw_request("track.set", {"track": 99, "mute": True})
     assert reply["error"]["code"] == "NOT_FOUND"
+    # zero-based like the parameters, and said so: "track index", with the track's name
+    assert reply["error"]["message"].startswith("No track index 99 (song has ")
+    reply = _raw_request("clip.get", {"track": 0, "slot": 99})
+    assert reply["error"]["message"].startswith("No slot index 99 on track index 0 '")
+    reply = _raw_request("batch", {"ops": [
+        {"op": "song.set", "params": {"tempo": 100}},
+        {"op": "notes.apply", "params": {"track": 0, "slot": 0, "add": [{"pitch": 60, "start_time": 0, "duration": 0}]}},
+    ]})
+    assert reply["error"]["code"] == "INVALID_PARAMS" and reply["error"]["details"]["index"] == 1
+    assert reply["error"]["message"].endswith("Parameter 'add[0].duration' must be more than 0")
 
 
 async def test_batch_is_one_undo_step(client, live):
