@@ -104,8 +104,17 @@ class TrackSet(Params):
 
 
 class ClipRef(Params):
+    """A session clip by `slot`, or an Arrangement View clip by `arrangement_clip` (index in time order)."""
+
     track: TrackIndex
-    slot: SlotIndex
+    slot: SlotIndex | None = None
+    arrangement_clip: Annotated[int, Field(ge=0, description="Arrangement clip index on the track, in time order")] | None = None
+
+    @model_validator(mode="after")
+    def _one_clip(self):
+        if (self.slot is None) == (self.arrangement_clip is None):
+            raise ValueError("give either slot or arrangement_clip")
+        return self
 
 
 class ClipCreate(Params):
@@ -115,9 +124,7 @@ class ClipCreate(Params):
     name: str | None = None
 
 
-class ClipSet(Params):
-    track: TrackIndex
-    slot: SlotIndex
+class ClipSet(ClipRef):
     name: str | None = None
     color_index: Annotated[int, Field(ge=0, le=69)] | None = None
     looping: bool | None = None
@@ -131,20 +138,16 @@ class ClipLaunch(Params):
     action: Literal["fire", "stop"] = "fire"
 
 
-class NotesGet(Params):
-    track: TrackIndex
-    slot: SlotIndex
+class NotesGet(ClipRef):
     from_time: Beats = 0.0
     time_span: Annotated[float, Field(gt=0)] | None = Field(None, description="Default: whole clip")
     from_pitch: Pitch = 0
     pitch_span: Annotated[int, Field(ge=1, le=128)] = 128
 
 
-class NotesApply(Params):
+class NotesApply(ClipRef):
     """Edit a MIDI clip as a diff, so untouched notes keep their ids and data."""
 
-    track: TrackIndex
-    slot: SlotIndex
     add: list[NoteIn] = Field(default_factory=list)
     modify: list[NoteChange] = Field(default_factory=list)
     remove: list[int] = Field(default_factory=list, description="note_ids to delete")
@@ -296,6 +299,82 @@ class RackSet(DeviceRef):
         return self
 
 
+class ArrangementGet(Params):
+    track: TrackIndex | None = Field(None, description="Only this track (default: all tracks)")
+
+
+class AddClip(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["add_clip"]
+    track: TrackIndex
+    start: Beats
+    length: Annotated[float, Field(gt=0, le=4096, description="Beats")]
+    name: str | None = None
+    color_index: Annotated[int, Field(ge=0, le=69)] | None = None
+    notes: list[NoteIn] = Field(default_factory=list, description="Notes, start_time relative to the clip start")
+
+
+class CopySessionClip(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["copy_session_clip"]
+    track: TrackIndex
+    slot: SlotIndex
+    start: Beats
+
+
+class DeleteArrangementClip(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["delete_clip"]
+    track: TrackIndex
+    clip: Annotated[int, Field(ge=0, description="arrangement_clip index from arrangement.get")]
+
+
+class SetLocator(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["set_locator"]
+    time: Beats
+    name: str | None = None
+
+
+class DeleteLocator(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["delete_locator"]
+    time: Beats
+
+
+ClipAction = Annotated[AddClip | CopySessionClip | DeleteArrangementClip, Field(discriminator="action")]
+LocatorAction = Annotated[SetLocator | DeleteLocator, Field(discriminator="action")]
+
+
+class ArrangementEdit(Params):
+    """Clip actions run in order as one undo step; a clip never lands on an existing one (CONFLICT)."""
+
+    actions: list[ClipAction] = Field(min_length=1, max_length=256)
+
+
+class ArrangementLocators(Params):
+    """Set (and name) or delete locators. Needs a stopped transport; the play position is restored."""
+
+    actions: list[LocatorAction] = Field(min_length=1, max_length=64)
+
+
+class SongPosition(Params):
+    beat: Beats
+
+
+class ArrangementTool(Params):
+    """Clip actions first (one undo step), then locators (transport must be stopped). A clip never lands on an existing one."""
+
+    actions: list[
+        Annotated[AddClip | CopySessionClip | DeleteArrangementClip | SetLocator | DeleteLocator, Field(discriminator="action")]
+    ] = Field(min_length=1, max_length=256)
+
+
 class SceneCreate(Params):
     index: int = Field(-1, ge=-1, description="Insert position, -1 = append")
     name: str | None = None
@@ -352,6 +431,10 @@ for spec in [
     OpSpec("return.create", ReturnCreate, "Create a return track, optionally with a native device", read_only=False),
     OpSpec("rack.get", DeviceRef, "Chains (devices, mixer, drum pad note) and macros of a rack", read_only=True),
     OpSpec("rack.set", RackSet, "Set macros, edit chains, or add a chain to a rack", read_only=False),
+    OpSpec("arrangement.get", ArrangementGet, "Arrangement clips per track (start, end), locators, song length", read_only=True),
+    OpSpec("arrangement.edit", ArrangementEdit, "Add MIDI clips with notes, copy session clips or delete arrangement clips", read_only=False, timeout=15.0, min_live=(12, 1, 10)),
+    OpSpec("arrangement.locators", ArrangementLocators, "Set, name or delete arrangement locators", read_only=False, timeout=30.0),
+    OpSpec("song.position", SongPosition, "Move the play position and wait until Live applied it", read_only=False, timeout=5.0),
     OpSpec("scene.create", SceneCreate, "Create a scene", read_only=False),
     OpSpec("scene.fire", SceneRef, "Launch a scene", read_only=False),
     OpSpec("history.step", History, "Undo or redo in Live", read_only=False),

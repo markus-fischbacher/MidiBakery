@@ -79,6 +79,7 @@ class LiveHarness:
                 except BaseException as exc:
                     done.put((False, exc))
             if not self.paused.is_set():
+                self.song.tick()
                 self.surface.update_display()
             time.sleep(TICK_SECONDS)
 

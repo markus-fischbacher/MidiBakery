@@ -43,7 +43,7 @@ def _all_notes(clip):
 
 @op("notes.get")
 def notes_get(ctx, params):
-    clip = ctx.midi_clip(params["track"], params["slot"])
+    clip = ctx.midi_clip_at(params)
     from_time = float(params.get("from_time", 0.0))
     time_span = params.get("time_span")
     if time_span is None:
@@ -90,7 +90,7 @@ def _make_spec(note):
 
 @op("notes.apply")
 def notes_apply(ctx, params):
-    clip = ctx.midi_clip(params["track"], params["slot"])
+    clip = ctx.midi_clip_at(params)
     add = params.get("add") or []
     modify = params.get("modify") or []
     remove = params.get("remove") or []

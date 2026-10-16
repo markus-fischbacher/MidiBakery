@@ -9,7 +9,7 @@ STOP_PENDING = -2
 
 
 def describe_clip(clip):
-    return {
+    data = {
         "name": clip.name,
         "length": clip.length,
         "is_midi": clip.is_midi_clip,
@@ -25,6 +25,10 @@ def describe_clip(clip):
         "signature_numerator": clip.signature_numerator,
         "signature_denominator": clip.signature_denominator,
     }
+    if getattr(clip, "is_arrangement_clip", False):
+        data["start_time"] = clip.start_time
+        data["end_time"] = clip.end_time
+    return data
 
 
 @op("clip.create")
@@ -43,15 +47,15 @@ def clip_create(ctx, params):
 
 @op("clip.get")
 def clip_get(ctx, params):
-    result = describe_clip(ctx.clip(params["track"], params["slot"]))
-    track = ctx.track(params["track"])
-    result["stop_pending"] = track.fired_slot_index == STOP_PENDING
+    result = describe_clip(ctx.clip_at(params))
+    if params.get("arrangement_clip") is None:
+        result["stop_pending"] = ctx.track(params["track"]).fired_slot_index == STOP_PENDING
     return result
 
 
 @op("clip.set")
 def clip_set(ctx, params):
-    clip = ctx.clip(params["track"], params["slot"])
+    clip = ctx.clip_at(params)
     loop_start = params.get("loop_start")
     loop_end = params.get("loop_end")
     start = clip.loop_start if loop_start is None else loop_start
@@ -76,7 +80,10 @@ def clip_set(ctx, params):
 
 @op("clip.delete")
 def clip_delete(ctx, params):
-    ctx.clip(params["track"], params["slot"])  # existence check
+    clip = ctx.clip_at(params)  # existence check
+    if params.get("arrangement_clip") is not None:
+        ctx.track(params["track"]).delete_clip(clip)
+        return {"deleted": {"track": params["track"], "arrangement_clip": params["arrangement_clip"]}}
     ctx.clip_slot(params["track"], params["slot"]).delete_clip()
     return {"deleted": [params["track"], params["slot"]]}
 

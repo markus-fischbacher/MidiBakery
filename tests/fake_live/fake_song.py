@@ -178,6 +178,9 @@ class Clip(LiveObject):
         self.signature_numerator = 4
         self.signature_denominator = 4
         self.notes = {}  # note_id -> dict
+        self.is_arrangement_clip = False
+        self.start_time = 0.0
+        self.end_time = length
 
     def get_notes_extended(self, from_pitch, pitch_span, from_time, time_span):
         return [
@@ -259,9 +262,32 @@ class Track(LiveObject):
         self.output_routing_channel = self.available_output_routing_channels[0]
         self.devices = []
         self.clip_slots = [ClipSlot() for _ in range(scenes)]
+        self.arrangement_clips = []
+        self.song = None  # set by Song, for Live's side effects on the play position
         self.playing_slot_index = -1
         self.fired_slot_index = -1  # -2: Clip Stop button fired (stop pending)
         self.stopped_unquantized = 0
+
+    def create_midi_clip(self, start_time, length):  # Live 12.1.10+
+        clip = Clip(length)
+        clip.is_arrangement_clip = True
+        clip.start_time, clip.end_time = start_time, start_time + length
+        self.arrangement_clips.append(clip)
+        return clip
+
+    def duplicate_clip_to_arrangement(self, clip, destination_time):
+        copy_ = Clip(clip.length, clip.is_midi_clip)
+        copy_.name = clip.name
+        copy_.notes = copy.deepcopy(clip.notes)
+        copy_.is_arrangement_clip = True
+        copy_.start_time, copy_.end_time = destination_time, destination_time + clip.length
+        self.arrangement_clips.append(copy_)
+        if self.song is not None:  # like Live: the play position jumps to the end of the copy
+            self.song.current_song_time = copy_.end_time
+        return copy_
+
+    def delete_clip(self, clip):
+        self.arrangement_clips.remove(clip)
 
     def stop_all_clips(self, quantized=True):
         for slot in self.clip_slots:
@@ -284,6 +310,12 @@ class Scene(LiveObject):
         self.fired += 1
 
 
+class CuePoint(LiveObject):
+    def __init__(self, time):
+        self.time = time
+        self.name = ""
+
+
 class SongView(LiveObject):
     def __init__(self, song):
         self.selected_track = song.tracks[0] if song.tracks else None
@@ -294,7 +326,10 @@ class Song(LiveObject):
     def __init__(self, tracks=2, scenes=8):
         self.scenes = [Scene() for _ in range(scenes)]
         self.tracks = [Track("%d-MIDI" % (i + 1), scenes=scenes) for i in range(tracks)]
+        for track in self.tracks:
+            track.song = self
         self.return_tracks = []
+        self.cue_points = []
         self.master_track = Track("Main", scenes=0)
         self.view = SongView(self)
         self.tempo = 120.0
@@ -303,7 +338,8 @@ class Song(LiveObject):
         self.is_playing = False
         self.record_mode = False
         self.metronome = False
-        self.current_song_time = 0.0
+        self._song_time = 0.0
+        self._pending_time = None
         self.loop = False
         self.loop_start = 0.0
         self.loop_length = 16.0
@@ -347,6 +383,31 @@ class Song(LiveObject):
     def create_audio_track(self, index):
         self._insert_track(Track("Audio", False, len(self.scenes)), index)
 
+    # Like Live: a new play position takes effect on a later tick, not when it is set.
+    @property
+    def current_song_time(self):
+        return self._song_time
+
+    @current_song_time.setter
+    def current_song_time(self, value):
+        self._pending_time = float(value)
+
+    def tick(self):
+        if self._pending_time is not None:
+            self._song_time, self._pending_time = self._pending_time, None
+
+    @property
+    def song_length(self):
+        ends = [c.end_time for t in self.tracks for c in t.arrangement_clips] + [c.time for c in self.cue_points]
+        return max(ends + [0.0])
+
+    def set_or_delete_cue(self):
+        for cue in self.cue_points:
+            if cue.time == self._song_time:
+                self.cue_points.remove(cue)
+                return
+        self.cue_points.append(CuePoint(self._song_time))
+
     def create_return_track(self):
         track = Track("%s-Return" % "ABCDEFGHIJKL"[len(self.return_tracks)], scenes=0)
         self.return_tracks.append(track)
@@ -355,6 +416,7 @@ class Song(LiveObject):
                 other.mixer_device.add_send()
 
     def _insert_track(self, track, index):
+        track.song = self
         for _ in self.return_tracks:
             track.mixer_device.add_send()
         if index == -1:

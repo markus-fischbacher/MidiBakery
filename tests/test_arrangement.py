@@ -1,0 +1,146 @@
+"""Arrangement View ops: clips on the timeline, locators, session -> arrangement, against the fake LOM."""
+
+import pytest
+from pydantic import ValidationError
+
+from midibakery.bridge import BridgeError
+from midibakery.catalog.ops import ArrangementEdit, ClipRef
+
+KICK = {"pitch": 36, "start_time": 0.0, "duration": 0.25, "velocity": 110}
+
+
+async def test_clips_with_notes_on_the_timeline(client):
+    result = await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 0, "start": 16, "length": 16, "name": "Drop", "notes": [KICK, {**KICK, "start_time": 1.0}]},
+        {"action": "add_clip", "track": 0, "start": 0, "length": 16, "name": "Intro"},
+    ]})
+    assert [r["start"] for r in result["results"]] == [16.0, 0.0] and result["song_length"] == 32.0
+    arrangement = await client.call("arrangement.get", {})
+    clips = arrangement["tracks"][0]["clips"]
+    assert [(c["index"], c["name"], c["start"], c["end"]) for c in clips] == [(0, "Intro", 0.0, 16.0), (1, "Drop", 16.0, 32.0)]
+
+    clip = await client.call("clip.get", {"track": 0, "arrangement_clip": 1})
+    assert clip["start_time"] == 16.0 and clip["end_time"] == 32.0 and "stop_pending" not in clip
+    notes = (await client.call("notes.get", {"track": 0, "arrangement_clip": 1}))["notes"]
+    assert [n["start_time"] for n in notes] == [0.0, 1.0]
+
+    changed = await client.call("notes.apply", {"track": 0, "arrangement_clip": 1, "modify": [{"note_id": notes[0]["note_id"], "velocity": 90}]})
+    assert changed["modified"] == 1
+
+
+async def test_nothing_is_overwritten(client):
+    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 16, "name": "Keep"}]})
+    with pytest.raises(BridgeError) as exc:
+        await client.call("arrangement.edit", {"actions": [
+            {"action": "add_clip", "track": 1, "start": 16, "length": 4},
+            {"action": "add_clip", "track": 1, "start": 8, "length": 16},
+        ]})
+    assert exc.value.code == "CONFLICT" and exc.value.details["index"] == 1 and exc.value.details["completed"] == 1
+    assert "Keep" in str(exc.value)
+    clips = (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"]
+    assert [(c["start"], c["end"]) for c in clips] == [(0.0, 16.0), (16.0, 20.0)]  # earlier actions stay; undo reverts all
+
+
+async def test_session_clip_to_the_arrangement(client):
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 8, "name": "Loop"})
+    await client.call("notes.apply", {"track": 0, "slot": 0, "add": [KICK]})
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "copy_session_clip", "track": 0, "slot": 0, "start": 32},
+        {"action": "copy_session_clip", "track": 0, "slot": 0, "start": 40},
+    ]})
+    clips = (await client.call("arrangement.get", {"track": 0}))["tracks"][0]["clips"]
+    assert [(c["name"], c["start"]) for c in clips] == [("Loop", 32.0), ("Loop", 40.0)]
+    assert len((await client.call("notes.get", {"track": 0, "arrangement_clip": 1}))["notes"]) == 1
+
+
+async def test_locators_named_moved_back_and_deleted(client, live):
+    # The fake applies a new play position one tick later, like Live: the op has to wait for it.
+    live.on_main(lambda: setattr(live.song, "current_song_time", 4.0))
+    await client.call("arrangement.locators", {"actions": [
+        {"action": "set_locator", "time": 0, "name": "Intro"},
+        {"action": "set_locator", "time": 64, "name": "Drop"},
+        {"action": "set_locator", "time": 64, "name": "Drop 1"},  # existing: renamed, not toggled away
+    ]})
+    locators = (await client.call("arrangement.get", {}))["locators"]
+    assert [(l["name"], l["time"]) for l in locators] == [("Intro", 0.0), ("Drop 1", 64.0)]
+    assert live.on_main(lambda: live.song.current_song_time) == 4.0  # play position restored
+
+    await client.call("arrangement.locators", {"actions": [{"action": "delete_locator", "time": 0}]})
+    assert [l["name"] for l in (await client.call("arrangement.get", {}))["locators"]] == ["Drop 1"]
+
+
+async def test_locators_need_a_stopped_transport(client, live):
+    live.on_main(lambda: setattr(live.song, "is_playing", True))
+    with pytest.raises(BridgeError) as exc:
+        await client.call("arrangement.locators", {"actions": [{"action": "set_locator", "time": 32}]})
+    assert exc.value.code == "CONFLICT"
+
+
+async def test_locators_cannot_share_a_batch(client):
+    with pytest.raises(BridgeError) as exc:
+        await client.call("batch", {"ops": [{"op": "arrangement.locators", "params": {"actions": [{"action": "set_locator", "time": 0}]}}]})
+    assert exc.value.code == "INVALID_PARAMS"
+
+
+async def test_edit_arrangement_tool_does_clips_then_locators(client, live):
+    from midibakery.mcp import build_server
+
+    server = build_server(client)
+    await server.call_tool("edit_arrangement", {"actions": [
+        {"action": "set_locator", "time": 0, "name": "Intro"},
+        {"action": "add_clip", "track": 0, "start": 0, "length": 16, "name": "Intro"},
+        {"action": "set_locator", "time": 16, "name": "Drop"},
+    ]})
+    arrangement = await client.call("arrangement.get", {})
+    assert [l["name"] for l in arrangement["locators"]] == ["Intro", "Drop"]
+    assert [c["name"] for c in arrangement["tracks"][0]["clips"]] == ["Intro"]
+
+
+async def test_delete_arrangement_clips(client):
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 0, "start": 0, "length": 4},
+        {"action": "add_clip", "track": 0, "start": 4, "length": 4},
+        {"action": "add_clip", "track": 0, "start": 8, "length": 4},
+    ]})
+    await client.call("arrangement.edit", {"actions": [{"action": "delete_clip", "track": 0, "clip": 1}]})
+    await client.call("clip.delete", {"track": 0, "arrangement_clip": 0})
+    clips = (await client.call("arrangement.get", {"track": 0}))["tracks"][0]["clips"]
+    assert [c["start"] for c in clips] == [8.0]
+
+
+async def test_one_edit_is_one_undo_step(client, live):
+    before = live.on_main(lambda: live.song.undo_steps)
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 0, "start": 0, "length": 4},
+        {"action": "add_clip", "track": 1, "start": 0, "length": 4},
+    ]})
+    assert live.on_main(lambda: live.song.undo_steps) == before + 1
+
+
+async def test_audio_tracks_get_no_midi_clips(client):
+    audio = (await client.call("track.create", {"kind": "audio"}))["track"]
+    with pytest.raises(BridgeError) as exc:
+        await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": audio, "start": 0, "length": 4}]})
+    assert exc.value.code == "INVALID_PARAMS"
+
+
+def test_core_checks_clip_addressing_and_actions():
+    with pytest.raises(ValidationError):
+        ClipRef(track=0)
+    with pytest.raises(ValidationError):
+        ClipRef(track=0, slot=0, arrangement_clip=0)
+    with pytest.raises(ValidationError):
+        ArrangementEdit(actions=[{"action": "move_clip", "track": 0}])
+    with pytest.raises(ValidationError):
+        ArrangementEdit(actions=[{"action": "add_clip", "track": 0, "start": 0, "length": 0}])
+    with pytest.raises(ValidationError):
+        ArrangementEdit(actions=[{"action": "set_locator", "time": 0}])  # locators go to arrangement.locators
+
+
+async def test_edit_arrangement_keeps_the_play_position(client, live):
+    from midibakery.mcp import build_server
+
+    live.on_main(lambda: setattr(live.song, "current_song_time", 12.0))
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 8})
+    await build_server(client).call_tool("edit_arrangement", {"actions": [{"action": "copy_session_clip", "track": 0, "slot": 0, "start": 64}]})
+    assert (await client.call("song.get"))["current_song_time"] == 12.0  # Live moved it to 72; the tool put it back

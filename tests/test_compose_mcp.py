@@ -109,6 +109,15 @@ async def test_compose_tools_are_listed_and_annotated():
     assert "preview" in tools["compose_melody"].input_schema["properties"]
 
 
+async def test_plan_changes_schema_stays_small_but_steps_are_still_checked(client):
+    server = build_server(client)
+    tools = {t.name: t for t in await server.list_tools()}
+    assert len(json.dumps(tools["plan_changes"].input_schema)) < 1500  # kind + free fields, not every compose schema
+    with pytest.raises(ToolError) as exc:
+        await server.call_tool("plan_changes", {"steps": [{"kind": "bass", "track": 0, "slot": 0, "styel": "walking"}]})
+    assert "styel" in str(exc.value)
+
+
 async def test_full_song_sketch_via_plan_changes(client, live):
     server = build_server(client)
     await client.call("song.set", {"root_note": 9, "scale_name": "Minor"})
