@@ -130,3 +130,6 @@ def test_chat_page_offers_key_entry_in_browser_and_device(api):
     page = api.get("/ui").text
     assert 'id="keyInput" type="password"' in page
     assert "if (keyMode) { keyMode = false; saveKey(raw); return true; }" in page
+    # Only for Claude: hidden until a connection or the model choice says anthropic.
+    assert '<button id="keyButton" type="button" title="Claude API key" hidden>' in page
+    assert 'const claude = provider === "anthropic";' in page
