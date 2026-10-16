@@ -17,11 +17,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
+
+      # The Max for Live devices' JavaScript (analysis, MIDI Tool logic) runs on Max's Node 22;
+      # the tests that run it must not skip here (MIDIBAKERY_REQUIRE_NODE below).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
 
       # 3.12+ runs the core; 3.11 is Live 12's embedded Python, used to check
       # that the Remote Script compiles there (test_remote_script_compiles_on_lives_python).
@@ -34,8 +40,11 @@ jobs:
       - name: Op manifest matches the catalog
         run: uv run midibakery manifest --check
 
+      # Pinned: a new ruff release must not turn CI red on its own.
       - name: Lint (errors only)
-        run: uvx ruff check --select F,E9 packages tests
+        run: uvx ruff@0.17.1 check --select F,E9 packages tests
 
       - name: Tests
-        run: uv run pytest -q
+        env:
+          MIDIBAKERY_REQUIRE_NODE: "1"
+        run: uv run pytest -q -rs

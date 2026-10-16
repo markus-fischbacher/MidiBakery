@@ -1,6 +1,8 @@
 """Runs the real Remote Script against the fake LOM on a simulated Live main thread."""
 
+import os
 import queue
+import shutil
 import sys
 import threading
 import time
@@ -17,6 +19,12 @@ import Live.Application  # noqa: E402
 from fake_song import Browser, CInstance, Song  # noqa: E402
 
 TICK_SECONDS = 0.005
+
+
+def pytest_configure(config):
+    # CI sets this: the Max devices' JavaScript tests skip without Node.js, which must not go unnoticed there.
+    if os.environ.get("MIDIBAKERY_REQUIRE_NODE") and shutil.which("node") is None:
+        raise pytest.UsageError("MIDIBAKERY_REQUIRE_NODE is set but there is no node on PATH")
 
 
 class LiveHarness:
