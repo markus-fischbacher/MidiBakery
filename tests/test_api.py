@@ -7,6 +7,7 @@ import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from midibakery import credentials
 from midibakery.agent import REDUCED_TOOLS
 from midibakery.agent.providers.base import ToolCall, Turn
 from midibakery.api.server import api_info_path, build_app, write_api_info
@@ -325,6 +326,19 @@ def test_models_lists_default_and_claude_and_skips_unreachable_local_servers(app
     assert models[0]["provider"] == "" and models[0]["label"].startswith("Default (")
     assert {"provider": "anthropic", "model": "claude-opus-5-5", "label": "Claude Opus 5.5"} in models
     assert not [m for m in models if m["provider"] in ("lmstudio", "ollama")]
+
+
+def test_models_without_an_api_key_still_lists_the_choices(bridge_env, monkeypatch):
+    monkeypatch.setenv("LMSTUDIO_HOST", "http://127.0.0.1:9")
+    monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:9")
+
+    def no_key(options):
+        raise credentials.MissingKey("No Claude API key")
+
+    api = TestClient(build_app(BridgeClient(), no_key, TOKEN))
+    response = api.get("/models", headers=AUTH)
+    assert response.status_code == 200 and "No Claude API key" in response.json()["error"]
+    assert any(m["provider"] == "anthropic" for m in response.json()["models"])
 
 
 async def test_local_models_are_listed_and_embeddings_dropped():

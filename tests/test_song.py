@@ -359,3 +359,49 @@ async def test_an_unswept_role_keeps_an_earlier_songs_filter_open(client, live):
     live.on_main(lambda: live.song.tracks[1].insert_device("Auto Filter", 0))  # e.g. left by a Peak-Time song
     preview = await _plan(build_server(client), create_missing=False)  # House sweeps no bass
     assert preview["tracks"]["bass"]["automation"] == "Auto Filter Low-pass cutoff"
+
+
+class _FailingEdit:
+    """The bridge, but the song's clip edit breaks after its first clip."""
+
+    def __init__(self, client):
+        self._client = client
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    async def call(self, op, params=None, **kwargs):
+        if op == "arrangement.edit":
+            params = {"actions": params["actions"][:1] + [{"action": "add_clip", "track": 99, "start": 0, "length": 4}]}
+        return await self._client.call(op, params, **kwargs)
+
+
+async def test_a_failed_apply_takes_back_tracks_and_clips(client, live):
+    _studio(live)
+    server = build_server(_FailingEdit(client))
+    preview = await _plan(server, set_tempo=True)
+    before = live.on_main(lambda: live.song.undo_calls)
+    with pytest.raises(ToolError) as exc:
+        await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    assert "were undone, Live is unchanged" in str(exc.value)
+    assert live.on_main(lambda: live.song.undo_calls) - before == 3  # the clip already written, the tempo, the new tracks
+
+
+async def test_songs_need_four_four(client, live):
+    _studio(live)
+    live.on_main(lambda: setattr(live.song, "signature_numerator", 3))
+    with pytest.raises(ToolError) as exc:
+        await _plan(build_server(client))
+    assert "needs 4/4" in str(exc.value)
+
+
+def test_shorter_and_longer_songs_move_the_section_borders():
+    radio = {s.name: s for s in sized(TEMPLATES["peak_time_techno"], "radio")}
+    assert radio["Intro"].bars == 16 and radio["Intro"].parts["drums"] == "kick_hats:8,groove"  # the groove still comes in
+    assert radio["Breakdown"].parts["lead"] == "-:8,tease:3"  # the hook still hints before the peak
+    extended = {s.name: s for s in sized(TEMPLATES["peak_time_techno"], "extended")}
+    assert extended["Outro"].parts["drums"] == "groove:48,kick_hats:16,sparse"
+    house = {s.name: s for s in sized(TEMPLATES["house"], minutes=3)}
+    for section in house.values():
+        for spec in (*section.parts.values(), *section.sweeps.values()):
+            assert sum(length for _, _, length in parse_segments(spec, section.bars)) <= section.bars
