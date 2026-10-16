@@ -7,6 +7,7 @@ Clip automation (`envelopes` on add_clip): Live cannot create an envelope on an
 arrangement clip ("Not a session clip"), so such a clip is built in a free session
 slot, envelopes and all, copied to the Arrangement and the session clip removed.
 Envelope values are absolute: the parameter follows them while the clip plays.
+Targets, shapes and units: envelopes.py.
 
 `arrangement.locators` runs across ticks: Live only sets a locator at the play
 position, and a new play position takes effect on a later tick, not at once.
@@ -14,6 +15,7 @@ position, and a new play position takes effect on a later tick, not at once.
 
 from ..protocol import ErrorCode, OpError
 from ..registry import op
+from . import envelopes as envelope_mod
 from .notes import _make_spec, _validate_note
 
 EPSILON = 1e-6
@@ -128,66 +130,6 @@ def _find_clip(ctx, track_index, start):
     raise OpError(ErrorCode.LIVE_ERROR, "Live did not place the clip at beat %g on track %d" % (start, track_index))
 
 
-def _resolve_envelopes(track, envelopes):
-    """(parameter, points) per envelope; device is a top-level index on the clip's own track."""
-    resolved = []
-    for i, env in enumerate(envelopes):
-        devices = list(track.devices)
-        index = env["device"]
-        if not 0 <= index < len(devices):
-            raise OpError(ErrorCode.NOT_FOUND, "envelopes[%d]: no device %d on the track (it has %d)" % (i, index, len(devices)))
-        param = next((p for p in devices[index].parameters if p.name == env["parameter"]), None)
-        if param is None:
-            raise OpError(ErrorCode.NOT_FOUND, "envelopes[%d]: device '%s' has no parameter '%s'" % (i, devices[index].name, env["parameter"]))
-        points = sorted(((float(t), min(1.0, max(0.0, float(v)))) for t, v in env["points"]), key=lambda p: p[0])
-        if not points:
-            raise OpError(ErrorCode.INVALID_PARAMS, "envelopes[%d]: no points" % i)
-        resolved.append((param, points))
-    return resolved
-
-
-def _raw(param, fraction):
-    value = param.min + fraction * (param.max - param.min)
-    return float(round(value)) if param.is_quantized else value
-
-
-def _write_envelope(clip, param, points, length):
-    """Breakpoints where Live has create_event, else 16th steps along the lines between them."""
-    env = clip.automation_envelope(param) or clip.create_automation_envelope(param)
-    if env is None:
-        raise OpError(ErrorCode.LIVE_ERROR, "Live did not create an envelope for '%s'" % param.name)
-    if param.is_quantized or not hasattr(env, "create_event"):
-        _write_steps(env, param, points, length)
-        return "steps"
-    try:
-        if points[0][0] > 0:
-            env.create_event(0.0, _raw(param, points[0][1]))
-        for t, v in points:
-            env.create_event(min(t, length), _raw(param, v))
-        if points[-1][0] < length:
-            env.create_event(length, _raw(param, points[-1][1]))
-    except Exception:  # an unknown signature in this Live build: fall back to steps
-        _write_steps(env, param, points, length)
-        return "steps"
-    return "events"
-
-
-def _value(points, t):
-    if t <= points[0][0]:
-        return points[0][1]
-    for (t0, v0), (t1, v1) in zip(points, points[1:]):
-        if t <= t1:
-            return v0 if t1 - t0 < EPSILON else v0 + (v1 - v0) * (t - t0) / (t1 - t0)
-    return points[-1][1]
-
-
-def _write_steps(env, param, points, length):
-    step, t = 0.25, 0.0
-    while t < length - EPSILON:
-        env.insert_step(t, min(step, length - t), _raw(param, _value(points, t)))
-        t += step
-
-
 def _free_slot(ctx, track):
     """A free session slot of the track, and the index of a scene made for it (None if none was needed)."""
     for i, slot in enumerate(track.clip_slots):
@@ -200,7 +142,7 @@ def _free_slot(ctx, track):
 
 
 def _add_clip_via_session(ctx, action, track, start, length, notes, envelopes):
-    resolved = _resolve_envelopes(track, envelopes)
+    resolved = envelope_mod.resolve(ctx, track, envelopes)
     index, scene = _free_slot(ctx, track)
     slot = track.clip_slots[index]
     try:
@@ -212,7 +154,7 @@ def _add_clip_via_session(ctx, action, track, start, length, notes, envelopes):
             clip.color_index = action["color_index"]
         if notes:
             clip.add_new_notes(tuple(_make_spec(n) for n in notes))
-        modes = [_write_envelope(clip, param, points, length) for param, points in resolved]
+        modes = [envelope_mod.write(clip, param, points, length) for param, points in resolved]
         track.duplicate_clip_to_arrangement(clip, start)
     finally:
         if slot.has_clip:

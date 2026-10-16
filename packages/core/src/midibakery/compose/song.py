@@ -267,25 +267,41 @@ def _fraction(hz: float) -> float:
     return min(1.0, max(0.0, math.log(max(hz, 20.0) / 20.0) / math.log(1000.0)))
 
 
-def _sweep(spec: str | None, section_bars: int, first: int, clip_length: float, bpb: float, open_hz: float) -> list[list[float]]:
-    """Envelope points [beat in clip, 0-1] from a sweep spec ("20:8,20>300"); open without one."""
+def _sweep(spec: str | None, section_bars: int, first: int, clip_length: float, bpb: float, open_hz: float) -> dict[str, Any]:
+    """Envelope points [beat in clip, 0-1] and shapes from a sweep spec ("20:8,20>300"); open without one.
+    A segment "a>b~exp" (or ~log) curves, "a>b~sine/2" (or triangle, saw, square) swings between
+    a and b every 2 bars; the Remote Script draws those."""
     if not spec:
-        return [[0.0, _fraction(open_hz)]]
+        return {"points": [[0.0, _fraction(open_hz)]]}
     points: list[list[float]] = []
+    shapes: list[dict[str, Any]] = []
+    end: tuple[float, float] | None = None  # time and value where the previous segment ended
     for name, offset, bars in parse_segments(spec, section_bars):
+        name, _, shape = name.partition("~")
         start_hz, _, end_hz = name.partition(">")
-        a = open_hz if start_hz == "-" else float(start_hz)
-        b = a if not end_hz else float(end_hz)
+        a = _fraction(open_hz if start_hz == "-" else float(start_hz))
+        b = a if not end_hz else _fraction(float(end_hz))
         t0 = min(clip_length, max(0.0, (offset - first) * bpb))
         t1 = min(clip_length, max(0.0, (offset + bars - first) * bpb))
         if t1 <= t0:
             continue
-        if points and abs(points[-1][0] - t0) < EPSILON and abs(points[-1][1] - _fraction(a)) > EPSILON:
+        joined = end is not None and abs(end[0] - t0) < EPSILON
+        if joined and abs(end[1] - a) > EPSILON:  # type: ignore[index]
             t0 += 0.01  # a jump: Live keeps one value per time
-        if not points or abs(points[-1][0] - t0) > EPSILON:
-            points.append([round(t0, 3), round(_fraction(a), 4)])
-        points.append([round(t1, 3), round(_fraction(b), 4)])
-    return points or [[0.0, _fraction(open_hz)]]
+        if shape:
+            kind, _, period = shape.partition("/")
+            shapes.append({"type": kind, "start": round(t0, 3), "length": round(t1 - t0, 3), "from_value": round(a, 4),
+                           "to_value": round(b, 4), **({"period": float(period) * bpb} if period else {})})
+            end = (t1, b if kind in ("exp", "log") else a)  # a wave ends near its start value
+            continue
+        if not joined or abs(end[1] - a) > EPSILON:  # type: ignore[index]
+            points.append([round(t0, 3), round(a, 4)])
+        points.append([round(t1, 3), round(b, 4)])
+        end = (t1, b)
+    envelope: dict[str, Any] = {"points": points} if points else {}
+    if shapes:
+        envelope["shapes"] = shapes
+    return envelope or {"points": [[0.0, _fraction(open_hz)]]}
 
 
 def _auto_filter(track: dict[str, Any]) -> int | None:
@@ -550,8 +566,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 "notes": [n.to_spec() for n in notes],
             }
             if target.filter is not None:
-                points = _sweep(section.sweeps.get(role), section.bars, first, clip_length, bpb, OPEN_HZ[target.filter])
-                action["envelopes"] = [{"device": target.filter_device, "parameter": "Frequency", "points": points}]
+                envelope = _sweep(section.sweeps.get(role), section.bars, first, clip_length, bpb, OPEN_HZ[target.filter])
+                action["envelopes"] = [{"device": target.filter_device, "parameter": "Frequency", **envelope}]
             actions.append(action)
     locators = [{"action": "set_locator", "time": at, "name": section.name} for section, at in zip(sections, starts)]
     if len(actions) > 256:

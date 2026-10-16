@@ -49,6 +49,8 @@ class Parameter(LiveObject):
         self.value_items = list(items)
 
     def str_for_value(self, value):
+        if self.is_quantized and self.value_items:  # Live shows the choice's name
+            return self.value_items[int(round(value))]
         return "%.2f" % value
 
 
@@ -186,6 +188,9 @@ class Envelope(LiveObject):
     def create_event(self, time, value):
         self.events = sorted([e for e in self.events if abs(e[0] - time) > 1e-9] + [(time, value)])
 
+    def delete_events_in_range(self, start, end):
+        self.events = [e for e in self.events if not start <= e[0] <= end]
+
     def insert_step(self, time, duration, value):
         self.create_event(time, value)
         self.create_event(time + duration - 1e-6, value)
@@ -227,7 +232,12 @@ class Clip(LiveObject):
         self.envelopes = {}  # parameter -> Envelope
 
     def automation_envelope(self, parameter):
+        if self.is_arrangement_clip:  # Live 12.4 shows scripts no arrangement clip envelopes
+            return None
         return self.envelopes.get(id(parameter))
+
+    def clear_envelope(self, parameter):
+        self.envelopes.pop(id(parameter), None)
 
     def create_automation_envelope(self, parameter):
         if self.is_arrangement_clip:  # what Live 12.4 answers for arrangement clips

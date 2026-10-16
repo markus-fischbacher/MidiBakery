@@ -324,12 +324,33 @@ class ArrangementGet(Params):
     track: TrackIndex | None = Field(None, description="Only this track (default: all tracks)")
 
 
+class Shape(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["ramp", "exp", "log", "sine", "triangle", "saw", "square"] = Field(
+        description="ramp/exp (slow start)/log (fast start) go from_value -> to_value; waves swing between them each period")
+    start: Beats = Field(0.0, description="Beat in the clip")
+    length: Annotated[float, Field(gt=0, le=4096, description="Beats")]
+    from_value: float
+    to_value: float
+    period: Annotated[float, Field(gt=0, le=1024, description="Waves: beats per cycle (default 4)")] | None = None
+
+
 class Envelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    device: Annotated[int, Field(ge=0, description="Device index on the clip's track")]
+    device: Annotated[int, Field(ge=0, description="Device index on the clip's track; omit for the mixer: Volume, Pan, Send A, ...")] | None = None
+    chain_path: ChainPath = Field(default_factory=list)
     parameter: str = Field(description="Exact parameter name")
-    points: list[tuple[float, float]] = Field(min_length=1, max_length=512, description="[beat in clip, 0-1 of the parameter range]; lines between")
+    unit: Literal["fraction", "display"] = Field("fraction", description="fraction: 0-1 of the range; display: as Live shows it, in Hz, s, dB, %")
+    points: list[tuple[float, float]] = Field(default_factory=list, max_length=512, description="[beat in clip, value]; lines between")
+    shapes: list[Shape] = Field(default_factory=list, max_length=32)
+
+    @model_validator(mode="after")
+    def _something(self) -> Envelope:
+        if not self.points and not self.shapes:
+            raise ValueError("give points or shapes")
+        return self
 
 
 class AddClip(BaseModel):
@@ -343,6 +364,12 @@ class AddClip(BaseModel):
     color_index: Annotated[int, Field(ge=0, le=69)] | None = None
     notes: list[NoteIn] = Field(default_factory=list, description="Notes, start_time relative to the clip start")
     envelopes: list[Envelope] = Field(default_factory=list, max_length=8, description="Clip automation; values are absolute while the clip plays")
+
+
+class ClipEnvelope(ClipRef):
+    envelopes: list[Envelope] = Field(min_length=1, max_length=8)
+    clear: bool = Field(True, description="Session clip: replace the parameter's envelope; false: add to it")
+    replace_envelopes: bool = Field(False, description="Required for an arrangement clip: Live hides its envelopes, so it is rebuilt with only the given ones")
 
 
 class CopySessionClip(BaseModel):
@@ -484,6 +511,7 @@ for spec in [
     OpSpec("return.create", ReturnCreate, "Create a return track, optionally with a native device", read_only=False),
     OpSpec("rack.get", DeviceRef, "Chains (devices, mixer, drum pad note) and macros of a rack", read_only=True),
     OpSpec("rack.set", RackSet, "Set macros, edit chains, or add a chain to a rack", read_only=False),
+    OpSpec("clip.envelope", ClipEnvelope, "Write clip automation (points or shapes) onto an existing clip", read_only=False),
     OpSpec("arrangement.get", ArrangementGet, "Arrangement clips per track (start, end), locators, song length", read_only=True),
     OpSpec("arrangement.edit", ArrangementEdit, "Add MIDI clips with notes, copy session clips or delete arrangement clips", read_only=False, timeout=15.0, min_live=(12, 1, 10)),
     OpSpec("arrangement.locators", ArrangementLocators, "Set, name or delete arrangement locators", read_only=False, timeout=30.0),

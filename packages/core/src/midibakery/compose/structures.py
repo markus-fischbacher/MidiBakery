@@ -10,7 +10,8 @@ together; `variation` gives a later section of that kind its own notes.
 Automation: a style names an Auto Filter type per role (`filters`), a section moves
 its cutoff with `sweeps`, in Hz and in the segment syntax of the parts: "20:8,20>300"
 holds 20 Hz for 8 bars, then sweeps to 300 Hz. A filtered role without a sweep
-stays open (Low-pass 20 kHz, High-pass 20 Hz).
+stays open (Low-pass 20 kHz, High-pass 20 Hz). "300>8000~exp" curves (slow start; ~log:
+fast start), "400>3000~sine/2" swings between the two every 2 bars (also triangle, saw, square).
 
 Mix: a style's `mix` sets the faders of new tracks and the sends to a Reverb and a
 Delay return, in dB as Live shows them; a role without a send stays dry.

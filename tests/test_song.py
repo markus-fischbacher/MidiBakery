@@ -6,7 +6,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from fake_song import DrumRackDevice
-from midibakery.compose.song import _batch_steps
+from midibakery.compose.song import _batch_steps, _sweep
 from midibakery.compose.structures import TEMPLATES, parse_segments, sized
 from midibakery.mcp import build_server
 
@@ -113,6 +113,15 @@ async def test_mix_scaffold_returns_sends_and_levels(client, live):
     assert chords["volume"]["display"] == "-12.0 dB" and [s["display"] for s in chords["sends"]] == ["-14.0 dB", "-22.0 dB"]
     assert tracks["Drums"]["volume"]["display"] == "0.0 dB" and [s["display"] for s in tracks["Drums"]["sends"]] == ["-24.0 dB", "-inf dB"]
     assert [s["display"] for s in tracks["Bass"]["sends"]] == ["-inf dB", "-inf dB"]
+
+
+def test_sweeps_with_curves_and_waves():
+    envelope = _sweep("20:4,20>20000~exp:4,400>4000~sine/2", 16, 0, 64.0, 4.0, 20000.0)
+    assert envelope["points"] == [[0.0, 0.0], [16.0, 0.0]]
+    curve, wave = envelope["shapes"]
+    assert curve == {"type": "exp", "start": 16.0, "length": 16.0, "from_value": 0.0, "to_value": 1.0}
+    assert wave["type"] == "sine" and wave["start"] == 32.01 and wave["period"] == 8.0  # a jump from 20 kHz down to 400 Hz
+    assert _sweep(None, 8, 0, 32.0, 4.0, 20.0) == {"points": [[0.0, 0.0]]}
 
 
 def test_live_closes_the_undo_step_at_a_new_return():
@@ -406,7 +415,7 @@ async def test_peak_time_sweeps_auto_filters_clip_by_clip(client, live):
             if not filters:
                 continue
             freq, kind = filters[-1].parameters[3], filters[-1].parameters[4]
-            out[track.name] = (kind.value, {c.name: c.automation_envelope(freq) for c in track.arrangement_clips})
+            out[track.name] = (kind.value, {c.name: c.envelopes.get(id(freq)) for c in track.arrangement_clips})
         return {name: (kind, {clip: [env.value_at_time(t) for t in (0, 32, 60)] if env else None for clip, env in envs.items()}) for name, (kind, envs) in out.items()}
 
     tracks = live.on_main(read)

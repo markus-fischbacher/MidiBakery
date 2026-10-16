@@ -217,6 +217,8 @@ In den Referenzen wird die Kick oft herausgefiltert, statt hart zu enden. Die En
 
 Jeder Clip einer gefilterten Spur bekommt eine Hüllkurve, auch wenn sie nur „offen“ ist. So bleibt kein Filter aus dem vorigen Abschnitt hängen.
 
+Ein Abschnitt kann statt einer Geraden auch eine Kurve oder Welle fahren: `300>8000~exp` beginnt langsam und öffnet am Ende schnell (`~log` umgekehrt), `400>3000~sine/2` schwingt alle 2 Takte zwischen beiden Werten (auch `triangle`, `saw`, `square`).
+
 **Aufbau**
 - **●** Elemente einzeln einführen. Rides kommen erst im Drop. Die Hook wird schon im Intro angedeutet, leise und gefiltert.
 - **●** Die letzten 8 Takte eines Breakdowns:
