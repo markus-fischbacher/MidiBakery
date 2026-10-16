@@ -165,6 +165,21 @@ class DeviceInsert(Params):
     index: int = Field(-1, ge=-1, description="Position in the chain, -1 = end")
 
 
+BrowserCategory = Literal["drums", "instruments", "audio_effects", "midi_effects", "sounds", "packs", "user_library", "plugins"]
+
+
+class BrowserSearch(Params):
+    query: str = Field(min_length=1, description="Words that must all be in the item name, e.g. '909 kit', 'reese bass'")
+    category: BrowserCategory | Literal["all"] = "all"
+    limit: int = Field(20, ge=1, le=100)
+    loadable_only: bool = True
+
+
+class BrowserLoad(Params):
+    track: TrackIndex
+    path: list[str] = Field(min_length=2, description="Browser path from browser.search, e.g. ['drums', '909 Core Kit.adg']")
+
+
 ChainPath = Annotated[
     list[Annotated[int, Field(ge=0)]],
     Field(max_length=8, description="Into racks: chain, device pairs below `device`, e.g. [1, 0] = first device of chain 2"),
@@ -453,6 +468,8 @@ for spec in [
     OpSpec("notes.get", NotesGet, "Read notes with ids, probability and velocity deviation", read_only=True),
     OpSpec("notes.apply", NotesApply, "Add, modify and remove notes by id", read_only=False, destructive=True),
     OpSpec("device.insert", DeviceInsert, "Insert a native Live device", read_only=False, min_live=(12, 3, 0)),
+    OpSpec("browser.search", BrowserSearch, "Find presets, kits and devices in Live's browser by name", read_only=True, timeout=30.0),
+    OpSpec("browser.load", BrowserLoad, "Load a browser item onto a track (an instrument or kit replaces the instrument)", read_only=False, timeout=10.0),
     OpSpec("device.params", DeviceRef, "Parameters of a device with ranges and display values", read_only=True),
     OpSpec("drum_rack.pads", DrumPadsGet, "Filled Drum Rack pads with their MIDI note and name", read_only=True),
     OpSpec("device.set_param", DeviceParamSet, "Set one device parameter", read_only=False),
