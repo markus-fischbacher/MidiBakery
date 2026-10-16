@@ -304,14 +304,18 @@
         "device": [
           "integer"
         ],
+        "return_track": [
+          "integer",
+          "null"
+        ],
         "track": [
-          "integer"
+          "integer",
+          "null"
         ]
       },
       "read_only": true,
       "required": [
-        "device",
-        "track"
+        "device"
       ]
     },
     "device.set_param": {
@@ -332,8 +336,13 @@
           "integer",
           "string"
         ],
+        "return_track": [
+          "integer",
+          "null"
+        ],
         "track": [
-          "integer"
+          "integer",
+          "null"
         ],
         "value": [
           "number"
@@ -343,7 +352,6 @@
       "required": [
         "device",
         "parameter",
-        "track",
         "value"
       ]
     },
@@ -574,14 +582,18 @@
         "device": [
           "integer"
         ],
+        "return_track": [
+          "integer",
+          "null"
+        ],
         "track": [
-          "integer"
+          "integer",
+          "null"
         ]
       },
       "read_only": true,
       "required": [
-        "device",
-        "track"
+        "device"
       ]
     },
     "rack.set": {
@@ -608,14 +620,18 @@
         "macros": [
           "array"
         ],
+        "return_track": [
+          "integer",
+          "null"
+        ],
         "track": [
-          "integer"
+          "integer",
+          "null"
         ]
       },
       "read_only": false,
       "required": [
-        "device",
-        "track"
+        "device"
       ]
     },
     "return.create": {

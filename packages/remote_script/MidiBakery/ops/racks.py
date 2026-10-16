@@ -13,7 +13,7 @@ RACK_KINDS = {
 
 
 def _rack(ctx, params):
-    device = ctx.device(params["track"], params["device"], params.get("chain_path"))
+    device = ctx.device(params)
     if not getattr(device, "can_have_chains", False):
         raise OpError(ErrorCode.INVALID_PARAMS, "'%s' is not a rack" % device.name)
     return device

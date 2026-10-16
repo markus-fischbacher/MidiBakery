@@ -7,7 +7,7 @@ from Live import LiveObject
 
 NOTE_FIELDS = ("pitch", "start_time", "duration", "velocity", "mute",
                "probability", "velocity_deviation", "release_velocity")
-NATIVE_DEVICES = {"Operator", "Drift", "Wavetable", "Reverb", "Auto Filter", "Drum Rack", "Simpler", "Instrument Rack", "Audio Effect Rack"}
+NATIVE_DEVICES = {"Operator", "Drift", "Wavetable", "Reverb", "Delay", "Auto Filter", "Drum Rack", "Simpler", "Instrument Rack", "Audio Effect Rack"}
 RACK_CLASSES = {"Instrument Rack": "InstrumentGroupDevice", "Audio Effect Rack": "AudioEffectGroupDevice", "Drum Rack": "DrumGroupDevice"}
 
 
@@ -24,6 +24,16 @@ def make_device(name):
         device.parameters += [
             Parameter("Frequency", 1.0),
             Parameter("Filter Type", 0.0, 0.0, 9.0, True, ("Low-pass", "High-pass", "Band-pass", "Notch", "Morph", "DJ", "Comb", "Resampling", "Notch+LP", "Vowel")),
+        ]
+    if name == "Reverb":
+        device.parameters += [Parameter("Decay Time", 0.314), Parameter("Dry/Wet", 0.5)]
+    if name == "Delay":
+        device.parameters += [
+            Parameter("Link", 1.0, 0.0, 1.0, True, ("Off", "On")),
+            Parameter("L Sync", 1.0, 0.0, 1.0, True, ("Off", "On")),
+            Parameter("L 16th", 2.0, 0.0, 7.0, True, ("1", "2", "3", "4", "5", "6", "8", "16")),
+            Parameter("Feedback", 0.526),
+            Parameter("Dry/Wet", 0.5),
         ]
     return device
 

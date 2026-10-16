@@ -6,6 +6,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from fake_song import DrumRackDevice
+from midibakery.compose.song import _batch_steps
 from midibakery.compose.structures import TEMPLATES, parse_segments, sized
 from midibakery.mcp import build_server
 
@@ -71,7 +72,7 @@ async def test_new_drum_track_gets_the_genre_kit_and_its_pads(client, live):
     assert preview["tracks"]["drums"]["device"] == "909 Core Kit" and not preview["warnings"]
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
     assert [t["device"] for t in applied["new_tracks"]] == ["909 Core Kit", "Basic FM House Bass", "106 Organ", "Basic Pluck Keys"]
-    assert "6 undo step(s)" in applied["undo"]  # tracks, one per sound, clips
+    assert "7 undo step(s)" in applied["undo"]  # tracks+returns, the mix after them, one per sound, clips
     drums = next(t["track"] for t in applied["new_tracks"] if t["name"] == "House Drums")
     drop = (await client.call("notes.get", {"track": drums, "arrangement_clip": 2}))["notes"]
     pitches = {n["pitch"] for n in drop}
@@ -86,6 +87,54 @@ async def test_sounds_off_or_missing_keep_native_devices(client, live):
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": trap["plan_id"]}))
     assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Wavetable"]
     assert len(applied["warnings"]) == 4 and "808 Core Kit could not be loaded" in applied["warnings"][0]
+
+
+async def test_mix_scaffold_returns_sends_and_levels(client, live):
+    _studio(live)
+    server = build_server(client)
+    preview = await _plan(server)
+    assert preview["mix"]["returns"] == {
+        "reverb": "return index 0 'Reverb' (new, 1.8 s)",
+        "delay": "return index 1 'Delay' (new, 3/16, feedback 35 %)",
+    }
+    assert preview["mix"]["levels"]["chords"] == "fader -12 dB, reverb -14 dB, delay -22 dB"
+    assert preview["mix"]["levels"]["drums"] == "reverb -24 dB"  # an existing track keeps its fader
+    assert "bass" not in preview["mix"]["levels"]
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    assert applied["mix"] == preview["mix"] and applied["undo"].startswith("5 undo step(s)")  # tracks+returns, the mix after them, 2 sounds, clips
+    mixer = await client.call("mixer.get", {})
+    assert [(r["name"], r["devices"]) for r in mixer["returns"]] == [("Reverb", ["Reverb"]), ("Delay", ["Delay"])]
+    reverb = {p["name"]: p["value"] for p in (await client.call("device.params", {"return_track": 0, "device": 0}))["parameters"]}
+    assert reverb["Dry/Wet"] == 1.0 and reverb["Decay Time"] == 0.3852  # 1.8 s
+    delay = {p["name"]: p["value"] for p in (await client.call("device.params", {"return_track": 1, "device": 0}))["parameters"]}
+    assert (delay["Dry/Wet"], delay["L 16th"], delay["Feedback"]) == (1.0, 2.0, 0.3684)  # 3/16, 35 %
+    tracks = {t["name"]: t for t in mixer["tracks"]}
+    chords = tracks["House Chords"]
+    assert chords["volume"]["display"] == "-12.0 dB" and [s["display"] for s in chords["sends"]] == ["-14.0 dB", "-22.0 dB"]
+    assert tracks["Drums"]["volume"]["display"] == "0.0 dB" and [s["display"] for s in tracks["Drums"]["sends"]] == ["-24.0 dB", "-inf dB"]
+    assert [s["display"] for s in tracks["Bass"]["sends"]] == ["-inf dB", "-inf dB"]
+
+
+def test_live_closes_the_undo_step_at_a_new_return():
+    ops = [{"op": o} for o in ("track.create", "return.create", "device.set_param", "return.create", "mixer.set")]
+    assert [_batch_steps(ops, done) for done in range(6)] == [0, 1, 1, 2, 1, 2]
+
+
+async def test_the_sets_own_reverb_is_used_and_left_as_it_is(client, live):
+    _studio(live)
+    await client.call("return.create", {"name": "Hall", "device": "Reverb"})
+    server = build_server(client)
+    preview = await _plan(server)
+    assert preview["mix"]["returns"]["reverb"] == "return index 0 'Hall' (the Set's)"
+    assert preview["mix"]["returns"]["delay"] == "return index 1 'Delay' (new, 3/16, feedback 35 %)"
+    assert "drums" not in preview["mix"]["levels"]  # its own track, its own return: untouched
+    await client.call("return.create", {"name": "Other"})
+    with pytest.raises(ToolError, match="Return tracks changed"):
+        await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    preview = await _plan(server, mix=False)
+    assert "mix" not in preview
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    assert "mix" not in applied and len((await client.call("mixer.get", {}))["returns"]) == 2
 
 
 async def test_same_seed_same_song_and_variation_for_the_second_drop(client, live):
@@ -408,7 +457,7 @@ async def test_a_failed_apply_takes_back_tracks_and_clips(client, live):
     with pytest.raises(ToolError) as exc:
         await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     assert "were undone, Live is unchanged" in str(exc.value)
-    assert live.on_main(lambda: live.song.undo_calls) - before == 5  # the clip already written, the tempo, two presets, the new tracks
+    assert live.on_main(lambda: live.song.undo_calls) - before == 6  # the clip already written, the tempo, two presets, the new tracks and returns (2 steps in Live)
 
 
 async def test_songs_need_four_four(client, live):

@@ -418,13 +418,14 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 | Harmonik | Genre-Loops nach Tonart (Dur/Moll), Septakkorde für House und Liquid, parallele Moll-Stabs mit Akkordverschiebung für Peak-Time, Trap ohne Grundton |
 | Lead | House, D&B, Trap: Hook mit Ruf/Antwort; Melodic: Arpeggio; Peak-Time: Acid-Line, die sich alle 8 Takte entwickelt und im letzten Peak steigt |
 | Struktur | Vorlagen nach den Rezepten, Längen Radio/Standard/Extended oder Minuten |
+| Sounds | Neue Spuren bekommen Kit und Presets des Genres aus der Core Library; die Drum-Noten landen auf den Pads des Kits |
+| Mix | Ein Reverb- und ein Delay-Return (vorhandene nutzt der Song), Fader-Pegel und Sends pro Rolle für neue Spuren; vorhandene Spuren behalten ihren Fader und senden nur in neue Returns. Nachhall und Delay-Zeit pro Genre, z. B. Melodic Techno 4,5 s, House 1,8 s |
 
 **Noch offen**
 
 | Thema | Warum |
 |---|---|
 | Riser, Sidechain, Filterfahrten in anderen Genres | Filterfahrten gibt es in House, Melodic und Peak-Time Techno; Riser und Sidechain brauchen Devices bzw. Routing |
-| Sounds | neue Tracks bekommen das passende native Instrument, aber dessen Standard-Preset; Kits und Samples kann die API nicht laden |
 | Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr; Referenztracks (Abschnitte und Elemente eines Songs, der gefällt) sind als nächster Schritt dafür gedacht |
 | Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
 | Andere Taktarten | die Grooves sind 16-Schritt-Takte; `plan_song` braucht deshalb 4/4 und meldet das sonst |

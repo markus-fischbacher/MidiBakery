@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from midibakery.bridge import BridgeError
-from midibakery.catalog.ops import MixerGet, MixerSet
+from midibakery.catalog.ops import DeviceParamSet, MixerGet, MixerSet
 
 
 async def test_return_with_reverb_and_a_send_in_db(client, live):
@@ -20,6 +20,17 @@ async def test_return_with_reverb_and_a_send_in_db(client, live):
     # Every track got a send to the new return, also tracks created later.
     new = (await client.call("track.create", {"name": "Late"}))["track"]
     assert len((await client.call("mixer.get", {"track": new}))["sends"]) == 1
+
+
+async def test_device_on_a_return_track(client):
+    await client.call("return.create", {"name": "Hall", "device": "Reverb"})
+    changed = await client.call("device.set_param", {"return_track": 0, "device": 0, "parameter": "Dry/Wet", "value": 1.0})
+    assert changed["value"] == 1.0
+    with pytest.raises(BridgeError, match="No return track 1"):
+        await client.call("device.params", {"return_track": 1, "device": 0})
+    for both_or_none in ({"track": 0, "return_track": 0}, {}):
+        with pytest.raises(ValidationError, match="either track or return_track"):
+            DeviceParamSet(device=0, parameter=0, value=0, **both_or_none)
 
 
 async def test_volume_in_db_pan_mute_and_crossfade(client):

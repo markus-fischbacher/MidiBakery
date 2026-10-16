@@ -186,10 +186,22 @@ ChainPath = Annotated[
 ]
 
 
+ReturnIndex = Annotated[int, Field(ge=0, description="Zero-based index into the return tracks (A = 0)")]
+
+
 class DeviceRef(Params):
-    track: TrackIndex
+    """A device on a track or, with return_track instead of track, on a return track."""
+
+    track: TrackIndex | None = None
+    return_track: ReturnIndex | None = None
     device: Annotated[int, Field(ge=0)]
     chain_path: ChainPath = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _one_owner(self) -> DeviceRef:
+        if (self.track is None) == (self.return_track is None):
+            raise ValueError("give either track or return_track")
+        return self
 
 
 class DrumPadsGet(Params):
@@ -199,15 +211,9 @@ class DrumPadsGet(Params):
     )
 
 
-class DeviceParamSet(Params):
-    track: TrackIndex
-    device: Annotated[int, Field(ge=0)]
-    chain_path: ChainPath = Field(default_factory=list)
+class DeviceParamSet(DeviceRef):
     parameter: int | str = Field(description="Parameter index or exact name")
     value: float = Field(description="Raw parameter value within the parameter's min/max")
-
-
-ReturnIndex = Annotated[int, Field(ge=0, description="Zero-based index into the return tracks (A = 0)")]
 
 
 class MixerTarget(Params):
