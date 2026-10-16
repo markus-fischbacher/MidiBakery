@@ -47,6 +47,12 @@ async def test_takes_of_other_kinds_and_their_params(client, live):
     with pytest.raises(ToolError) as exc:
         await server.call_tool("compose_takes", {"track": 1, "start_bar": 1, "kind": "bass", "params": {"style": "polka"}})
     assert "params" in str(exc.value)
+    with pytest.raises(ToolError) as exc:
+        await server.call_tool("compose_takes", {"track": 1, "start_bar": 1, "kind": "hook", "params": {"lowest": 60}})
+    assert "params" in str(exc.value) and "lowest" in str(exc.value)
+    with pytest.raises(ToolError) as exc:
+        await server.call_tool("compose_takes", {"track": 1, "start_bar": 1, "chords_from": {"track": 0, "arrangement_clip": 3}})
+    assert "no arrangement clip 3 on track index 0" in str(exc.value)
 
 
 async def test_a_take_clip_needs_a_lane(client):

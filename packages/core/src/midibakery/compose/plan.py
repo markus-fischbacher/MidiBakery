@@ -98,7 +98,7 @@ class Session:
 
     def track(self, index: int) -> dict[str, Any]:
         if not 0 <= index < len(self.tracks):
-            raise BridgeError("NOT_FOUND", f"No track {index} (song has {len(self.tracks)})", {"track": index})
+            raise BridgeError("NOT_FOUND", f"No track index {index} (song has {len(self.tracks)})", {"track": index})
         return self.tracks[index]
 
     async def clip(self, track: int, slot: int, include_planned: bool = True) -> ClipState:
@@ -110,7 +110,7 @@ class Session:
         info = self.track(track)
         scenes = int(self.song.get("scene_count", slot + 1))
         if slot >= scenes:
-            raise BridgeError("NOT_FOUND", f"No clip slot {slot} (song has {scenes} scenes; create a scene first)", {"slot": slot})
+            raise BridgeError("NOT_FOUND", f"No clip slot index {slot} (song has {scenes} scenes; create a scene first)", {"slot": slot})
         found = next((c for c in info.get("clips", []) if c["slot"] == slot), None)
         identity = (info.get("id"), info.get("name"), info.get("kind"))
         if found is None:
@@ -129,7 +129,7 @@ class Session:
         scenes = int(self.song.get("scene_count", 0))
         free = next((s for s in range(scenes) if s not in used), None)
         if free is None:
-            raise BridgeError("CONFLICT", f"Track {track} has no free clip slot; create a scene first or pick a slot", {"track": track})
+            raise BridgeError("CONFLICT", f"Track index {track} has no free clip slot; create a scene first or pick a slot", {"track": track})
         return free
 
     async def drum_pads(self, track: int, device: int | None = None) -> list[dict] | None:
@@ -308,7 +308,7 @@ async def _target(session: Session, spec: Generate) -> tuple[ClipState, float, d
     """Existing state, clip length, clip.create params and note ids to remove for a generator target."""
     track = session.track(spec.track)
     if track.get("kind") != "midi":
-        raise BridgeError("INVALID_PARAMS", f"Track {spec.track} ('{track.get('name')}') is not a MIDI track")
+        raise BridgeError("INVALID_PARAMS", f"Track index {spec.track} '{track.get('name')}' is not a MIDI track")
     state = await session.clip(spec.track, spec.slot)
     length = session.meter.beats_per_bar * spec.bars
     if state.planned:
@@ -321,7 +321,7 @@ async def _target(session: Session, spec: Generate) -> tuple[ClipState, float, d
     if spec.if_exists == "error":
         raise BridgeError(
             "CONFLICT",
-            f"Slot {spec.track}/{spec.slot} already has a clip; pass if_exists='replace' or 'merge', or pick an empty slot",
+            f"Slot index {spec.slot} of track index {spec.track} already has a clip; pass if_exists='replace' or 'merge', or pick an empty slot",
         )
     remove = [n["note_id"] for n in state.notes or []] if spec.if_exists == "replace" else []
     return state, min(length, state.length or length), None, remove
@@ -343,7 +343,7 @@ def _not_drums(session: Session, index: int) -> None:
     hint = f"; MIDI tracks with clips: {', '.join(candidates)}" if candidates else ""
     raise BridgeError(
         "INVALID_PARAMS",
-        f"chords_from points to track {index} '{track.get('name')}', a drum track (Drum Rack) without chords. "
+        f"chords_from points to track index {index} '{track.get('name')}', a drum track (Drum Rack) without chords. "
         f"Use the chord clip's track and slot, or omit chords_from{hint}",
     )
 

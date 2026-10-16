@@ -61,6 +61,7 @@ DRUM_PARTS = {
     "drive": {"kick", "clap", "rim", "open_hat"},
 }
 PHRASE = 8  # bars
+RECIPE_LOW = 0.85  # recipe bass and chords: as much velocity range as the grooves give the drums
 FILTER_TYPES = {"Low-pass": 0, "High-pass": 1}  # Auto Filter (Live 12) "Filter Type" values
 OPEN_HZ = {"Low-pass": 20000.0, "High-pass": 20.0}
 EPSILON = 1e-6
@@ -211,7 +212,7 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
     for role, index in request.roles.items():
         track = session.track(index)
         if track.get("kind") != "midi":
-            raise BridgeError("INVALID_PARAMS", f"roles.{role}: track {index + 1} '{track.get('name')}' is not a MIDI track")
+            raise BridgeError("INVALID_PARAMS", f"roles.{role}: track index {index} '{track.get('name')}' is not a MIDI track")
         roles[role] = RoleTrack(role, index, track.get("name", ""))
         used.add(index)
     for clip in request.clips:
@@ -251,8 +252,9 @@ def _filter_drums(notes: list[Note], drum_map: DrumMap, part: str) -> list[Note]
     return [n for n in notes if by_pitch.get(n.pitch) in keep]
 
 
-def _energize(notes: list[Note], energy: float) -> list[Note]:
-    factor = 0.75 + 0.25 * energy
+def _energize(notes: list[Note], energy: float, low: float = 0.75) -> list[Note]:
+    """Velocity by section energy: `low` of it at energy 0, all of it at 1."""
+    factor = low + (1 - low) * energy
     return [replace(n, velocity=max(1.0, min(127.0, n.velocity * factor))) for n in notes]
 
 
@@ -308,6 +310,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     template = TEMPLATES[request.genre]
     style = template.style
     meter, scale = session.meter, session.scale
+    if (meter.numerator, meter.denominator) != (4, 4):
+        # The genre grooves are 16-step bars; in another meter they would spill over the bar line.
+        raise BridgeError("INVALID_PARAMS", f"plan_song needs 4/4 (the Set is {meter.numerator}/{meter.denominator}); set_song to 4/4 first")
     bpb = meter.beats_per_bar
     tempo = float(session.song.get("tempo", style.tempo))
     if request.set_tempo:
@@ -336,7 +341,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             first_free = -(-_free_from(arrangement, existing) // bpb) + 1
             raise BridgeError(
                 "CONFLICT",
-                f"Track {role_track.index + 1} '{role_track.name}' already has '{clash['name'] or 'a clip'}' at beats "
+                f"Track index {role_track.index} '{role_track.name}' already has '{clash['name'] or 'a clip'}' at beats "
                 f"{clash['start']:g}-{clash['end']:g}; start at bar {int(first_free)} or later (or leave start_bar out)",
                 {"track": role_track.index, "first_free_bar": int(first_free)},
             )
@@ -370,12 +375,12 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             target.filter_new = found is None
             target.filter_device = len(session.track(target.index).get("devices", [])) if found is None else found
             if found is not None:
-                warnings.append(f"Track {target.index + 1}: its Auto Filter is set to {kind} for the song's sweeps")
+                warnings.append(f"Track index {target.index} '{target.name}': its Auto Filter is set to {kind} for the song's sweeps")
     loops: dict[str, float] = {}
     for role, clip in use.items():
         found = next((c for c in session.track(clip.track).get("clips", []) if c["slot"] == clip.slot), None)
         if found is None:
-            raise BridgeError("NOT_FOUND", f"clips: no clip in slot {clip.slot + 1} of track {clip.track + 1}")
+            raise BridgeError("NOT_FOUND", f"clips: no clip in slot index {clip.slot} of track index {clip.track}")
         loops[role] = float(found["length"])
 
     cache: dict[tuple, list[Note]] = {}
@@ -405,7 +410,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             if part == "rumble":
                 return _rumble(harmony, meter, bars)
             if request.genre in BASS:
-                return generate_recipe_bass(BASS[request.genre], harmony, meter, bars, swing, r)
+                return _energize(generate_recipe_bass(BASS[request.genre], harmony, meter, bars, swing, r), section.energy, RECIPE_LOW)
             relation = "avoid" if style.bass in ("offbeat", "pulse") else "lock"
             return _energize(generate_bass(harmony, scale, meter, bars, style.bass, r, style.bass_octave, kick or None, relation, 0.3 + 0.5 * section.energy, swing), section.energy)
         if role == "chords":
@@ -413,6 +418,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 pattern = CHORDS[request.genre]
                 chords = seventh_harmony(harmony, scale) if pattern.sevenths else harmony
                 notes = generate_recipe_chords(pattern, chords, meter, bars, swing, stabs=part in ("stabs", "on", "tease", "accent"), pad=part not in ("tease", "accent"))
+                notes = _energize(notes, section.energy, RECIPE_LOW)
                 if part == "accent":  # one hit to open each phrase (the "signal" in a groove)
                     notes = _accents(notes, meter, offset_bars)
                 if part == "tease":  # the hook hinted at, quieter (Peak-Time: "die Hook im Intro andeuten")
@@ -528,6 +534,20 @@ def _breathe(notes: list[Note], role: str, every: int, first_bar: int, bpb: floa
     return [n for n in notes if not paused(n)]
 
 
+async def _undo(call: Call, error: BridgeError, steps: int) -> None:
+    """Take back what a failed apply already did, so a song lands whole or not at all."""
+    error.details["rolled_back"] = True
+    if not steps:
+        return
+    try:
+        for _ in range(steps):
+            await call("history.step", {"action": "undo"})
+    except BridgeError as undo_error:
+        error.message += f" (undoing the song's {steps} step(s) failed: {undo_error.message}; check Live's undo history)"
+        return
+    error.message += f"; the song's {steps} step(s) that had already run were undone, Live is unchanged"
+
+
 async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     """New tracks (one undo step), then all clips (one undo step), then locators and tempo."""
     tracks = (await call("tracks.list", {}))["tracks"]
@@ -536,7 +556,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     arrangement = await call("arrangement.get", {})
     for role_track in plan.roles.values():
         if not role_track.new and _overlap(arrangement, role_track.index, plan.start, plan.end) is not None:
-            raise BridgeError("CONFLICT", f"Track {role_track.index + 1} has new arrangement clips in the song's range; plan again")
+            raise BridgeError("CONFLICT", f"Track index {role_track.index} '{role_track.name}' has new arrangement clips in the song's range; plan again")
     song = await call("song.get", {})
     undo_steps = 0
     new = [t for t in plan.roles.values() if t.new]
@@ -550,14 +570,23 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         if t.filter_new:
             ops.append({"op": "device.insert", "params": {"track": t.index, "name": "Auto Filter"}})
         ops.append({"op": "device.set_param", "params": {"track": t.index, "device": t.filter_device, "parameter": "Filter Type", "value": FILTER_TYPES[t.filter]}})
-    if ops:
-        await call("batch", {"ops": ops, "label": f"MidiBakery song {plan.id}: tracks"})
+    try:
+        if ops:
+            try:
+                await call("batch", {"ops": ops, "label": f"MidiBakery song {plan.id}: tracks"})
+            except BridgeError as exc:
+                await _undo(call, exc, 1 if exc.details.get("completed") else 0)
+                raise
+            undo_steps += 1
+        if plan.tempo is not None:
+            await call("song.set", {"tempo": plan.tempo})
+            undo_steps += 1
+        result = await call("arrangement.edit", {"actions": plan.actions})
         undo_steps += 1
-    if plan.tempo is not None:
-        await call("song.set", {"tempo": plan.tempo})
-        undo_steps += 1
-    result = await call("arrangement.edit", {"actions": plan.actions})
-    undo_steps += 1
+    except BridgeError as exc:
+        if not exc.details.get("rolled_back"):
+            await _undo(call, exc, undo_steps + (1 if exc.details.get("completed") else 0))
+        raise
     if not song["is_playing"]:
         await call("arrangement.locators", {"actions": plan.locators})
         if (await call("song.get", {}))["current_song_time"] != song["current_song_time"]:
@@ -567,7 +596,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         "song": f"{plan.template.label}, bars {int(plan.start / plan.beats_per_bar) + 1}-{int(plan.end / plan.beats_per_bar)}",
         "clips": len(result["results"]),
         "new_tracks": [{"track": t.index, "name": t.name, "device": t.device} for t in new],
-        "automation": {r: f"track {t.index + 1}, device {t.filter_device + 1}" for r, t in plan.roles.items() if t.filter is not None},
+        "automation": {r: f"track index {t.index}, device index {t.filter_device}" for r, t in plan.roles.items() if t.filter is not None},
         "locators": len(plan.locators) if not song["is_playing"] else "skipped: stop the transport and plan again for locators",
         "undo": f"{undo_steps} undo step(s) for tracks/tempo/clips; each locator is its own step",
     }

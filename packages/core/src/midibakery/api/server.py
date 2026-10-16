@@ -98,7 +98,10 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
     async def models(request: Request) -> JSONResponse:
         """Model choices for the chat's menu; local models are listed when their server runs."""
         if not default:
-            provider = provider_factory({})
+            try:
+                provider = provider_factory({})
+            except ValueError as exc:  # e.g. no Claude key yet: the menu still lists every choice
+                return JSONResponse({"models": await list_models("anthropic", "no API key"), "error": str(exc)})
             default.update(provider=provider.name, model=provider.model)
         return JSONResponse({"models": await list_models(default["provider"], default["model"])})
 

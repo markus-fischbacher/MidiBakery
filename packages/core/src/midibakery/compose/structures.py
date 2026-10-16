@@ -206,6 +206,35 @@ def _round_bars(bars: float) -> int:
     return max(4, int(round(bars / 4.0)) * 4)
 
 
+def _scale_spec(spec: str, old: int, new: int) -> str:
+    """A part or sweep spec for a section resized from `old` to `new` bars: segment borders
+    move with it ("kick_hats:16,groove" in 32 bars -> "kick_hats:8,groove" in 16)."""
+    if old == new:
+        return spec
+    items = [item.strip() for item in spec.split(",") if item.strip()]
+    out, pos, new_pos = [], 0, 0
+    for item in items:
+        name, _, count = item.partition(":")
+        if not count:  # takes the rest, in the new length too
+            out.append(name)
+            continue
+        pos += int(count)
+        border = min(new, round(pos * new / old))
+        if border > new_pos:
+            out.append(f"{name}:{border - new_pos}")
+        new_pos = border
+    return ",".join(out) or "-"
+
+
+def _resize(section: Section, bars: int) -> Section:
+    return replace(
+        section,
+        bars=bars,
+        parts={role: _scale_spec(spec, section.bars, bars) for role, spec in section.parts.items()},
+        sweeps={role: _scale_spec(spec, section.bars, bars) for role, spec in section.sweeps.items()},
+    )
+
+
 def sized(template: Template, length: str = "standard", minutes: float | None = None, beats_per_bar: float = 4.0, tempo: float | None = None) -> tuple[Section, ...]:
     """The template's sections for a radio edit, the standard length, an extended mix, or a target duration."""
     sections = template.sections
@@ -215,9 +244,9 @@ def sized(template: Template, length: str = "standard", minutes: float | None = 
         fixed = sum(s.bars for s in sections if s.kind not in FLEXIBLE_KINDS)
         flexible = sum(s.bars for s in sections if s.kind in FLEXIBLE_KINDS) or 1
         factor = max(0.25, (target_bars - fixed) / flexible)
-        return tuple(replace(s, bars=_round_bars(s.bars * factor)) if s.kind in FLEXIBLE_KINDS else s for s in sections)
+        return tuple(_resize(s, _round_bars(s.bars * factor)) if s.kind in FLEXIBLE_KINDS else s for s in sections)
     if length == "radio":
-        return tuple(replace(s, bars=_round_bars(s.bars / 2)) if s.kind in ("intro", "outro", "break") else s for s in sections)
+        return tuple(_resize(s, _round_bars(s.bars / 2)) if s.kind in ("intro", "outro", "break") else s for s in sections)
     if length == "extended":
-        return tuple(replace(s, bars=s.bars * 2) if s.kind in ("intro", "outro") else s for s in sections)
+        return tuple(_resize(s, s.bars * 2) if s.kind in ("intro", "outro") else s for s in sections)
     return sections

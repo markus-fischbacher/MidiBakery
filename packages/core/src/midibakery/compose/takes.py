@@ -29,6 +29,14 @@ CHORD_WORDS = ("chord", "pad", "keys", "piano", "stab")
 SPECS = {"melody": MelodySpec, "bass": BassSpec, "chords": ChordsSpec, "drums": DrumsSpec}
 
 
+class HookParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    low: Annotated[int, Field(ge=0, le=127)] = 72
+    high: Annotated[int, Field(ge=0, le=127)] = 89
+    swing: Annotated[float, Field(ge=0, le=1)] = 0.0
+
+
 class ArrangementClipRef(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -67,7 +75,9 @@ async def _harmony(call: Call, session: Session, request: TakesRequest, start: f
     if source is None:
         return harmony_mod.auto(scale, meter, bars, 1.0, rng), "generated"
     track_index, clip_index = source
-    clip = next(c for t in arrangement["tracks"] if t["index"] == track_index for c in t["clips"] if c["index"] == clip_index)
+    clip = next((c for t in arrangement["tracks"] if t["index"] == track_index for c in t["clips"] if c["index"] == clip_index), None)
+    if clip is None:
+        raise BridgeError("NOT_FOUND", f"chords_from: no arrangement clip {clip_index} on track index {track_index}")
     notes = (await call("notes.get", {"track": track_index, "arrangement_clip": clip_index}))["notes"]
     offset = start - clip["start"]  # takes start inside or before the chord clip
     window = [
@@ -78,7 +88,7 @@ async def _harmony(call: Call, session: Session, request: TakesRequest, start: f
     if not window:
         return harmony_mod.auto(scale, meter, bars, 1.0, rng), "generated"
     try:
-        return harmony_mod.detect(window, scale, meter, bars, 1.0), f"from '{clip['name'] or 'clip'}' on track {track_index + 1}"
+        return harmony_mod.detect(window, scale, meter, bars, 1.0), f"from '{clip['name'] or 'clip'}' on track index {track_index}"
     except ValueError:
         return harmony_mod.auto(scale, meter, bars, 1.0, rng), "generated"
 
@@ -86,10 +96,12 @@ async def _harmony(call: Call, session: Session, request: TakesRequest, start: f
 def _notes(request: TakesRequest, session: Session, harmony: Harmony, seed: int, pads: list[dict] | None) -> list[Note]:
     meter, scale, bars = session.meter, session.scale, request.bars
     rng = random.Random(seed)
-    if request.kind == "hook":
-        low, high = request.params.get("low", 72), request.params.get("high", 89)
-        return generate_hook(make_hook(rng), harmony, scale, meter, bars, request.params.get("swing", 0.0), low, high)
     try:
+        if request.kind == "hook":
+            hook = HookParams.model_validate(request.params)
+            if hook.high - hook.low < 12:
+                raise ValueError("high must be at least an octave above low")
+            return generate_hook(make_hook(rng), harmony, scale, meter, bars, hook.swing, hook.low, hook.high)
         spec = SPECS[request.kind].model_validate({"track": 0, "slot": 0, **request.params})
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", f"params: {exc}") from None
@@ -108,7 +120,7 @@ async def build_takes(call: Call, request: TakesRequest) -> tuple[list[dict[str,
     session = await Session(call).load()
     track = session.track(request.track)
     if track.get("kind") != "midi":
-        raise BridgeError("INVALID_PARAMS", f"Track {request.track + 1} '{track.get('name')}' is not a MIDI track")
+        raise BridgeError("INVALID_PARAMS", f"Track index {request.track} '{track.get('name')}' is not a MIDI track")
     bpb = session.meter.beats_per_bar
     start, length = (request.start_bar - 1) * bpb, request.bars * bpb
     base = request.seed if request.seed is not None else new_seed()
