@@ -332,6 +332,26 @@ class DeleteArrangementClip(BaseModel):
     clip: Annotated[int, Field(ge=0, description="arrangement_clip index from arrangement.get")]
 
 
+class AddTakeLane(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["add_take_lane"]
+    track: TrackIndex
+    name: str | None = None
+
+
+class AddTakeClip(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["add_take_clip"]
+    track: TrackIndex
+    lane: Annotated[int, Field(ge=-1, description="Take lane index; -1 = the lane created last in this edit")]
+    start: Beats
+    length: Annotated[float, Field(gt=0, le=4096, description="Beats")]
+    name: str | None = None
+    notes: list[NoteIn] = Field(default_factory=list, description="Notes, start_time relative to the clip start")
+
+
 class SetLocator(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -347,7 +367,7 @@ class DeleteLocator(BaseModel):
     time: Beats
 
 
-ClipAction = Annotated[AddClip | CopySessionClip | DeleteArrangementClip, Field(discriminator="action")]
+ClipAction = Annotated[AddClip | CopySessionClip | DeleteArrangementClip | AddTakeLane | AddTakeClip, Field(discriminator="action")]
 LocatorAction = Annotated[SetLocator | DeleteLocator, Field(discriminator="action")]
 
 
@@ -371,7 +391,10 @@ class ArrangementTool(Params):
     """Clip actions first (one undo step), then locators (transport must be stopped). A clip never lands on an existing one."""
 
     actions: list[
-        Annotated[AddClip | CopySessionClip | DeleteArrangementClip | SetLocator | DeleteLocator, Field(discriminator="action")]
+        Annotated[
+            AddClip | CopySessionClip | DeleteArrangementClip | AddTakeLane | AddTakeClip | SetLocator | DeleteLocator,
+            Field(discriminator="action"),
+        ]
     ] = Field(min_length=1, max_length=256)
 
 

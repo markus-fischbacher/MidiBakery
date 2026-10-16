@@ -37,6 +37,7 @@ from midibakery.compose import (
 )
 from midibakery.compose.plan import Plan, new_seed
 from midibakery.compose.song import SongPlan, SongRequest, apply_song, build_song
+from midibakery.compose.takes import TakesRequest, build_takes
 from midibakery.mcp.confirm import confirm, request_state
 
 INSTRUCTIONS = """\
@@ -62,6 +63,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   overwrites a clip. Clip tools take arrangement_clip (index from get_arrangement) instead of slot.
 - A whole track ("build me a house song"): plan_song with the genre, then apply_plan. It uses the
   drum/bass/chords/lead tracks it finds and creates missing ones; say what it found and created.
+- Variations to choose from: compose_takes puts several takes of a part on take lanes to comp in Live.
 - Every write is undoable with the undo tool.
 Composition:
 - compose_drums / compose_bass / compose_chords / compose_melody write a new
@@ -319,7 +321,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
     async def edit_arrangement(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
         # One tool for the model; two ops for Live: locators need ticks of their own (see arrangement.locators).
         actions = ArrangementTool.model_validate(args).model_dump(exclude_none=True)["actions"]
-        clips = [a for a in actions if a["action"] in ("add_clip", "copy_session_clip", "delete_clip")]
+        clips = [a for a in actions if a["action"] not in ("set_locator", "delete_locator")]
         locators = [a for a in actions if a["action"] in ("set_locator", "delete_locator")]
         result: dict[str, Any] = {}
         song = await bridge.call("song.get")
@@ -447,6 +449,19 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         "share the first step's chords. Returns a diff preview and a plan_id.",
         annotations=read_only,
         meta=UI_META,
+    )
+    async def compose_takes(args: dict[str, Any], ctx: Context | None) -> Any:
+        actions, summary = await build_takes(bridge.call, TakesRequest.model_validate(args))
+        await bridge.call("arrangement.edit", {"actions": actions})
+        return summary
+
+    server.add_tool(
+        _make_tool(TakesRequest, compose_takes),
+        name="compose_takes",
+        title="Compose takes to comp",
+        description="Several variations of one part (hook, melody, bass, chords, drums) over the same chords, each on its "
+        "own take lane of a track in the Arrangement View (Live 12.2+), to comp the best one in Live. One undo step.",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     )
     server.add_tool(
         _make_tool(SongRequest, plan_song),

@@ -182,6 +182,7 @@ MidiBakery/
    - Reihenfolge, je ein PR: Events → Mixer/Routing → Racks → Arrangement → Take Lanes.
    - Events: im Chat-Gerät zunächst nur eine Statuszeile (Transport, Tempo, Scale, was spielt).
    - Arrangement: Die Engine baut ganze Songstrukturen (Intro, Build, Drop, Break …), mit eigenen Struktur-Vorlagen pro Genre.
+   - Take Lanes: `compose_takes` legt mehrere Varianten eines Parts (Hook, Melodie, Bass, Chords, Drums) über dieselben Akkorde in eigene Take Lanes, damit man in Live comppen kann. Ein Undo entfernt alle Takes. Das braucht Live 12.2 oder neuer; die Lanes sind in Live erst über „Show Take Lanes“ (⌘⌥U) sichtbar.
 5. **Produktisierung:** Installer, Signierung, Lizenz, Doku, Beta-Programm.
 6. **Optional:** Extensions-SDK-Adapter, sobald die SDK-Doku zugänglich und stabil ist.
 
