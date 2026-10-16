@@ -137,7 +137,7 @@ Peak-Time oder Driving Techno ist die Beatport-Kategorie „Peak Time / Driving�
 - **●** 126–132 BPM, Beatportal empfiehlt 128 als Start. Der Drumcode-Stil liegt eher um 135, neuere Releases von Amelie Lens und Charlotte de Witte um 138. Ab 140 ist es Hard Techno, nicht mehr dieser Stil.
 - **●** Das Tempo steigt seit Jahren: lange um 127, dann die Welle mit 150 und mehr (Attack, MusicTech).
 - **●** Kaum Swing: 0–20 % nur auf Hats, Shakern und Percussion. Kick und Bass bleiben gerade.
-- Vorgabe: **130–132 BPM**.
+- Vorgabe: **128 BPM** wie die Referenz unten.
 
 **Struktur** (Abschnitte als Vielfache von 8 Takten, meist 16 oder 32)
 - **◐** EDMProd: DJ-Intro, Breakdown, Drop, Drop-Variation (32+), Breakdown, Drop, Outro, je 16–32 Takte.
@@ -147,6 +147,41 @@ Peak-Time oder Driving Techno ist die Beatport-Kategorie „Peak Time / Driving�
 - **●** Alle 8 Takte ändert sich etwas, alle 16 Takte markiert ein Fill oder Impact die Phrase. Pro 8 oder 16 Takte ändert sich nur eine Dimension (Filter, Decay oder Akzent).
 - **◐** Breakdowns mit 8, 16 oder 32 Takten (Attack: 24 = 3 × 8, oder 32). Die Kick ist raus. Percussion, Clap, Offbeat-Hat, ein hochpassgefilterter Bass, Textur und die Hook laufen weiter.
 - **●** Spannung ohne großen Drop: Der Peak läuft mindestens 32 Takte, darin optional Mini-Breaks von 1–2 Takten. Oft reicht es, Kick oder Bass kurz wegzunehmen, ein Riser ist nicht nötig.
+
+**Referenzen** (Analyse vom Oktober 2026; gemessen wurde pro Takt die Energie von Kick, Bass, Mitten und Höhen, Melodien lassen sich aus dem fertigen Mix so nicht ablesen):
+- Y-Traxx – Mystery Land (Spektre Remix): 128 BPM, A-Moll, 7:30, rund 232 Takte.
+- Katoff – The Signal: 126 BPM, Dis-Moll; nur eine 3-Minuten-Fassung ohne DJ-Intro und Outro.
+- T78 – Nezquik (Original Mix): 128 BPM, A-Moll, 7:00, rund 220 Takte.
+
+Was alle drei tun:
+- **●** Vor jedem großen Drop geht zuerst der Bass für etwa 8 Takte, dann wird die Kick über 3–5 Takte herausgefiltert. Die letzten 2–3 Takte laufen ohne Kick, und genau dann ist der Synth am lautesten.
+- **●** Im Outro geht zuerst der Bass, dann die Kick, am Ende bleiben die Hats.
+
+Was zwei von drei tun:
+- **◐** Nach einem Breakdown kommen die Hats verzögert: 8–16 Takte Kick, Bass und Synth mit wenig Hats, dann voll (Katoff, T78).
+- **◐** Nach einem Peak 8 Takte nur Kick und Bass, ohne Hats und Synth (Spektre, T78).
+- **◐** Im Breakdown ohne Kick rumpelt der Bass leise weiter (Katoff, T78).
+
+Einzelne Tracks:
+- **◐** T78 nimmt am Ende vieler 8- und 16-Takt-Phrasen für einen Takt Kick und Bass weg.
+- **◐** Katoff setzt im Groove einen Synth-Akzent auf den Anfang jeder 8-Takt-Phrase und spielt im Breakdown den Synth im Wechsel von 2 Takten an, 2 Takten aus, mit 2 Takten Stille vor dem Drop.
+
+Die Vorlage kombiniert die drei, 224 Takte, also 7:00 bei 128 BPM:
+
+| Takte | Abschnitt | Was passiert | Vorbild |
+|---|---|---|---|
+| 1–32 | Intro | Kick und Hats, nach 16 Takten der Bass | Spektre |
+| 33–48 | Groove | Synth-Akzent auf jedem Phrasenanfang, 1 Takt Pause von Kick und Bass am Ende jeder Phrase | Katoff, T78 |
+| 49–64 | Lift | 8 Takte ohne Bass, dann kommen die Stabs, nach 12 Takten geht die Kick | alle drei |
+| 65–96 | Peak | Alles läuft, 1 Takt Pause am Ende jeder 16 Takte | T78 |
+| 97–120 | Breakdown | Ohne Kick: Rumpel-Bass, die Hats gehen nach 8 Takten, Synth im Wechsel, 2 Takte Stille | Katoff, Spektre |
+| 121–152 | Peak 2 | 8 Takte mit wenig Hats, dann voll | Katoff, T78 |
+| 153–160 | Lift 2 | Ohne Bass, die Kick geht, die Acid-Line bleibt | alle drei |
+| 161–176 | Peak 3 | Alles läuft | T78 |
+| 177–184 | Stripped | Nur Kick und Bass | Spektre, T78 |
+| 185–224 | Outro | 24 Takte Groove ohne Hook, dann geht der Bass, dann die Kick, zuletzt bleiben die Hats | alle drei |
+
+In den Referenzen wird die Kick oft herausgefiltert, statt hart zu enden. Das kann die Engine noch nicht, solange sie keine Automation schreibt.
 
 **Aufbau**
 - **●** Elemente einzeln einführen. Rides kommen erst im Drop. Die Hook wird schon im Intro angedeutet, leise und gefiltert.

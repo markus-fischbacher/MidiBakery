@@ -1,8 +1,9 @@
 """Song structures per genre: sections with length, energy and what each role plays.
 
 Templates are data. A section names its kind (intro, build, drop, ...) and for
-every role a part: drums "full" / "no_kick" / "kick_hats" / "sparse", the other
-roles "on", "sparse" or absent (silent). Energy (0-1) drives density and
+every role a part: drums "full" / "no_kick" / "kick_hats" / "sparse" (Peak-Time also
+"kick_only" and "drive"), the other roles "on", "sparse" or absent (silent); bass
+"rumble" and chords "accent" are the quiet break pulse and one hit per phrase. Energy (0-1) drives density and
 velocity. Sections of the same kind share their notes, which keeps a song
 together; `variation` gives a later section of that kind its own notes.
 """
@@ -28,6 +29,7 @@ class Section:
     fill: bool = False  # drum fill into the next section
     variation: int = 0  # >0: own notes instead of sharing them with the earlier section of this kind
     rest_beats: float = 0.0  # silence at the end, e.g. the beat before a drop
+    pause_every: int = 0  # >0: the last bar of every N bars without kick and bass (a short breath)
 
 
 EDM_PROGRESSIONS = {
@@ -77,8 +79,8 @@ class Template:
         return sum(s.bars for s in self.sections)
 
 
-def _s(name, kind, bars, energy, fill=False, variation=0, rest=0.0, **parts) -> Section:
-    return Section(name, kind, bars, energy, dict(parts), fill, variation, rest)
+def _s(name, kind, bars, energy, fill=False, variation=0, rest=0.0, pause=0, **parts) -> Section:
+    return Section(name, kind, bars, energy, dict(parts), fill, variation, rest, pause)
 
 
 def parse_segments(spec: str, bars: int) -> list[tuple[str, int, int]]:
@@ -121,20 +123,25 @@ TEMPLATES: dict[str, Template] = {
         _s("Climax", "drop", 32, 1.0, variation=1, drums="full", bass="on", chords="pad", lead="arp"),
         _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8"),
     )),
-    # docs/GENRES.md, Peak-Time Techno: DJ intro, tension by adding one thing per 8-16 bars, kick-less
-    # breakdowns that reveal the stab hook, rides and the acid line at the peaks, bass leaves the outro first.
+    # docs/GENRES.md, Peak-Time Techno, combined from three reference tracks (Spektre remix, Katoff,
+    # T78; 128 BPM, 224 bars = 7:00): tension by taking things away. Before each big drop the bass
+    # leaves first, then the kick, while the synth is at its loudest; one bar without kick and bass
+    # closes many phrases; after a breakdown the hats come in late; a stripped kick-and-bass part
+    # follows the last peak; the outro hands over by removing bass, then kick, then hats.
     "peak_time_techno": Template("peak_time_techno", "Peak-Time Techno", Style(
-        131, "techno", "pulse", "stabs", swing=0.15, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
+        128, "techno", "pulse", "stabs", swing=0.15, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
         progressions=DRONE_PROGRESSIONS, devices={"lead": "Drift", "chords": "Wavetable", "bass": "Analog"},
     ), (
-        _s("Intro", "intro", 32, 0.4, fill=True, drums="kick_hats:16,groove", chords="-:24,tease"),
-        _s("Groove", "groove", 32, 0.6, fill=True, drums="groove", bass="on", chords="-:16,tease"),
-        _s("Breakdown", "break", 16, 0.5, fill=True, rest=1.0, drums="no_kick", bass="on", chords="stabs"),
-        _s("Peak", "drop", 32, 0.9, fill=True, drums="full", bass="on", chords="stabs", lead="acid"),
-        _s("Groove 2", "groove", 16, 0.7, variation=1, fill=True, drums="groove", bass="on", chords="stabs", lead="-:8,tease"),
-        _s("Breakdown 2", "break", 16, 0.6, variation=1, fill=True, rest=1.0, drums="no_kick", chords="stabs", lead="tease"),
-        _s("Peak 2", "drop", 32, 1.0, variation=1, drums="full", bass="on", chords="stabs", lead="acid"),
-        _s("Outro", "outro", 32, 0.4, drums="full:16,kick_hats", bass="on:8"),
+        _s("Intro", "intro", 32, 0.4, fill=True, drums="kick_hats:16,groove", bass="-:16,on"),
+        _s("Groove", "groove", 16, 0.6, fill=True, pause=8, drums="groove", bass="on", chords="accent"),
+        _s("Lift", "build", 16, 0.7, fill=True, rest=1.0, drums="groove:12,sparse", chords="tease:8,stabs", lead="-:8,tease"),
+        _s("Peak", "drop", 32, 0.9, fill=True, pause=16, drums="full", bass="on", chords="stabs", lead="acid"),
+        _s("Breakdown", "break", 24, 0.5, drums="sparse:8", bass="rumble:16", chords="tease:8,stabs:2,-:2,stabs:2,-:2,stabs:6", lead="-:16,tease:6"),
+        _s("Peak 2", "drop", 32, 1.0, variation=1, fill=True, pause=16, drums="drive:8,full", bass="on", chords="stabs", lead="acid"),
+        _s("Lift 2", "build", 8, 0.8, variation=1, fill=True, rest=1.0, drums="groove:5,sparse", chords="stabs", lead="acid"),
+        _s("Peak 3", "drop", 16, 1.0, variation=2, drums="full", bass="on", chords="stabs", lead="acid"),
+        _s("Stripped", "groove", 8, 0.6, variation=1, drums="kick_only:6", bass="on:6"),
+        _s("Outro", "outro", 40, 0.4, drums="groove:24,kick_hats:8,sparse", bass="on:24"),
     )),
     # docs/GENRES.md, Drum & Bass: 32-bar DJ intro, drums out for the last 4 bars before a drop,
     # 64-bar drops, a drumless 32-bar breakdown, liquid pads with 2 bars per chord, bass leaves the outro first.

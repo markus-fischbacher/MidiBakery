@@ -107,6 +107,8 @@ PEAK_TIME = Groove(
         "groove": frozenset({"kick", "closed_hat", "open_hat", "rim", "shaker"}),
         "full": frozenset({"kick", "clap", "closed_hat", "open_hat", "rim", "low_tom", "shaker", "ride"}),
         "no_kick": frozenset({"clap", "closed_hat", "open_hat", "rim", "shaker"}),
+        "kick_only": frozenset({"kick", "rim", "low_tom"}),
+        "drive": frozenset({"kick", "clap", "open_hat", "rim", "low_tom"}),  # a drop's first bars: few hats, the full kit later  # stripped rebuild: kick and bass, the hats come back later
         "sparse": frozenset({"closed_hat", "shaker", "rim"}),
     },
     swing=0.15,
