@@ -51,14 +51,16 @@ from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, 
 from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
-NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator"}
+NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator"}
 ROLE_WORDS = {
     "bass": ("bass", "sub", "808"),
     "chords": ("chord", "pad", "keys", "piano", "stab"),
     "lead": ("lead", "melody", "synth", "arp", "pluck"),
     "riser": ("riser", "uplift"),
     "impact": ("impact", "boom"),
+    "sidechain": ("sidechain", "trigger"),
 }
+TRIGGER_PITCH = 48  # the sidechain track's notes: a short Operator sine nobody hears
 PHRASE = 8  # bars
 FILTER_TYPES = {"Low-pass": 0, "High-pass": 1}  # Auto Filter (Live 12) "Filter Type" values
 OPEN_HZ = {"Low-pass": 20000.0, "High-pass": 20.0}
@@ -80,7 +82,7 @@ class SongRequest(BaseModel):
     length: Literal["radio", "standard", "extended"] = "standard"
     minutes: Annotated[float, Field(ge=0.5, le=20, description="Target duration; overrides length")] | None = None
     start_bar: Annotated[int, Field(ge=1, description="Arrangement bar to start at (default: after the last clip)")] | None = None
-    roles: dict[Literal["drums", "bass", "chords", "lead", "riser", "impact"], Annotated[int, Field(ge=0)]] = Field(
+    roles: dict[Literal["drums", "bass", "chords", "lead", "riser", "impact", "sidechain"], Annotated[int, Field(ge=0)]] = Field(
         default_factory=dict, description="Role -> track index; others are found by Drum Rack or track name"
     )
     clips: list[UseClip] = Field(default_factory=list, description="Session clips to use for a role instead of generating it")
@@ -88,6 +90,7 @@ class SongRequest(BaseModel):
     sounds: bool = Field(True, description="New tracks get the genre's kit and presets; false: empty Drum Rack and native synths")
     mix: bool = Field(True, description="Reverb and Delay returns, sends and fader levels for new tracks")
     fx: bool = Field(True, description="A riser before each drop and an impact on its first beat (needs sounds)")
+    sidechain: bool = Field(True, description="Bass and pads duck under the kick: Compressors keyed from a silent trigger track")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174)")
     seed: Annotated[int, Field(ge=0)] | None = None
@@ -106,6 +109,9 @@ class RoleTrack:
     filter_new: bool = False
     resonance: bool = False  # the song rides the Auto Filter's resonance too
     throws: tuple[str, ...] = ()  # section kinds with delay throws
+    duck: float | None = None  # sidechain: threshold in dB of a Compressor keyed from the kick
+    duck_device: int | None = None  # its index on the track
+    duck_new: bool = False
 
 
 @dataclass
@@ -307,6 +313,15 @@ def _throw_points(section_bars: int, first: int, until: int, bpb: float, base: f
 
 
 def _filter_info(t: RoleTrack) -> dict[str, str]:
+    info = _automation_info(t)
+    if t.duck is not None:
+        info["sidechain"] = f"Compressor keyed from the sidechain track, threshold {t.duck:g} dB" + (" (new device)" if t.duck_new and not t.new else "")
+    return info
+
+
+def _automation_info(t: RoleTrack) -> dict[str, str]:
+    if t.role == "sidechain":
+        return {"plays": "1/16 notes on the kick steps through the whole song, silent (fader -inf); the Compressors listen Post FX"}
     if t.filter is None:
         return {"throws": f"delay on the last beat of every {PHRASE} bars in {', '.join(t.throws)}"} if t.throws else {}
     info = {"automation": f"Auto Filter {t.filter} cutoff" + (" and resonance" if t.resonance else "") + (" (new device)" if t.filter_new and not t.new else "")}
@@ -360,6 +375,29 @@ def _sweep(spec: str | None, section_bars: int, first: int, clip_length: float, 
     return envelope or {"points": [[0.0, convert(open_hz)]]}
 
 
+def pump_steps(genre: str) -> tuple[int, ...]:
+    """16th steps (0-based) of the genre's main kick: where the trigger track plays."""
+    lanes = [lane for lane in GROOVES[genre].lanes if lane.role == "kick" and lane.probability >= 1 and lane.cycle == 1]
+    return tuple(sorted({step - 1 for lane in lanes for step in lane.steps}))
+
+
+def _trigger_clip(t: RoleTrack, genre: str, start: float, end: float, bpb: float) -> dict[str, Any]:
+    """One clip over the whole song: a 1/16 note on every kick step, also where the kick rests."""
+    steps = pump_steps(genre)
+    notes = [Note(TRIGGER_PITCH, bar * bpb + step * 0.25, 0.25, 127).to_spec() for bar in range(round((end - start) / bpb)) for step in steps]
+    return {"action": "add_clip", "track": t.index, "start": start, "length": end - start, "name": "Sidechain", "notes": notes}
+
+
+def _compressor(track: dict[str, Any]) -> int | None:
+    devices = track.get("devices", [])
+    return next((d.get("index", i) for i, d in reversed(list(enumerate(devices))) if str(d.get("class_name", "")).startswith("Compressor")), None)
+
+
+def _duck_params(threshold: float, release: float) -> list[tuple[str, float | str]]:
+    """Compressor settings for a pump: fast attack, back up before the next kick."""
+    return [("Threshold", threshold), ("Ratio", 4.0), ("Attack", 0.001), ("Release", release), ("S/C EQ On", "Off"), ("S/C On", "On")]
+
+
 def _auto_filter(track: dict[str, Any]) -> int | None:
     devices = track.get("devices", [])
     return next((d.get("index", i) for i, d in reversed(list(enumerate(devices))) if str(d.get("class_name", "")).startswith("AutoFilter")), None)
@@ -387,6 +425,8 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
             wanted += FX_ROLES
         else:
             warnings.append("No riser or impact: they need the genre's presets (sounds=false)")
+    if request.sidechain and template.style.mix.duck:
+        wanted += ("sidechain",)
     for role in wanted:
         if role in roles:
             continue
@@ -539,6 +579,24 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             target.filter_device = len(session.track(target.index).get("devices", [])) if found is None else found
             if found is not None:
                 warnings.append(f"Track index {target.index} '{target.name}': its Auto Filter is set to {kind} for the song's sweeps")
+    trigger = roles.get("sidechain")
+    if trigger is not None and not trigger.new and not session.track(trigger.index).get("devices"):
+        trigger.device = NEW_TRACK_DEVICES["sidechain"]  # an empty track sends no audio to key from
+    if trigger is not None:
+        for role, threshold in style.mix.duck.items():
+            target = roles.get(role)
+            if target is None:
+                continue
+            target.duck = threshold
+            after_filter = 1 if target.filter_new else 0
+            if target.new:
+                target.duck_device, target.duck_new = 1 + after_filter, True  # after the instrument and its filter
+            else:
+                found = _compressor(session.track(target.index))
+                target.duck_new = found is None
+                target.duck_device = len(session.track(target.index).get("devices", [])) + after_filter if found is None else found
+                if found is not None:
+                    warnings.append(f"Track index {target.index} '{target.name}': its Compressor is keyed from the sidechain track for the song")
     loops: dict[str, float] = {}
     for role, clip in use.items():
         found = next((c for c in session.track(clip.track).get("clips", []) if c["slot"] == clip.slot), None)
@@ -648,6 +706,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     riser_macro = riser is not None and preset is not None and (
         riser.sound is not None or not riser.new and [d.get("name") for d in session.track(riser.index).get("devices", [])][:1] == [_sound_name(preset)])
     fx_plays = _fx(actions, counts, roles, sections, starts, bpb, scale, style.mix.volume.get("riser", -12.0), riser_macro)
+    if trigger is not None:
+        actions.append(_trigger_clip(trigger, request.genre, start, end, bpb))
+        counts["sidechain"] += 1
     locators = [{"action": "set_locator", "time": at, "name": section.name} for section, at in zip(sections, starts)]
     if len(actions) > 256:
         raise BridgeError("INVALID_PARAMS", f"The song needs {len(actions)} clips; use a shorter length or fewer copied clips (max 256)")
@@ -784,6 +845,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         if t.filter_new:
             ops.append({"op": "device.insert", "params": {"track": t.index, "name": "Auto Filter"}})
         ops.append({"op": "device.set_param", "params": {"track": t.index, "device": t.filter_device, "parameter": "Filter Type", "value": FILTER_TYPES[t.filter]}})
+    ops += _sidechain_ops(plan)
     ops += plan.mix_ops()
     try:
         if ops:
@@ -816,6 +878,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
                     warnings.append(f"{_sound_name(t.sound)}: pads not readable ({exc.message}); the drums keep General MIDI notes")
                 else:
                     actions = _move_to_kit(actions, t.index, kit)
+        undo_steps += await _route_sidechains(call, plan, warnings)
         if plan.tempo is not None:
             await call("song.set", {"tempo": plan.tempo})
             undo_steps += 1
@@ -835,11 +898,55 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         "clips": len(result["results"]),
         "new_tracks": [{"track": t.index, "name": t.name, "device": _sound_name(t.sound) if t in loaded else t.device} for t in new],
         "automation": {r: f"track index {t.index}, device index {t.filter_device}" for r, t in plan.roles.items() if t.filter is not None},
+        **({"sidechain": ducks} if (ducks := {r: f"track index {t.index}, device index {t.duck_device}" for r, t in plan.roles.items() if t.duck is not None}) else {}),
         **plan.mix_info(),
         "locators": len(plan.locators) if not song["is_playing"] else "skipped: stop the transport and plan again for locators",
         "undo": f"{undo_steps} undo step(s) for tracks/mix/sounds/tempo/clips; each locator is its own step",
         **({"warnings": warnings} if warnings else {}),
     }
+
+
+def _sidechain_ops(plan: SongPlan) -> list[dict[str, Any]]:
+    """The trigger track silent, a Compressor per ducking role keyed from its Post FX (before the fader)."""
+    trigger = plan.roles.get("sidechain")
+    if trigger is None:
+        return []
+    ops: list[dict[str, Any]] = []
+    if not trigger.new and trigger.device:
+        ops.append({"op": "device.insert", "params": {"track": trigger.index, "name": trigger.device}})
+    ops.append({"op": "mixer.set", "params": {"track": trigger.index, "volume": 0.0}})
+    release = plan.template.style.mix.release
+    for t in plan.roles.values():
+        if t.duck is None:
+            continue
+        if t.duck_new:
+            ops.append({"op": "device.insert", "params": {"track": t.index, "name": "Compressor"}})
+        for parameter, shown in _duck_params(t.duck, release):
+            ops.append({"op": "device.set_param", "params": {"track": t.index, "device": t.duck_device, "parameter": parameter, "display": shown}})
+    return ops
+
+
+ROUTING_TRIES = 10  # Live lists a new track as a sidechain source a few ticks after it exists
+
+
+async def _route_sidechains(call: Call, plan: SongPlan, warnings: list[str]) -> int:
+    """Key each ducking Compressor from the trigger track: a batch of its own, once Live lists the
+    new track as a source. Its undo steps."""
+    trigger = plan.roles.get("sidechain")
+    ops = [{"op": "device.routing", "params": {"track": t.index, "device": t.duck_device, "input_track": trigger.index, "channel": "Post FX"}}
+           for t in plan.roles.values() if t.duck is not None] if trigger is not None else []
+    if not ops:
+        return 0
+    for attempt in range(ROUTING_TRIES):
+        try:
+            await call("batch", {"ops": ops, "label": f"MidiBakery song {plan.id}: sidechain"})
+            return 1
+        except BridgeError as exc:
+            if exc.details.get("completed") or "no sidechain source" not in exc.message or attempt == ROUTING_TRIES - 1:
+                warnings.append(f"Sidechain not routed ({exc.message}); set the Compressors' sidechain to track index {trigger.index}, Post FX")
+                return 1 if exc.details.get("completed") else 0
+            await asyncio.sleep(0.2)
+    return 0
 
 
 def _move_to_kit(actions: list[dict[str, Any]], track: int, kit: DrumMap) -> list[dict[str, Any]]:

@@ -353,6 +353,47 @@
         "device"
       ]
     },
+    "device.routing": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "chain_path": [
+          "array"
+        ],
+        "channel": [
+          "string",
+          "array",
+          "null"
+        ],
+        "device": [
+          "integer"
+        ],
+        "input": [
+          "string",
+          "null"
+        ],
+        "input_track": [
+          "integer",
+          "null"
+        ],
+        "return_track": [
+          "integer",
+          "null"
+        ],
+        "track": [
+          "integer",
+          "null"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "device"
+      ]
+    },
     "device.set_param": {
       "destructive": false,
       "min_live": [
@@ -367,6 +408,11 @@
         "device": [
           "integer"
         ],
+        "display": [
+          "number",
+          "string",
+          "null"
+        ],
         "parameter": [
           "integer",
           "string"
@@ -380,14 +426,14 @@
           "null"
         ],
         "value": [
-          "number"
+          "number",
+          "null"
         ]
       },
       "read_only": false,
       "required": [
         "device",
-        "parameter",
-        "value"
+        "parameter"
       ]
     },
     "drum_rack.pads": {

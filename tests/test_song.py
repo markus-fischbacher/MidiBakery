@@ -33,7 +33,7 @@ def _studio(live):
 
 
 async def _plan(server, **args):
-    return _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "fx": False, **args}))  # FX: test_fx_*
+    return _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "fx": False, "sidechain": False, **args}))  # test_fx_*, test_sidechain_*
 
 
 async def test_house_song_on_found_and_new_tracks(client, live):
@@ -85,7 +85,7 @@ async def test_sounds_off_or_missing_keep_native_devices(client, live):
     assert preview["tracks"]["chords"]["device"] == "Wavetable" and "empty Drum Rack" in preview["warnings"][0]
     trap = _payload(await server.call_tool("plan_song", {"genre": "trap", "seed": 1}))  # its sounds are not in the fake browser
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": trap["plan_id"]}))
-    assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Wavetable", "Riser Basic", "Sub 808 Pitch Boom"]
+    assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Wavetable", "Riser Basic", "Sub 808 Pitch Boom", "Operator"]
     assert len(applied["warnings"]) == 4 and "808 Core Kit could not be loaded" in applied["warnings"][0]
 
 
@@ -601,3 +601,14 @@ async def test_throws_and_resonance_ride_on_their_sections(client, live):
     chord = next(v for k, v in tracks.items() if k.endswith("Chords"))
     thrown = sorted(name for name, (send, _) in chord.items() if send is not None)
     assert thrown and all(name.split(" ")[0] in ("Groove", "Breakdown") for name in thrown), thrown
+
+
+async def test_a_kit_with_only_a_kick_gets_no_snare_fills(client, live):
+    def setup():
+        kit = DrumRackDevice()
+        kit.add_pad("Kick", 36)
+        live.song.tracks[0].devices.append(kit)
+
+    live.on_main(setup)
+    preview = await _plan(build_server(client), genre="drum_and_bass", seed=3, create_missing=False)
+    assert preview["tracks"]["drums"]["track"] == 0

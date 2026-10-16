@@ -215,6 +215,8 @@ def _fill(meter: Meter, bar: int, strong: bool, variant: int, drum_map: DrumMap,
     bpb = meter.beats_per_bar
     start = bar * bpb
     snare = drum_map.note(role) or drum_map.note("snare") or drum_map.note("clap")
+    if snare is None and (strong or variant % 2 == 0):  # a kit without snare or clap: no snare fill
+        return notes
     if strong:
         # 8ths for two beats, 16ths for one, 32nds for the last (Peak-Time / D&B recipes) - velocity 50 -> 115
         times = [start + t * 0.5 for t in range(4)] + [start + 2 + t * 0.25 for t in range(4)] + [start + 3 + t * 0.125 for t in range(8)]

@@ -449,13 +449,13 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 | Sounds | Neue Spuren bekommen Kit und Presets des Genres aus der Core Library; die Drum-Noten landen auf den Pads des Kits |
 | Mix | Ein Reverb- und ein Delay-Return (vorhandene nutzt der Song), Fader-Pegel und Sends pro Rolle für neue Spuren; vorhandene Spuren behalten ihren Fader und senden nur in neue Returns. Nachhall und Delay-Zeit pro Genre, z. B. Melodic Techno 4,5 s, House 1,8 s |
 | Automation | Auto-Filter-Fahrten pro Clip in allen Genres, dazu Resonanz-Fahrten (Acid in Peak-Time, Pads in Breaks und Builds). Delay-Throws: Der Send einer Rolle springt auf der letzten Zählzeit jedes 8. Takts auf -4 dB und fällt danach auf seinen Pegel zurück |
+| Sidechain | Bass und Pads ducken unter der Kick. Eine eigene, stumme Sidechain-Spur (Operator, Fader auf -inf) spielt über den ganzen Song 1/16-Noten auf den Kick-Schritten des Genres, auch dort, wo die Kick pausiert (House, Melodic, Peak-Time jede Zählzeit, D&B Schritte 1 und 11, Trap 1, 8 und 11). Ein Compressor (4:1, Attack 1 ms) auf Bass und Pads hört ihr Post-FX-Signal. Threshold und Release pro Genre: House Bass -24 / Chords -18 dB, 160 ms; Melodic -22 / -16 dB, 200 ms; Peak-Time -24 / -20 dB, 120 ms; D&B nur Bass -18 dB, 90 ms; Trap nur 808 -14 dB, 100 ms |
 | FX | Ein Riser füllt die letzten Takte (höchstens 8) vor jedem Drop, der auf einen anderen Abschnitt folgt, und endet an der Pause davor; Lautstärke und Filter-Makro steigen exponentiell. Ein Impact (Sub 808 Pitch Boom) trifft die Eins des Drops. Riser-Presets: House und Trap Riser Basic, Melodic und Peak-Time Hyper Riser, D&B ENCOM Riser |
 
 **Noch offen**
 
 | Thema | Warum |
 |---|---|
-| Sidechain | braucht Routing zur Kick |
 | Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr; Referenztracks (Abschnitte und Elemente eines Songs, der gefällt) sind als nächster Schritt dafür gedacht |
 | Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
 | Andere Taktarten | die Grooves sind 16-Schritt-Takte; `plan_song` braucht deshalb 4/4 und meldet das sonst |
@@ -464,5 +464,5 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 
 - **Lead-Dichte und Stab-Länge** nennen die Quellen kaum in Zahlen. Die Werte oben sind Konventionen (○) und gehören nach Gehör justiert.
 - **Notenraster aus Attacks „Beat Dissected“** liegen nur als Bilder vor. Die Schrittpositionen stammen aus den Texten und aus anderen Quellen.
-- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an. Filterfahrten und Resonanz schreibt sie als Clip-Automation eines Auto Filters, Delay-Throws als Send-Automation, Riser als Preset mit Hüllkurven auf Lautstärke und Filter-Makro.
+- **Sound-Techniken** wie Rumble, Reese und Sidechain sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an; Sidechain baut sie als Compressor, den eine stumme Trigger-Spur steuert. Filterfahrten und Resonanz schreibt sie als Clip-Automation eines Auto Filters, Delay-Throws als Send-Automation, Riser als Preset mit Hüllkurven auf Lautstärke und Filter-Makro.
 - **Breaks und Samples** (Amen, Vocal-Chops, 808-Samples) kann Lives API nicht laden.

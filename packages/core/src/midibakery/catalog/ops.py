@@ -213,7 +213,20 @@ class DrumPadsGet(Params):
 
 class DeviceParamSet(DeviceRef):
     parameter: int | str = Field(description="Parameter index or exact name")
-    value: float = Field(description="Raw parameter value within the parameter's min/max")
+    value: float | None = Field(None, description="Raw parameter value within the parameter's min/max")
+    display: float | str | None = Field(None, description="Instead of value: what Live shows, a number in s, Hz, dB or % or a switch item")
+
+    @model_validator(mode="after")
+    def _one_value(self) -> DeviceParamSet:
+        if (self.value is None) == (self.display is None):
+            raise ValueError("give either value or display")
+        return self
+
+
+class DeviceRouting(DeviceRef):
+    input_track: TrackIndex | None = Field(None, description="Sidechain source track; omit input_track and input to read")
+    input: str | None = Field(None, description="Sidechain source as Live lists it, e.g. 'A-Reverb'")
+    channel: str | list[str] | None = Field(None, description="Source channel, e.g. 'Post FX'; a list: the first Live offers")
 
 
 class MixerTarget(Params):
@@ -506,6 +519,7 @@ for spec in [
     OpSpec("device.params", DeviceRef, "Parameters of a device with ranges and display values", read_only=True),
     OpSpec("drum_rack.pads", DrumPadsGet, "Filled Drum Rack pads with their MIDI note and name", read_only=True),
     OpSpec("device.set_param", DeviceParamSet, "Set one device parameter", read_only=False),
+    OpSpec("device.routing", DeviceRouting, "Read or set a device's sidechain input (Compressor, Gate...)", read_only=False),
     OpSpec("mixer.get", MixerGet, "Volume, pan, sends, mute/solo, crossfade and routing of tracks, returns and master", read_only=True),
     OpSpec("mixer.set", MixerSet, "Change volume (normalised or dB), pan, sends, mute/solo, crossfade or routing", read_only=False),
     OpSpec("return.create", ReturnCreate, "Create a return track, optionally with a native device", read_only=False),

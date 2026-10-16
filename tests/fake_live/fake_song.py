@@ -7,11 +7,11 @@ from Live import LiveObject
 
 NOTE_FIELDS = ("pitch", "start_time", "duration", "velocity", "mute",
                "probability", "velocity_deviation", "release_velocity")
-NATIVE_DEVICES = {"Operator", "Drift", "Wavetable", "Reverb", "Delay", "Auto Filter", "Drum Rack", "Simpler", "Instrument Rack", "Audio Effect Rack"}
+NATIVE_DEVICES = {"Compressor", "Operator", "Drift", "Wavetable", "Reverb", "Delay", "Auto Filter", "Drum Rack", "Simpler", "Instrument Rack", "Audio Effect Rack"}
 RACK_CLASSES = {"Instrument Rack": "InstrumentGroupDevice", "Audio Effect Rack": "AudioEffectGroupDevice", "Drum Rack": "DrumGroupDevice"}
 
 
-def make_device(name):
+def make_device(name, track=None):
     if name not in NATIVE_DEVICES:
         raise RuntimeError("Unknown device")
     if name == "Drum Rack":
@@ -26,6 +26,8 @@ def make_device(name):
             PercentParameter("Resonance", 0.0),
             Parameter("Filter Type", 0.0, 0.0, 9.0, True, ("Low-pass", "High-pass", "Band-pass", "Notch", "Morph", "DJ", "Comb", "Resampling", "Notch+LP", "Vowel")),
         ]
+    if name == "Compressor":
+        return CompressorDevice(track)
     if name == "Reverb":
         device.parameters += [Parameter("Decay Time", 0.314), Parameter("Dry/Wet", 0.5)]
     if name == "Delay":
@@ -175,8 +177,62 @@ class Mixer(LiveObject):
 
 
 class RoutingType(LiveObject):
-    def __init__(self, display_name):
+    def __init__(self, display_name, attached_object=None):
         self.display_name = display_name
+        self.attached_object = attached_object
+
+
+class ShownParameter(Parameter):
+    """A continuous parameter Live shows through `show` (raw -> text)."""
+
+    def __init__(self, name, value, show):
+        Parameter.__init__(self, name, value)
+        self.show = show
+
+    def str_for_value(self, value):
+        return self.show(value)
+
+
+class CompressorDevice(Device):
+    """Live 12's Compressor2 with its sidechain: sources are the Set's other tracks with an
+    instrument, channels the source's taps plus each drum pad chain's."""
+
+    def __init__(self, track):
+        Device.__init__(self, "Compressor")
+        self.class_name = "Compressor2"
+        self.track = track
+        on = ("Off", "On")
+        self.parameters = [
+            Parameter("Device On", 1.0, 0.0, 1.0, True, on),
+            ShownParameter("Threshold", 1.0, lambda v: "%.2f dB" % (-70 + 70 * v)),
+            ShownParameter("Ratio", 0.5, lambda v: "%.2f : 1" % (1 + 6 * v)),
+            ShownParameter("Attack", 0.2, lambda v: "%.2f ms" % (1000 * v ** 3)),
+            ShownParameter("Release", 0.2, lambda v: "%.1f ms" % (1 + 3000 * v ** 3)),
+            Parameter("S/C EQ On", 0.0, 0.0, 1.0, True, on),
+            Parameter("S/C EQ Type", 5.0, 0.0, 5.0, True, ("Low Shelf", "Bell", "High Shelf", "Low pass", "Peak", "High pass")),
+            ShownParameter("S/C EQ Freq", 0.2, lambda v: "%.1f Hz" % (20 + 19980 * v ** 3)),
+            Parameter("S/C On", 0.0, 0.0, 1.0, True, on),
+        ]
+        self.input_routing_type = RoutingType("No Input")
+        self.input_routing_channel = RoutingType("")
+
+    @property
+    def available_input_routing_types(self):
+        song = self.track.song if self.track is not None else None
+        sources = [t for t in (song.tracks if song else []) if t is not self.track and t.devices and not t.unlisted_ticks]
+        return [RoutingType(t.name, t) for t in sources] + [RoutingType("Main"), RoutingType("No Input")]
+
+    @property
+    def available_input_routing_channels(self):
+        source = self.input_routing_type.attached_object
+        if source is None:
+            return [RoutingType("")]
+        taps = ("Pre FX", "Post FX", "Post Mixer")
+        names = list(taps)
+        for device in source.devices:
+            if getattr(device, "can_have_drum_pads", False):
+                names += ["%s | %s | %s" % (device.name, chain.name, tap) for chain in device.chains for tap in taps]
+        return [RoutingType(n) for n in names]
 
 
 class MidiNote(LiveObject):
@@ -353,6 +409,7 @@ class Track(LiveObject):
         self.playing_slot_index = -1
         self.fired_slot_index = -1  # -2: Clip Stop button fired (stop pending)
         self.stopped_unquantized = 0
+        self.unlisted_ticks = 0
 
     def create_midi_clip(self, start_time, length):  # Live 12.1.10+
         clip = Clip(length)
@@ -391,7 +448,7 @@ class Track(LiveObject):
             self.stopped_unquantized += 1
 
     def insert_device(self, name, index):
-        self.devices.insert(index, make_device(name))
+        self.devices.insert(index, make_device(name, self))
 
 
 class BrowserItem(LiveObject):
@@ -551,7 +608,9 @@ class Song(LiveObject):
         self.is_playing = True
 
     def create_midi_track(self, index):
-        self._insert_track(Track("MIDI", True, len(self.scenes)), index)
+        track = Track("MIDI", True, len(self.scenes))
+        track.unlisted_ticks = 3  # like Live: a sidechain source a few ticks later
+        self._insert_track(track, index)
 
     def create_audio_track(self, index):
         self._insert_track(Track("Audio", False, len(self.scenes)), index)
@@ -566,6 +625,8 @@ class Song(LiveObject):
         self._pending_time = float(value)
 
     def tick(self):
+        for track in self.tracks:
+            track.unlisted_ticks = max(0, track.unlisted_ticks - 1)
         if getattr(self, "browser", None) is not None:
             self.browser.tick()
         if self._pending_time is not None:

@@ -386,7 +386,7 @@ def test_song_plan_reaches_the_page_and_its_apply_button_writes_it(app_factory, 
         song = next(e for e in events if e["type"] == "tool_result" and e["name"] == "plan_song")["result"]
         assert song["genre"] == "Trap" and song["duration"] and song["bpm"]
         assert all({"name", "bar", "bars", "plays"} <= set(s) for s in song["sections"])
-        assert set(song["tracks"]) == {"drums", "bass", "chords", "lead", "riser", "impact"}
+        assert set(song["tracks"]) == {"drums", "bass", "chords", "lead", "riser", "impact", "sidechain"}
 
         ws.send_json({"type": "tool", "name": "apply_plan", "input": {"plan_id": song["plan_id"]}})
         events = _until(ws, "done")

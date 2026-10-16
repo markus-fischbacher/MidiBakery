@@ -75,6 +75,8 @@ class Mix:
     decay: float = 2.0  # Reverb decay in seconds
     delay_16ths: int = 3  # Delay time in 16th notes (3 = dotted 8th)
     feedback: float = 0.35  # Delay feedback, 0-1
+    duck: dict[str, float] = field(default_factory=dict)  # sidechain: Compressor threshold keyed from the kick
+    release: float = 0.15  # its release in seconds: back up before the next kick
 
 
 @dataclass(frozen=True)
@@ -130,12 +132,12 @@ def _kit(folder: str, name: str) -> tuple[str, ...]:
     return ("packs", "Core Library", "Racks", "Drum Racks", folder, f"{name}.adg")
 
 
-def _mix(volume: str, reverb: str, delay: str, decay: float, delay_16ths: int, feedback: float) -> Mix:
-    """Levels per role as "drums,bass,chords,lead" in dB; "-" = no send."""
+def _mix(volume: str, reverb: str, delay: str, decay: float, delay_16ths: int, feedback: float, duck: str = "-,-,-,-", release: float = 0.15) -> Mix:
+    """Levels per role as "drums,bass,chords,lead" in dB; "-" = no send (no ducking)."""
     def levels(spec: str) -> dict[str, float]:
         return {role: float(db) for role, db in zip(ROLES, spec.split(",")) if db.strip() != "-"}
 
-    return Mix({**levels(volume), **FX_VOLUME}, {**levels(reverb), **FX_REVERB}, {**levels(delay), **FX_DELAY}, decay, delay_16ths, feedback)
+    return Mix({**levels(volume), **FX_VOLUME}, {**levels(reverb), **FX_REVERB}, {**levels(delay), **FX_DELAY}, decay, delay_16ths, feedback, levels(duck), release)
 
 
 FX_VOLUME = {"riser": -12.0, "impact": -8.0}
@@ -158,7 +160,7 @@ TEMPLATES: dict[str, Template] = {
     "house": Template("house", "House", Style(
         124, lead_range=(72, 89),
         sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic FM House Bass.adg", chords="Synth Keys/106 Organ.adg", lead="Synth Keys/Basic Pluck Keys.adg"),
-        mix=_mix("-6,-8,-12,-11", "-24,-,-14,-16", "-,-,-22,-18", decay=1.8, delay_16ths=3, feedback=0.35),
+        mix=_mix("-6,-8,-12,-11", "-24,-,-14,-16", "-,-,-22,-18", decay=1.8, delay_16ths=3, feedback=0.35, duck="-,-24,-18,-", release=0.16),
         filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",)},
     ), (
         _s("Intro", "intro", 16, 0.4, fill=True, drums="kick_hats:8,groove", chords="-:8,pad", sweeps={"chords": "-:8,150>20000~exp"}),
@@ -173,7 +175,7 @@ TEMPLATES: dict[str, Template] = {
     "melodic_techno": Template("melodic_techno", "Melodic Techno", Style(
         122, chords_per_bar=0.5, lead_range=(60, 84), lead="arp",
         sounds=_sounds(_kit("Electronic", "AG Techno Kit"), bass="Bass/Analogue Bass.adv", chords="Pad/Analog Soft Pad.adv", lead="Synth Lead/Basic Waves Lead.adg", riser="Effects/Hyper Riser.adg"),
-        mix=_mix("-6,-8,-13,-12", "-26,-,-8,-12", "-,-,-20,-12", decay=4.5, delay_16ths=3, feedback=0.45),
+        mix=_mix("-6,-8,-13,-12", "-26,-,-8,-12", "-,-,-20,-12", decay=4.5, delay_16ths=3, feedback=0.45, duck="-,-22,-16,-", release=0.2),
         progressions=MELODIC_PROGRESSIONS, devices={"lead": "Wavetable", "chords": "Wavetable", "bass": "Drift"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"}, throws={"lead": ("break",)},
     ), (
@@ -196,7 +198,7 @@ TEMPLATES: dict[str, Template] = {
     "peak_time_techno": Template("peak_time_techno", "Peak-Time Techno", Style(
         128, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
         sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic Sub Boom.adg", chords="Pad/Butter Knife Stab.adg", lead="Bass/Basic 303 Bass.adg", riser="Effects/Hyper Riser.adg"),
-        mix=_mix("-5,-9,-12,-12", "-24,-,-12,-20", "-,-,-16,-16", decay=2.5, delay_16ths=3, feedback=0.4),
+        mix=_mix("-5,-9,-12,-12", "-24,-,-12,-20", "-,-,-16,-16", decay=2.5, delay_16ths=3, feedback=0.4, duck="-,-24,-20,-", release=0.12),
         progressions=DRONE_PROGRESSIONS, devices={"lead": "Drift", "chords": "Wavetable", "bass": "Analog"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"}, throws={"chords": ("groove", "break")},
     ), (
@@ -224,7 +226,7 @@ TEMPLATES: dict[str, Template] = {
     "drum_and_bass": Template("drum_and_bass", "Drum & Bass", Style(
         174, chords_per_bar=0.5, lead_range=(72, 89),
         sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead="Synth Lead/Basic Glide Lead.adg", riser="Effects/ENCOM Riser.adg"),
-        mix=_mix("-5,-8,-13,-11", "-26,-,-10,-16", "-,-,-,-16", decay=2.0, delay_16ths=3, feedback=0.3),
+        mix=_mix("-5,-8,-13,-11", "-26,-,-10,-16", "-,-,-,-16", decay=2.0, delay_16ths=3, feedback=0.3, duck="-,-18,-,-", release=0.09),
         progressions=DNB_PROGRESSIONS, devices={"bass": "Operator", "chords": "Wavetable", "lead": "Operator"},
         filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",)},
     ), (
@@ -241,7 +243,7 @@ TEMPLATES: dict[str, Template] = {
     "trap": Template("trap", "Trap", Style(
         145, chords_per_bar=0.5, lead_range=(69, 86),
         sounds=_sounds(_kit("Drum Machines", "808 Core Kit"), bass="Bass/808 Pure.adg", chords="Synth Keys/Basic Bell Keys.adg", lead="Synth Lead/Basic Sine Drive Lead.adg"),
-        mix=_mix("-6,-7,-12,-11", "-28,-,-12,-16", "-,-,-18,-16", decay=2.2, delay_16ths=2, feedback=0.3),
+        mix=_mix("-6,-7,-12,-11", "-28,-,-12,-16", "-,-,-18,-16", decay=2.2, delay_16ths=2, feedback=0.3, duck="-,-14,-,-", release=0.1),
         progressions=TRAP_PROGRESSIONS, devices={"bass": "Operator", "chords": "Drift", "lead": "Wavetable"},
         filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",), "chords": ("verse",)},
     ), (
