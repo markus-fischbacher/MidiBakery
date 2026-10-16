@@ -179,6 +179,9 @@ MidiBakery/
 2. **Komposition:** `compose/` mit Drums, Bass, Chords, Melody und Transform; Plan/Apply mit Undo; MCP-Apps-Vorschau.
 3. **Live-Frontends:** Chat-AMXD und MIDI-Tools-AMXDs, Agent-Loop mit Anthropic und Ollama.
 4. **Abdeckung & Events:** Mixer/Routing, Racks, Arrangement, Take Lanes, Listener-Events über `subscriptions/listen`.
+   - Reihenfolge, je ein PR: Events → Mixer/Routing → Racks → Arrangement → Take Lanes.
+   - Events: im Chat-Gerät zunächst nur eine Statuszeile (Transport, Tempo, Scale, was spielt).
+   - Arrangement: Die Engine baut ganze Songstrukturen (Intro, Build, Drop, Break …), mit eigenen Struktur-Vorlagen pro Genre.
 5. **Produktisierung:** Installer, Signierung, Lizenz, Doku, Beta-Programm.
 6. **Optional:** Extensions-SDK-Adapter, sobald die SDK-Doku zugänglich und stabil ist.
 

@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 
-from .protocol import BRIDGE_VERSION, MAX_LINE_BYTES, PROTOCOL_VERSION, ErrorCode, OpError, encode
+from .protocol import BRIDGE_VERSION, MAX_LINE_BYTES, PROTOCOL_VERSION, TOPICS, ErrorCode, OpError, encode
 
 DEFAULT_PORT = 47681
 MAX_CLIENTS = 8
@@ -54,6 +54,7 @@ class Client(object):
         self.outbox = queue.Queue()
         self.authenticated = False
         self.alive = True
+        self.topics = frozenset()
 
     def start(self):
         for target in (self._read_loop, self._write_loop):
@@ -148,6 +149,16 @@ class Client(object):
                 self.close()
             return
 
+        if "subscribe" in message:
+            topics = message.get("subscribe")
+            if not isinstance(topics, list) or not all(t in TOPICS for t in topics):
+                self.send({"ok": False, "error": OpError(ErrorCode.BAD_REQUEST, "subscribe takes a list of: %s" % ", ".join(TOPICS)).to_wire()})
+                return
+            self.topics = frozenset(topics)
+            self.server.subscribed(self)
+            self.send({"subscribed": sorted(self.topics)})
+            return
+
         req_id = message.get("id")
         op = message.get("op")
         if not isinstance(op, str) or req_id is None:
@@ -171,6 +182,7 @@ class BridgeServer(object):
         self.jobs = queue.Queue(maxsize=MAX_PENDING_JOBS)
         self.token = secrets.token_urlsafe(32)
         self._clients = []
+        self._fresh = set()  # clients that subscribed since the last publish: they need the current state
         self._lock = threading.Lock()
         self._sock = None
         self._running = False
@@ -209,12 +221,27 @@ class BridgeServer(object):
         with self._lock:
             if client in self._clients:
                 self._clients.remove(client)
+            self._fresh.discard(client)
 
-    def broadcast(self, event, data):
+    def subscribed(self, client):
         with self._lock:
-            clients = [c for c in self._clients if c.authenticated]
+            self._fresh.add(client)
+
+    def has_subscribers(self, topic):
+        with self._lock:
+            return any(topic in c.topics for c in self._clients)
+
+    def take_new_subscribers(self, topic):
+        with self._lock:
+            fresh = [c for c in self._fresh if topic in c.topics]
+            self._fresh.clear()
+        return bool(fresh)
+
+    def publish(self, topic, data):
+        with self._lock:
+            clients = [c for c in self._clients if c.authenticated and topic in c.topics]
         for client in clients:
-            client.send({"event": event, "data": data})
+            client.send({"event": topic, "data": data})
 
     def _accept_loop(self):
         while self._running:

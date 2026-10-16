@@ -52,6 +52,11 @@
   body.device form { display: none; }
   body.device #modelSelect { display: none; }  /* the device has a native Model menu (umenu) */
   #modelSelect { max-width: 220px; padding: 1px 4px; }
+  /* Live status line: transport, tempo, scale and what plays (from the bridge's state events). */
+  #live { padding: 1px 6px; font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--line); }
+  #live[hidden] { display: none; }
+  #live .play { color: var(--ok); }
+  #live .rec { color: var(--err); }
   /* Claude API key: a password field in the browser; in the device the next line typed into the
      Max text field is taken as the key (jweb gets no keystrokes). */
   #keyPanel { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
@@ -93,6 +98,7 @@
   <button id="keyButton" type="button" title="Claude API key" hidden>Key</button>
   <button id="reset" type="button" title="Forget the conversation">New</button>
 </header>
+<div id="live" hidden title="What Live is doing"></div>
 <div id="keyPanel" hidden>
   <span id="keyText" class="text"></span>
   <span id="keyTypeHint" class="note">Paste the key into the message field on the right and press Enter. It is not sent to any model.</span>
@@ -246,6 +252,9 @@ function handle(ev) {
       $("status").textContent = `${ev.provider} · ${ev.model} · ${ev.tools} tools`;
       showKeyButton(ev.provider);  // also covers "Default" when the API runs with Claude
       setBusy(false);
+      break;
+    case "live_state":
+      showLive(ev);
       break;
     case "thinking":
       if (!thinking) thinking = add("msg thinking", "");
@@ -424,6 +433,25 @@ function planApplied(planId, failed) {
   plan.card.classList.remove("open");
   plan.state.textContent = "✓ applied · Undo reverts it";
   plan.state.classList.add("ok");
+}
+
+// One line: ▶/■ tempo · signature · scale · what plays (or starts / stops).
+function showLive(ev) {
+  const line = $("live");
+  line.hidden = false;
+  if (!ev.connected || !ev.state) { line.textContent = "Live not connected"; return; }
+  const s = ev.state;
+  const parts = [`${+s.tempo.toFixed(2)} BPM`, s.signature.join("/"), `${NAMES[s.root_note] || ""} ${s.scale_name}`.trim()];
+  const playing = s.playing.map((p) => `${p.name}: ${p.clip || "clip " + (p.slot + 1)}`);
+  // With the transport stopped Live keeps these clips as playing: they continue on Play.
+  if (playing.length) parts.push((s.is_playing ? "" : "ready: ") + playing.slice(0, 2).join(", ") + (playing.length > 2 ? ` +${playing.length - 2}` : ""));
+  if (s.launching.length) parts.push(`starting ${s.launching.map((l) => "track " + (l.track + 1)).join(", ")}`);
+  if (s.stopping.length) parts.push(`stopping ${s.stopping.map((t) => "track " + (t + 1)).join(", ")}`);
+  const icon = document.createElement("span");
+  icon.className = s.record_mode ? "rec" : s.is_playing ? "play" : "";
+  icon.textContent = s.record_mode ? "● " : s.is_playing ? "▶ " : "■ ";
+  line.replaceChildren(icon, document.createTextNode(parts.join(" · ")));
+  line.title = playing.length ? `Playing: ${playing.join(", ")}` : "Nothing playing";
 }
 
 function askConfirm(ev) {

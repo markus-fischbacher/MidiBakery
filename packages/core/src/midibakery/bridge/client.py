@@ -55,10 +55,14 @@ EventHandler = Callable[[str, dict[str, Any]], None]
 
 
 class BridgeClient:
-    """One authenticated connection; reconnects lazily on the next call."""
+    """One authenticated connection; reconnects lazily on the next call.
 
-    def __init__(self, on_event: EventHandler | None = None):
+    With `topics` (e.g. ("state",)) the bridge pushes those events to `on_event`
+    from the moment the connection is up, again after every reconnect."""
+
+    def __init__(self, on_event: EventHandler | None = None, topics: tuple[str, ...] = ()):
         self._on_event = on_event
+        self._topics = topics
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
@@ -103,8 +107,16 @@ class BridgeClient:
                     f"Protocol mismatch: bridge {hello.get('protocol')}, core {PROTOCOL_VERSION}. Reinstall the Remote Script."
                 )
             self.live_version = tuple(hello.get("live", ()))
+            if self._topics:
+                writer.write(_frame({"subscribe": list(self._topics)}))
+                await writer.drain()
             self._reader, self._writer = reader, writer
             self._read_task = asyncio.create_task(self._read_loop(reader))
+
+    async def wait_closed(self) -> None:
+        """Returns when Live closes the connection (or close() is called)."""
+        if self._read_task is not None:
+            await asyncio.shield(self._read_task)
 
     async def close(self) -> None:
         if self._writer is not None:

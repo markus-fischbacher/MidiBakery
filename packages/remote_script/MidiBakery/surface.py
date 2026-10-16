@@ -14,6 +14,7 @@ from .protocol import ErrorCode, OpError, load_manifest, validate
 from .launcher import ApiLauncher
 from .registry import HANDLERS, Context
 from .server import BridgeServer
+from .state import StateWatcher
 
 # Max wall time per update_display tick spent on jobs.
 TICK_BUDGET_SECONDS = 0.03
@@ -52,6 +53,7 @@ class MidiBakerySurface(object):
             self.log("could not start bridge: %s" % exc)
             self.show_message("MidiBakery: bridge failed to start (%s)" % exc)
 
+        self._state = StateWatcher(c_instance.song(), self._server, self.log)
         self._api = ApiLauncher(self.log)
         self._api.start()
 
@@ -60,6 +62,7 @@ class MidiBakerySurface(object):
     # ------------------------------------------------------------------
 
     def update_display(self):
+        self._state.tick()
         started = time.monotonic()
         jobs = self._server.jobs
         while time.monotonic() - started < TICK_BUDGET_SECONDS:

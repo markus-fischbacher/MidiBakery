@@ -3,18 +3,21 @@
 Client -> bridge:
     {"hello": <token>, "protocol": 1}              first line, authenticates
     {"id": 7, "op": "song.get", "params": {}, "timeout": 5.0}
+    {"subscribe": ["state"]}                        push these events to me (replaces earlier topics)
 Bridge -> client:
     {"hello": "ok", "protocol": 1, "bridge": "0.1.0", "live": [12, 4, 6]}
     {"id": 7, "ok": true, "result": {...}}
     {"id": 7, "ok": false, "error": {"code": "NOT_FOUND", "message": "...", "details": {...}}}
-    {"event": "...", "data": {...}}                 unsolicited push (no id)
+    {"subscribed": ["state"]}
+    {"event": "...", "data": {...}}                 unsolicited push (no id), only for subscribed topics
 """
 
 import json
 import os
 
 PROTOCOL_VERSION = 1
-BRIDGE_VERSION = "0.1.0"
+BRIDGE_VERSION = "0.2.0"
+TOPICS = ("state",)
 MAX_LINE_BYTES = 4 * 1024 * 1024
 
 
