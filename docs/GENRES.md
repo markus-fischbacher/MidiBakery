@@ -83,6 +83,17 @@ Familie aus Mainstream-, Deep- und Tech-House. Deep House ist langsamer und jazz
 - Chord-Stabs mit Orgel- oder E-Piano-Sound: Operator, Electric, Wavetable oder Simpler mit Akkord-Sample.
 - Effekte: Reverb, Echo, Auto Filter.
 
+**Filterfahrten** (Auto Filter, Clip-Automation)
+
+| Abschnitt | Drums (High-pass) | Chords (Low-pass) |
+|---|---|---|
+| Intro | offen | ab Takt 9: 400 Hz → 6 kHz |
+| Build, Build 2 | 20 → 400 Hz bzw. 500 Hz | offen |
+| Break | 150 Hz, dünn | 500 Hz → 5 kHz |
+| Outro | offen (Kick bleibt für den DJ) | 20 kHz → 600 Hz in 8 Takten |
+
+Die Drops sind offen.
+
 **Quellen:** Ableton Learning Music (Tempo); EDMProd „Classic Deep House“; Native Instruments „Deep House Track“; Attack Magazine Beat Dissected (Soulful Deep House, Deep Tech House, Chugging Tech House, Dusted Deep House); Attack Passing Notes (Deep House Chords); Attack Deconstructed (Tiga „Bugatti“); Mixed In Key (Arrangement); Mixgraph (Intro, Riser); Loopmasters (Tech House Beat & Bass); The Producer School und Boombox (Tech-House-Basslines); Mode Audio (Deep House Chords); MusicRadar (m9-Akkorde, Hooks); EDMProd (Call and Response); Violet Recording (House); Foren: Gearspace, Elektronauts, KVR, DJTechTools (schwächer belegt).
 
 ---
@@ -124,6 +135,18 @@ Melodic Techno (etwa Afterlife: Anyma, ARTBAT, Stephan Bodzin) ist langsamer und
 - **○** Sechzehntel-Raster, 4–10 Noten pro Takt, MIDI 60–84.
 
 **Sounds:** Pads und Leads mit Wavetable oder Drift, langem Reverb und Delay (1/8 oder 3/16). Bass mit Analog oder Drift.
+
+**Filterfahrten** (Auto Filter, Clip-Automation): Langsames Öffnen gehört zu den langen Builds des Genres.
+
+| Abschnitt | Drums (High-pass) | Pads (Low-pass) | Arp (Low-pass) |
+|---|---|---|---|
+| Intro | offen | 300 Hz → 3 kHz | – |
+| Build | 12 Takte offen, dann 20 → 200 Hz | 3 → 12 kHz | ab Takt 9: 500 Hz → 2 kHz |
+| Drop | offen | offen | 800 Hz → 6 kHz in 16 Takten, zurück auf 3 kHz |
+| Breakdown | – | 400 Hz → 8 kHz | 600 Hz → 2,5 kHz |
+| Build 2 | 20 → 350 Hz | offen | 2,5 → 10 kHz |
+| Climax | offen | offen | 2 → 12 kHz |
+| Outro | offen | 12 kHz → 500 Hz in 8 Takten | – |
 
 **Quellen:** Beatportal (Melodic House & Techno: Anyma, Miss Monique, ARTBAT, Stephan Bodzin); Native Instruments (Melodic Techno); Attack Magazine (Deep Melodic/Progressive Techno).
 
@@ -400,7 +423,7 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 
 | Thema | Warum |
 |---|---|
-| Riser, Sidechain, Filterfahrten in anderen Genres | Filterfahrten gibt es bisher nur in Peak-Time; Riser und Sidechain brauchen Devices bzw. Routing |
+| Riser, Sidechain, Filterfahrten in anderen Genres | Filterfahrten gibt es in House, Melodic und Peak-Time Techno; Riser und Sidechain brauchen Devices bzw. Routing |
 | Sounds | neue Tracks bekommen das passende native Instrument, aber dessen Standard-Preset; Kits und Samples kann die API nicht laden |
 | Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr; Referenztracks (Abschnitte und Elemente eines Songs, der gefällt) sind als nächster Schritt dafür gedacht |
 | Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
@@ -409,5 +432,5 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 
 - **Lead-Dichte und Stab-Länge** nennen die Quellen kaum in Zahlen. Die Werte oben sind Konventionen (○) und gehören nach Gehör justiert.
 - **Notenraster aus Attacks „Beat Dissected“** liegen nur als Bilder vor. Die Schrittpositionen stammen aus den Texten und aus anderen Quellen.
-- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an. Filterfahrten schreibt sie als Clip-Automation eines Auto Filters (bisher Peak-Time).
+- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an. Filterfahrten schreibt sie als Clip-Automation eines Auto Filters (House, Melodic und Peak-Time Techno).
 - **Breaks und Samples** (Amen, Vocal-Chops, 808-Samples) kann Lives API nicht laden.

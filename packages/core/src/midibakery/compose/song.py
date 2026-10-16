@@ -18,7 +18,8 @@ Nothing changes in Live until ``apply_song``.
   names the first free bar instead.
 - Automation: a role the style filters gets an Auto Filter (the track's last one,
   else a new one at the end of its chain) and every one of its clips an envelope
-  of the cutoff, so a sweep never carries over into the next section.
+  of the cutoff, so a sweep never carries over into the next section. A track
+  that has an Auto Filter already gets open envelopes where the style has no sweep.
 """
 
 from __future__ import annotations
@@ -353,10 +354,14 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     swing = style.swing
 
     use = {c.role: c for c in request.clips}
-    for role, kind in style.filters.items():
-        target = roles.get(role)
-        if target is None or role in use:
+    for role, target in roles.items():
+        if role in use:
             continue
+        kind = style.filters.get(role)
+        if kind is None:
+            if target.new or _auto_filter(session.track(target.index)) is None:
+                continue
+            kind = "Low-pass"  # an earlier song's filter would stay where it ended: keep it open
         target.filter = kind
         if target.new:
             target.filter_device, target.filter_new = 1, True  # after the instrument
