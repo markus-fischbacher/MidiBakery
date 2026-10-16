@@ -36,6 +36,7 @@ from midibakery.compose import (
     build_plan,
 )
 from midibakery.compose.plan import Plan, new_seed
+from midibakery.compose.song import SongPlan, SongRequest, apply_song, build_song
 from midibakery.mcp.confirm import confirm, request_state
 
 INSTRUCTIONS = """\
@@ -59,6 +60,8 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
 - Arrangement: positions are beats from the song start (bar n starts at (n-1) * beats per bar).
   edit_arrangement adds clips with notes, copies session clips, sets locators; it never
   overwrites a clip. Clip tools take arrangement_clip (index from get_arrangement) instead of slot.
+- A whole track ("build me a house song"): plan_song with the genre, then apply_plan. It uses the
+  drum/bass/chords/lead tracks it finds and creates missing ones; say what it found and created.
 - Every write is undoable with the undo tool.
 Composition:
 - compose_drums / compose_bass / compose_chords / compose_melody write a new
@@ -411,11 +414,19 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         plans.put(plan)
         return _with_roll(plan, {**plan.preview(), "next": "apply_plan(plan_id) writes all steps as one undo step"}, False)
 
+    async def plan_song(args: dict[str, Any], ctx: Context | None) -> Any:
+        song = await build_song(bridge.call, SongRequest.model_validate(args))
+        plans.put(song)  # type: ignore[arg-type]  # apply_plan tells songs and clip plans apart
+        return song.preview()
+
     async def run_plan(args: dict[str, Any], ctx: Context | None) -> Any:
         plan = plans.get(args["plan_id"])
         if plan is None:
             plans.pop(args["plan_id"])  # raises NOT_FOUND
         assert plan is not None
+        if isinstance(plan, SongPlan):
+            plans.pop(plan.id)
+            return await apply_song(bridge.call, plan)
         asked = await ask_before_replacing(plan, ctx)
         if asked is not None:
             return asked
@@ -434,6 +445,17 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         description="Plan several composition steps (drums, bass, chords, melody, transform) without changing Live. "
         "Later steps see earlier ones: bass can follow_kick a planned drum clip, and harmonic steps without chords "
         "share the first step's chords. Returns a diff preview and a plan_id.",
+        annotations=read_only,
+        meta=UI_META,
+    )
+    server.add_tool(
+        _make_tool(SongRequest, plan_song),
+        name="plan_song",
+        title="Plan a whole song in the Arrangement View",
+        description="Full song from a genre template (house, techno, drum_and_bass, trap): intro, builds, drops, breaks, outro "
+        "with locators, on the drum/bass/chords/lead tracks (found by Drum Rack or name; missing ones are created). "
+        "Length radio/standard/extended or minutes; starts after the last arrangement clip unless start_bar. "
+        "Returns a preview and a plan_id for apply_plan; nothing changes before that.",
         annotations=read_only,
         meta=UI_META,
     )
