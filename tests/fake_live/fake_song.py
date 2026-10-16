@@ -279,8 +279,7 @@ class Clip(LiveObject):
         self.length = length
         self.is_midi_clip = is_midi
         self.looping = True
-        self.loop_start = 0.0
-        self.loop_end = length
+        self._loop = [0.0, length]
         self.start_marker = 0.0
         self.end_marker = length
         self.color_index = 0
@@ -294,6 +293,28 @@ class Clip(LiveObject):
         self.start_time = 0.0
         self.end_time = length
         self.envelopes = {}  # parameter -> Envelope
+
+    # Like Live: a loop start at or past the loop end (or the reverse) is refused, so the order of
+    # setting both matters when a loop moves.
+    @property
+    def loop_start(self):
+        return self._loop[0]
+
+    @loop_start.setter
+    def loop_start(self, value):
+        if value >= self._loop[1]:
+            raise RuntimeError("Invalid loop start")
+        self._loop[0] = value
+
+    @property
+    def loop_end(self):
+        return self._loop[1]
+
+    @loop_end.setter
+    def loop_end(self, value):
+        if value <= self._loop[0]:
+            raise RuntimeError("Invalid loop end")
+        self._loop[1] = value
 
     def automation_envelope(self, parameter):
         if self.is_arrangement_clip:  # Live 12.4 shows scripts no arrangement clip envelopes
@@ -578,6 +599,7 @@ class Song(LiveObject):
         self.undo_depth = 0
         self.undo_steps = 0
         self.undo_calls = 0
+        self._undone = 0  # steps undone and not yet redone
 
     def begin_undo_step(self):
         self.undo_depth += 1
@@ -585,14 +607,27 @@ class Song(LiveObject):
     def end_undo_step(self):
         self.undo_depth -= 1
         if self.undo_depth == 0:
+            # like Live: a new step drops what was undone (no redo after a change)
             self.undo_steps += 1
-            self.can_undo = True
+            self._undone = 0
+            self._history_flags()
 
+    # Undo and redo only count steps here; the fake does not roll back its objects. Live keeps more
+    # steps than the fake records (it adds some of its own, e.g. for new tracks), so once anything was
+    # done, undo stays possible; redo is possible exactly after an undo.
     def undo(self):
         self.undo_calls += 1
+        self._undone += 1
+        self._history_flags()
 
     def redo(self):
-        pass
+        if self.can_redo:
+            self._undone -= 1
+        self._history_flags()
+
+    def _history_flags(self):
+        self.can_undo = self.undo_steps > 0
+        self.can_redo = self._undone > 0
 
     def start_playing(self):
         self.is_playing = True
