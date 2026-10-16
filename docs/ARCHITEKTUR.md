@@ -6,6 +6,7 @@ MidiBakery besteht aus fünf Teilen:
 - **Core** in Python: Kompositions-Engine, MCP-Server, Agent und lokale API.
 - **Chat-Gerät**: Max-for-Live-Gerät für den Chat.
 - **Generator** und **Transform**: zwei Max-for-Live-MIDI-Tools in der Clip-Ansicht.
+- **Reference**: Max-for-Live-Audio-Effekt, der einen Referenzsong im Arrangement analysiert.
 
 Den Live-Set verändert nur das Remote Script; alle anderen Teile reden mit ihm oder mit der API. Einzige Ausnahme: Die MIDI Tools geben ihre Noten über Lives eigenen MIDI-Tool-Mechanismus zurück.
 
@@ -15,6 +16,7 @@ flowchart LR
     RS["Remote Script<br/>(Control Surface 'MidiBakery')"]
     CHAT["Chat-Gerät<br/>(MIDI Effect)"]
     TOOLS["Generator / Transform<br/>(MIDI Tools, Clip-Ansicht)"]
+    REF["Reference<br/>(Audio Effect)"]
   end
   subgraph Core["midibakery (Python)"]
     MCP["MCP-Server<br/>midibakery mcp"]
@@ -32,6 +34,7 @@ flowchart LR
   AGENT -- "MCP in-process" --> MCP
   AGENT <--> LLM
   TOOLS -- "node.script: HTTP /miditool/*" --> API
+  REF -- "references/*.json" --> MCP
   API --> ENGINE
   MCP --> ENGINE
 ```
@@ -45,6 +48,7 @@ flowchart LR
 | Lokale API | `packages/core/src/midibakery/api` | Python 3.12 | das Remote Script beim Laden (`launcher.json`) oder du: `uv run midibakery api --provider …` | Remote Script; LLM-Anbieter; Max-Geräte |
 | Chat-Gerät | `packages/m4l` → Presets/MIDI Effects/Max MIDI Effect/MidiBakery | Max-Patch, `jweb` (HTML/JS), Node for Max | Live, wenn das Gerät auf einer Spur liegt | API |
 | Generator / Transform | `packages/m4l` → MIDI Tools/Max Generators bzw. Max Transformations | Max-Patch, `v8`, Node for Max | Live, wenn das Tool in der Clip-Ansicht gewählt ist | API |
+| Reference | `packages/m4l` → Presets/Audio Effects/Max Audio Effect/MidiBakery | Max-Patch, `v8`, `v8ui`, Node for Max | Live, wenn das Gerät auf einer Spur liegt | Live API; schreibt `references/` |
 
 ### Remote Script: die einzige Hand am Live-Set
 
@@ -90,6 +94,13 @@ flowchart LR
 - **Generator:** Ein Generator kann in Live nur hinzufügen. **Replace** (Standard: an) leert den Zeitbereich deshalb vorher über die Live API, einmal pro Apply-Zyklus. Innerhalb eines Zyklus, also beim Drehen an Reglern oder bei Dice, ersetzt Live das eigene Zwischenergebnis immer selbst.
 - **Transform:** Die Operation läuft über Note-IDs, Eigenschaften wie Probability bleiben erhalten. Ändert sie nichts, steht der Grund in der Statuszeile.
 - Diese Tools benutzen das Remote Script nicht. Sie bekommen die Noten von Live und geben sie an Live zurück; die API rechnet nur.
+
+### Reference (Audio Effect)
+
+- Liegt auf der Audiospur mit dem Referenzsong. Der `v8`-Code sucht über die Live API den längsten Audio-Clip im Arrangement der Spur und liest Datei, Lage, Start-Marker und Warp-Marker.
+- `node.script midibakery-reference.js` dekodiert die Datei mit `afconvert` (22,05 kHz mono) und analysiert sie in `reference-analysis.js`, bei gewarpten Clips auf Lives Beat-Raster aus den Warp-Markern, bei ungewarpten auf einem eigenen Raster (Tempo aus dem stärksten Achtel-Puls, Zählzeit eins dort, wo die Tiefen steigen): Energie in vier Bändern pro Takt, Kick aus wiederkehrenden Anstiegen der Tiefen, Tonart aus Chroma und Bass, Abschnitte in 8-Takt-Schritten mit Namen (Intro, Build, Drop, Break, Outro).
+- Das Ergebnis zeigt ein `v8ui` an und es landet in `references/<hash>.json`; das MCP-Tool `get_reference` liest es. **Set Locators** setzt nacheinander Locators an die Abschnitte, **Remove Locators** entfernt alle Locators im Bereich des Clips. Live setzt und entfernt Locators nur an der Abspielposition und rastet sie dabei aufs sichtbare Raster ein, deshalb ein Task mit Ticks, der neue und verschwundene Locators an ihren IDs erkennt; der Transport muss stehen.
+- Weder API noch Remote Script sind nötig.
 
 ## Welcher Prozess hostet was
 
@@ -143,6 +154,8 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 | `~/Library/Application Support/MidiBakery/api.json` | Port und Token der API |
 | `~/Library/Application Support/MidiBakery/device-chat.log` | Chat-Gerät: gesendete URLs, Meldungen von `jweb`, Seitengröße (Token geschwärzt) |
 | `~/Library/Application Support/MidiBakery/device-miditool.log` | Generator/Transform: Anfragen, Antwortzeiten, Fehler mit Schritt |
+| `~/Library/Application Support/MidiBakery/device-reference.log` | Reference: analysierte Clips, Dauer, Fehler |
+| `~/Library/Application Support/MidiBakery/references/` | Analysen des Reference-Geräts |
 | Terminal mit `midibakery api` | Aufrufe an LM Studio/Ollama, Fehler der API |
 | Lives `Log.txt` | Meldungen des Remote Scripts (`MidiBakery: …`) |
 | `uv run midibakery ping` | prüft die Verbindung zum Remote Script |

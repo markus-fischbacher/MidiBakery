@@ -23,6 +23,7 @@ from mcp_types import CallToolResult, InputRequiredResult, TextContent
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from midibakery.bridge import BridgeClient, BridgeError
+from midibakery.bridge.client import config_dir
 from midibakery.catalog import get_op
 from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty
 from midibakery.compose import (
@@ -58,6 +59,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   follow_kick the drum clip; or plan_changes, where later steps share the first step's chords.
 - preview=true or plan_changes return a diff (a piano roll in MCP Apps clients) and a plan_id;
   apply_plan writes it as one undo step.
+- get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick) to model a song on.
 - Deleting tracks or clips and replacing notes ask the user first; a declined change returns CANCELLED.
 """
 
@@ -280,6 +282,18 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         annotations=read_only,
     )
 
+    async def get_reference(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
+        return read_references(ReferenceQuery.model_validate(args).name)
+
+    server.add_tool(
+        _make_tool(ReferenceQuery, get_reference),
+        name="get_reference",
+        title="Get reference song analysis",
+        description="Sections (start bar, length, kick, elements), key and tempo of reference songs analyzed by the "
+        "MidiBakery Reference Analyzer device in Live. " + inspect.cleandoc(ReferenceQuery.__doc__ or ""),
+        annotations=read_only,
+    )
+
     async def edit_arrangement(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
         # One tool for the model; two ops for Live: locators need ticks of their own (see arrangement.locators).
         actions = ArrangementTool.model_validate(args).model_dump(exclude_none=True)["actions"]
@@ -447,6 +461,35 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     )
     return server
+
+
+class ReferenceQuery(BaseModel):
+    """Without name: every analyzed reference, newest first. With name: the best match, with lanes
+    (per bar: kick 0-1; low, bass, mid, high, energy in dB below the song's peak)."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(None, description="Part of the song, file or track name")
+
+
+def read_references(name: str | None = None) -> dict[str, Any]:
+    """The Reference device's analyses (<MidiBakery folder>/references/*.json)."""
+    found = []
+    for path in (config_dir() / "references").glob("*.json"):
+        try:
+            found.append(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+    found.sort(key=lambda r: r.get("analyzed", ""), reverse=True)
+    if name:
+        wanted = name.casefold()
+        found = [r for r in found if any(wanted in str(r.get(k, "")).casefold() for k in ("name", "file", "track"))]
+        if not found:
+            raise ToolError(f"No analyzed reference matches '{name}'")
+        return found[0]
+    brief = ("name", "track", "tempo", "key", "first_bar", "bars")
+    return {"references": [{**{k: r.get(k) for k in brief}, "sections": [
+        {k: s.get(k) for k in ("name", "start_bar", "bars", "kick", "elements")} for s in r.get("sections", [])
+    ]} for r in found]}
 
 
 def _item_op(item: Any) -> str:
