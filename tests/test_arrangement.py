@@ -144,3 +144,63 @@ async def test_edit_arrangement_keeps_the_play_position(client, live):
     await client.call("clip.create", {"track": 0, "slot": 0, "length": 8})
     await build_server(client).call_tool("edit_arrangement", {"actions": [{"action": "copy_session_clip", "track": 0, "slot": 0, "start": 64}]})
     assert (await client.call("song.get"))["current_song_time"] == 12.0  # Live moved it to 72; the tool put it back
+
+
+
+def _with_filter(song, full=False):
+    track = song.tracks[0]
+    track.insert_device("Auto Filter", 0)
+    for slot in track.clip_slots if full else track.clip_slots[:1]:
+        slot.create_clip(4)  # the user's clips stay
+    return len(song.scenes)
+
+
+async def test_clip_automation_goes_through_a_session_slot(client, live):
+    live.on_main(lambda: _with_filter(live.song))
+    result = await client.call("arrangement.edit", {"actions": [{
+        "action": "add_clip", "track": 0, "start": 8, "length": 8, "name": "Sweep", "color_index": 5, "notes": [KICK],
+        "envelopes": [{"device": 0, "parameter": "Filter Freq", "points": [[0, 0.0], [8, 1.0]]}],
+    }]})
+    assert result["results"][0]["envelopes"] == 1 and result["results"][0]["envelope_mode"] == "events"
+
+    def check():
+        track = live.song.tracks[0]
+        clip = track.arrangement_clips[0]
+        envelope = clip.automation_envelope(track.devices[0].parameters[2])  # Filter Freq, 20-20000
+        return (
+            (clip.name, clip.start_time, clip.end_time, clip.color_index, len(clip.notes)),
+            [envelope.value_at_time(t) for t in (0, 4, 8)],
+            [slot.has_clip for slot in track.clip_slots[:3]],
+        )
+
+    clip, values, slots = live.on_main(check)
+    assert clip == ("Sweep", 8.0, 16.0, 5, 1)
+    assert values == [20.0, pytest.approx(10010.0), 20000.0]
+    assert slots == [True, False, False]
+
+
+async def test_a_full_track_gets_a_scene_for_the_automation_and_loses_it_again(client, live):
+    scenes = live.on_main(lambda: _with_filter(live.song, full=True))
+    await client.call("arrangement.edit", {"actions": [{
+        "action": "add_clip", "track": 0, "start": 0, "length": 4,
+        "envelopes": [{"device": 0, "parameter": "Device On", "points": [[0, 1], [2, 0]]}],
+    }]})
+
+    def check():
+        track = live.song.tracks[0]
+        envelope = track.arrangement_clips[0].automation_envelope(track.devices[0].parameters[0])
+        return len(live.song.scenes), len(track.clip_slots), [envelope.value_at_time(t) for t in (0, 3)]
+
+    assert live.on_main(check) == (scenes, scenes, [1.0, 0.0])  # a quantized parameter steps
+
+
+async def test_automation_of_an_unknown_parameter_changes_nothing(client, live):
+    live.on_main(lambda: _with_filter(live.song))
+    with pytest.raises(BridgeError) as exc:
+        await client.call("arrangement.edit", {"actions": [{
+            "action": "add_clip", "track": 0, "start": 0, "length": 4,
+            "envelopes": [{"device": 0, "parameter": "Cutoff", "points": [[0, 0.5]]}],
+        }]})
+    assert exc.value.code == "NOT_FOUND" and "Cutoff" in str(exc.value)
+    track = live.on_main(lambda: live.song.tracks[0])
+    assert live.on_main(lambda: (len(track.arrangement_clips), sum(s.has_clip for s in track.clip_slots))) == (0, 1)

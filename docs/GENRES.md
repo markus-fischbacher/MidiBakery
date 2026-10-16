@@ -181,7 +181,18 @@ Die Vorlage kombiniert die drei, 224 Takte, also 7:00 bei 128 BPM:
 | 177–184 | Stripped | Nur Kick und Bass | Spektre, T78 |
 | 185–224 | Outro | 24 Takte Groove ohne Hook, dann geht der Bass, dann die Kick, zuletzt bleiben die Hats | alle drei |
 
-In den Referenzen wird die Kick oft herausgefiltert, statt hart zu enden. Das kann die Engine noch nicht, solange sie keine Automation schreibt.
+In den Referenzen wird die Kick oft herausgefiltert, statt hart zu enden. Die Engine macht das mit einem Auto Filter pro Spur, dessen Cutoff sie pro Clip automatisiert (`sweeps` in der Vorlage):
+
+| Abschnitt | Drums (High-pass) | Chords (Low-pass) | Lead (Low-pass) |
+|---|---|---|---|
+| Lift | 8 Takte offen, dann 20 → 300 Hz | 500 Hz → 8 kHz | 600 Hz → 2,5 kHz |
+| Peak | offen: die Kick ist sofort voll da | offen | 400 Hz → 5 kHz in 24 Takten, zurück auf 1,5 kHz |
+| Breakdown | 250 Hz, dünn | 300 Hz → 9 kHz | 800 Hz → 3 kHz |
+| Peak 2 | offen | offen | 800 Hz → 8 kHz in 16 Takten, zurück auf 2 kHz |
+| Lift 2 | 20 → 400 Hz | offen | 2 → 12 kHz |
+| Peak 3 | offen | offen | 6 → 3 kHz |
+
+Jeder Clip einer gefilterten Spur bekommt eine Hüllkurve, auch wenn sie nur „offen“ ist. So bleibt kein Filter aus dem vorigen Abschnitt hängen.
 
 **Aufbau**
 - **●** Elemente einzeln einführen. Rides kommen erst im Drop. Die Hook wird schon im Intro angedeutet, leise und gefiltert.
@@ -389,7 +400,7 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 
 | Thema | Warum |
 |---|---|
-| Filterfahrten, Riser, Rumble, Sidechain | Klangbearbeitung bzw. Automation, keine Noten; dafür bräuchte es einen eigenen Schritt (Automation, Devices) |
+| Riser, Sidechain, Filterfahrten in anderen Genres | Filterfahrten gibt es bisher nur in Peak-Time; Riser und Sidechain brauchen Devices bzw. Routing |
 | Sounds | neue Tracks bekommen das passende native Instrument, aber dessen Standard-Preset; Kits und Samples kann die API nicht laden |
 | Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr; Referenztracks (Abschnitte und Elemente eines Songs, der gefällt) sind als nächster Schritt dafür gedacht |
 | Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
@@ -398,5 +409,5 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 
 - **Lead-Dichte und Stab-Länge** nennen die Quellen kaum in Zahlen. Die Werte oben sind Konventionen (○) und gehören nach Gehör justiert.
 - **Notenraster aus Attacks „Beat Dissected“** liegen nur als Bilder vor. Die Schrittpositionen stammen aus den Texten und aus anderen Quellen.
-- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine schreibt Noten, sie kann sie also nur andeuten, etwa durch Pausen, Dichte und Velocity. Für Automation bräuchte es einen eigenen Schritt.
+- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an. Filterfahrten schreibt sie als Clip-Automation eines Auto Filters (bisher Peak-Time).
 - **Breaks und Samples** (Amen, Vocal-Chops, 808-Samples) kann Lives API nicht laden.

@@ -20,6 +20,7 @@ Wichtige Erkenntnisse aus der Recherche:
   - `Song.scale_name`, `scale_mode`, `scale_intervals` und `root_note`, dazu `tuning_system`
   - `Track.create_midi_clip` (12.1.10)
   - Take Lanes über die API (12.2)
+  - Clip-Automation im Arrangement: Live legt Hüllkurven nur auf Session-Clips an. Ein `add_clip` mit `envelopes` entsteht deshalb in einem freien Slot und wird ins Arrangement kopiert. Die Werte sind absolut (in Live 12.4.6 gemessen).
   - `Track.insert_device` / `RackDevice.insert_chain` / `DrumChain.in_note` (12.3): native Devices lassen sich ohne Browser einfügen
   - `SimplerDevice.replace_sample` (12.4)
   - Notes-API mit IDs (`get_notes_extended`, `add_new_notes`, `apply_note_modifications`), dazu Probability und Velocity Deviation

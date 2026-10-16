@@ -303,6 +303,14 @@ class ArrangementGet(Params):
     track: TrackIndex | None = Field(None, description="Only this track (default: all tracks)")
 
 
+class Envelope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    device: Annotated[int, Field(ge=0, description="Device index on the clip's track")]
+    parameter: str = Field(description="Exact parameter name")
+    points: list[tuple[float, float]] = Field(min_length=1, max_length=512, description="[beat in clip, 0-1 of the parameter range]; lines between")
+
+
 class AddClip(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -313,6 +321,7 @@ class AddClip(BaseModel):
     name: str | None = None
     color_index: Annotated[int, Field(ge=0, le=69)] | None = None
     notes: list[NoteIn] = Field(default_factory=list, description="Notes, start_time relative to the clip start")
+    envelopes: list[Envelope] = Field(default_factory=list, max_length=8, description="Clip automation; values are absolute while the clip plays")
 
 
 class CopySessionClip(BaseModel):
