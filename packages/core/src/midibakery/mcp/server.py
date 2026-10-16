@@ -452,7 +452,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         _make_tool(SongRequest, plan_song),
         name="plan_song",
         title="Plan a whole song in the Arrangement View",
-        description="Full song from a genre template (house, techno, drum_and_bass, trap): intro, builds, drops, breaks, outro "
+        description="Full song from a genre template (house, melodic_techno, peak_time_techno, drum_and_bass, trap): intro, builds, drops, breaks, outro "
         "with locators, on the drum/bass/chords/lead tracks (found by Drum Rack or name; missing ones are created). "
         "Length radio/standard/extended or minutes; starts after the last arrangement clip unless start_bar. "
         "Returns a preview and a plan_id for apply_plan; nothing changes before that.",

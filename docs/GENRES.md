@@ -335,29 +335,29 @@ Festival-Trap, nicht Hip-Hop-Trap, mit denselben Wurzeln. Die Quellenlage ist d�
 
 ---
 
-## Was die Engine heute anders macht
+## Was die Engine umsetzt und was nicht
 
-Abgleich mit dem Stand auf dem Branch `phase4-song-engine`: Vorlagen in `structures.py`, Generatoren in `compose/`.
+Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, Vorlagen in `compose/structures.py`).
 
-| Thema | Heute | Rezept |
-|---|---|---|
-| House-Swing | 10 % | 58–62 % auf Sechzehnteln (MPC-Skala) |
-| House-Intro | 16 Takte nur Kick + Hats, ohne Aufbau | Elemente steigen alle 8 Takte ein, Fills alle 8 Takte |
-| Lead (alle) | dichtes Sechzehntel-Motiv, ~11 Noten/Takt, jeder Takt gleich | Hook über 2–4 Takte, Call & Response, je nach Genre 3–8 Noten/Takt, Pausen, über den Chords |
-| House-Chord-Stabs | 0,2 Beats, darunter nichts | Stabs 1/16–1/8 plus leises Pad oder längere Akkorde, Septim- und Nonakkorde |
-| Lagen | Lead 64–86 über Chords 52–76 (überlappt) | Chords etwa 48–72 bzw. 60–84, Lead eine Oktave darüber, Bass genrespezifisch (siehe oben) |
-| Techno | eine Vorlage „techno“ für alles | getrennt: Melodic Techno (122 BPM, Akkord-Loops, Pads, Arpeggio) und Peak-Time Techno (130–132 BPM) |
-| Peak-Time-Struktur | Drop-Logik mit Builds | Intro 32, Groove 32, Breakdown 16, Peak 32, Groove B, Breakdown, Peak 2 32, Outro 32; Spannung durch eine Änderung alle 8 Takte, Mini-Breaks |
-| Peak-Time-Bass | Stil „pulse“ | rollende Sechzehntel auf 2–4/6–8/10–12/14–16, meist ein Ton, MIDI 36–48 |
-| Peak-Time-Hook | Lead „sparse“, Akkorde als Stabs | parallele Moll-Stabs (1/16, 3–6 pro Takt) oder Acid-Line mit wenigen Slides und Akzenten, kaum Harmonik |
-| D&B-Drums | Stil „breakbeat“ | echter Two-Step: Kick 1 + 11, Snare 5 + 13, Ghost-Snares 3/8/10/16 |
-| D&B-Struktur | Drops mit 32 Takten | Drops mit 64 Takten (4 × 16), längeres Intro |
-| D&B-Akkorde | 1 Akkord pro 2 Takte | passt; dazu m7/maj7 bei Liquid |
-| Trap-Drums | Stil „trap“ ohne Rolls | Snare auf Schritt 9, Hat-Rolls (32tel, Triolen) und Snare-Rolls im Build |
-| Trap-808 | Bass „sustained“ | 808 unter jeder Kick, Glides, Lage MIDI 28–43 |
-| Drop 2 | eigene Noten (Variation) | passt, dazu mehr Energie und ein neues Element |
-| Stille vor dem Drop | fehlt | kurze Pause oder Drop-out im letzten Takt |
-| Velocity | Energie skaliert alles gleich | Ghost-Notes 30–50, Akzente, keine flachen Velocities |
+**Umgesetzt**
+
+| Thema | Umsetzung |
+|---|---|
+| Drums | Spuren als Daten pro Genre (Schritte, Velocity, Ghost-Notes, Zyklen), Swing nur auf den Spuren, die schwingen dürfen; wechselnde Fills alle 8 Takte, ein Roll in neue Abschnitte, Hat- und Clap-Rolls (Trap, Peak-Time); Spuren ohne passenden Pad im Kit fallen weg |
+| Aufbau | Teile steigen innerhalb eines Abschnitts ein und aus (`"kick_hats:8,groove"`), eine Zählzeit Stille vor Drops, Drums 4 Takte vor dem D&B-Drop raus, der Bass verlässt das Outro zuerst, späte Spuren (Open Hat, Ride) erst in der zweiten Drop-Hälfte |
+| Bass | Muster pro Genre: House offbeat, Peak-Time rollende Sechzehntel, Melodic zwischen den Kicks, D&B-Sub lang, Trap-808 unter den Kicks mit Glide; Lagen aus den Rezepten |
+| Harmonik | Genre-Loops nach Tonart (Dur/Moll), Septakkorde für House und Liquid, parallele Moll-Stabs mit Akkordverschiebung für Peak-Time, Trap ohne Grundton |
+| Lead | House, D&B, Trap: Hook mit Ruf/Antwort; Melodic: Arpeggio; Peak-Time: Acid-Line, die sich alle 8 Takte entwickelt und im letzten Peak steigt |
+| Struktur | Vorlagen nach den Rezepten, Längen Radio/Standard/Extended oder Minuten |
+
+**Noch offen**
+
+| Thema | Warum |
+|---|---|
+| Filterfahrten, Riser, Rumble, Sidechain | Klangbearbeitung bzw. Automation, keine Noten; dafür bräuchte es einen eigenen Schritt (Automation, Devices) |
+| Sounds | neue Tracks bekommen das passende native Instrument, aber dessen Standard-Preset; Kits und Samples kann die API nicht laden |
+| Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr; Referenztracks (Abschnitte und Elemente eines Songs, der gefällt) sind als nächster Schritt dafür gedacht |
+| Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
 
 ## Lücken
 

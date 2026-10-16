@@ -22,7 +22,7 @@ def _studio(live):
     """Track 1 with a named Drum Rack, track 2 called 'Bass'."""
     def setup():
         rack = DrumRackDevice()
-        for name, note in (("Kick", 36), ("Snare", 38), ("Clap", 39), ("Closed Hat", 42), ("Open Hat", 46)):
+        for name, note in (("Kick", 36), ("Snare", 38), ("Clap", 39), ("Closed Hat", 42), ("Open Hat", 46), ("Ride", 51)):
             rack.add_pad(name, note)
         live.song.tracks[0].devices.append(rack)
         live.song.tracks[0].name = "Drums"
@@ -173,3 +173,132 @@ async def test_house_follows_the_recipe(client, live):
     drop = await notes("Drop Drums")
     open_hat = [n for n in drop if n["pitch"] == 46]
     assert open_hat and min(n["start_time"] for n in open_hat) >= 64  # open hats join in the second half
+
+
+async def _song_notes(client, server, genre, **args):
+    """Plan and apply a song; return {clip name: notes} (positions relative to each clip)."""
+    preview = await _plan(server, genre=genre, **args)
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    arrangement = await client.call("arrangement.get", {})
+    result = {}
+    for track in arrangement["tracks"]:
+        for clip in track["clips"]:
+            notes = (await client.call("notes.get", {"track": track["index"], "arrangement_clip": clip["index"]}))["notes"]
+            result[clip["name"]] = (clip, notes)
+    return preview, result
+
+
+def _minor(live):
+    def setup():
+        live.song.root_note, live.song.scale_name = 9, "Minor"
+        live.song.scale_intervals = (0, 2, 3, 5, 7, 8, 10)
+
+    live.on_main(setup)
+
+
+async def test_peak_time_techno_follows_the_recipe(client, live):
+    _studio(live)
+    _minor(live)
+    preview, clips = await _song_notes(client, build_server(client), "peak_time_techno")
+    assert [s["name"] for s in preview["sections"]][:4] == ["Intro", "Groove", "Breakdown", "Peak"]
+    kick = [n for n in clips["Peak Drums"][1] if n["pitch"] == 36 and n["velocity"] > 100]
+    assert all(abs(n["start_time"] % 1) < 1e-6 for n in kick)  # straight kick, no swing
+    bass = clips["Peak Bass"][1]
+    assert all(abs(n["start_time"] % 1) > 0.2 for n in bass)  # the first 16th of each beat is left to the kick
+    common = max(sum(1 for n in bass if n["pitch"] == p) for p in {n["pitch"] for n in bass})
+    assert common / len(bass) >= 0.5 and all(36 <= n["pitch"] <= 59 for n in bass)  # mostly one note
+    stabs = clips["Peak Chords"][1]
+    by_time: dict[float, list[int]] = {}
+    for n in stabs:
+        by_time.setdefault(n["start_time"], []).append(n["pitch"])
+    shapes = {tuple(p - min(ps) for p in sorted(ps)) for ps in by_time.values()}
+    assert shapes == {(0, 3, 7), (0, 3, 7, 12)}  # one minor-triad shape moved as a block, root doubled up in every 2nd phrase
+    rhythm = lambda first: tuple(sorted({round(t % 32, 2) for t in by_time if first <= t < first + 32}))  # noqa: E731
+    assert rhythm(0) != rhythm(32)  # stabs change from one 8-bar phrase to the next
+    roots = {min(ps) % 12 for ps in by_time.values()}
+    assert len(roots) == 2  # home chord plus a two-chord shift
+    acid = clips["Peak Lead"][1]
+    assert all(48 <= n["pitch"] <= 62 for n in acid) and 8 <= len(acid) / 32 <= 12
+    block = lambda first: [(round(n["start_time"] - first, 2), n["pitch"], n["velocity"], round(n["duration"], 2)) for n in acid if first <= n["start_time"] < first + 32]  # noqa: E731
+    assert block(32) != block(64)  # the acid line moves one thing every 8 bars
+    assert len(block(0)) < len([n for n in acid if 16 <= n["start_time"] < 32]) * 2  # each 16 bars start thinned out
+    peak_2 = clips["Peak 2 Lead"][1]
+    assert max(n["pitch"] for n in peak_2) > 62  # the last peak lifts the acid an octave in its second half
+    ride = [n for n in clips["Peak Drums"][1] if n["pitch"] == 51 and n["duration"] < 1]  # not the crash accent on bar 1
+    assert ride and min(n["start_time"] for n in ride) >= 64  # rides arrive in the second half of a peak
+
+
+async def test_melodic_techno_has_an_arp_over_pads(client, live):
+    _studio(live)
+    _minor(live)
+    _, clips = await _song_notes(client, build_server(client), "melodic_techno")
+    pads = clips["Drop Chords"][1]
+    assert min(n["duration"] for n in pads) >= 7.9  # one held chord per 2 bars
+    arp = clips["Drop Lead"][1]
+    assert 6 <= len(arp) / 32 <= 8 and all(60 <= n["pitch"] <= 84 for n in arp)
+
+
+async def test_drum_and_bass_two_step_and_long_drops(client, live):
+    _studio(live)
+    _minor(live)
+    preview, clips = await _song_notes(client, build_server(client), "drum_and_bass")
+    assert {s["name"]: s["bars"] for s in preview["sections"]}["Drop"] == 64
+    drop = [n for n in clips["Drop Drums"][1] if int(n["start_time"] // 4) % 8 != 7]  # leave out the fill bars
+    kicks = sorted({round(n["start_time"] % 4, 2) for n in drop if n["pitch"] == 36})
+    snares = sorted({round(n["start_time"] % 4, 2) for n in drop if n["pitch"] == 38 and n["velocity"] > 100})
+    assert kicks == [0.0, 2.5] and snares == [1.0, 3.0]  # kick on 1 and 11, snare on 5 and 13
+    build = clips["Build Drums"]
+    assert build[0]["end"] - build[0]["start"] == 48  # drums out for the last 4 bars before the drop
+    sub = clips["Drop Bass"][1]
+    assert all(27 <= n["pitch"] <= 45 for n in sub)
+
+
+async def test_trap_half_time_rolls_and_808(client, live):
+    _studio(live)
+    _minor(live)
+    _, clips = await _song_notes(client, build_server(client), "trap")
+    drop = clips["Drop Drums"][1]
+    snares = {round(n["start_time"] % 4, 2) for n in drop if n["pitch"] == 38 and int(n["start_time"] // 4) % 8 != 7}
+    assert 2.0 in snares and 1.0 not in snares and 3.0 not in snares  # half time: beat 3 only
+    hats = sorted(n["start_time"] for n in drop if n["pitch"] == 42)
+    gaps = {round(b - a, 3) for a, b in zip(hats, hats[1:])}
+    assert 0.125 in gaps  # 1/32 rolls
+    kicks = {n["start_time"] for n in drop if n["pitch"] == 36}
+    bass = clips["Drop Bass"][1]
+    assert sum(1 for n in bass if n["start_time"] in kicks) >= len(kicks) * 0.7  # an 808 under the kicks
+    assert all(28 <= n["pitch"] <= 55 for n in bass)
+
+
+async def test_a_lane_without_its_pad_does_not_double_another(client, live):
+    def hats_only():
+        rack = DrumRackDevice()
+        for name, note in (("Kick", 36), ("Clap", 39), ("Closed Hat", 42)):
+            rack.add_pad(name, note)
+        live.song.tracks[0].devices.append(rack)
+
+    live.on_main(hats_only)
+    _, clips = await _song_notes(client, build_server(client), "peak_time_techno", create_missing=False)
+    peak = clips["Peak Drums"][1]
+    hats = [n["start_time"] for n in peak if n["pitch"] == 42]
+    assert len(hats) == len(set(hats))  # the ride (no pad) did not land on the closed hat
+
+
+async def test_a_new_song_starts_after_every_track_not_just_its_own(client, live):
+    _studio(live)
+    other = (await client.call("track.create", {"name": "Vocals"}))["track"]
+    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": other, "start": 0, "length": 64}]})
+    preview = await _plan(build_server(client), create_missing=False)
+    assert preview["from_bar"] == 17  # after the Vocals clip, though plan_song does not use that track
+
+
+async def test_no_ride_on_a_crash_when_the_kit_has_no_ride(client, live):
+    def kit_808():
+        rack = DrumRackDevice()
+        for name, note in (("Bass Drum", 36), ("Hand Clap", 39), ("Closed Hi Hat", 42), ("Open Hi Hat", 46), ("Cymbal", 49), ("Maracas", 48)):
+            rack.add_pad(name, note)
+        live.song.tracks[0].devices.append(rack)
+
+    live.on_main(kit_808)
+    _, clips = await _song_notes(client, build_server(client), "peak_time_techno", create_missing=False)
+    cymbal = [n for n in clips["Peak Drums"][1] if n["pitch"] == 49]
+    assert len(cymbal) <= 1  # at most the crash accent on bar 1, never a ride pattern on the crash
