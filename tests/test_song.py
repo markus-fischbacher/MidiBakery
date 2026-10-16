@@ -187,6 +187,22 @@ async def test_fx_need_their_presets(client, live):
     assert "riser" not in plain["tracks"] and any("No riser or impact" in w for w in plain["warnings"])
 
 
+async def test_fx_on_the_riser_track_of_an_earlier_song(client, live):
+    _studio(live)
+    server = build_server(client)
+    first = await _plan(server, fx=True)
+    await server.call_tool("apply_plan", {"plan_id": first["plan_id"]})
+    second = await _plan(server, fx=True, seed=8)
+    assert second["tracks"]["riser"]["name"] == "House Riser" and "new" not in second["tracks"]["riser"]
+    await server.call_tool("apply_plan", {"plan_id": second["plan_id"]})
+
+    def envelopes():
+        track = next(t for t in live.song.tracks if t.name == "House Riser")
+        return [len(c.envelopes) for c in sorted(track.arrangement_clips, key=lambda c: c.start_time)]
+
+    assert live.on_main(envelopes) == [2, 2, 2, 2]  # Riser Basic is on the track: the macro swells too
+
+
 async def test_fx_on_a_track_called_riser(client, live):
     _studio(live)
     await client.call("track.create", {"kind": "midi", "name": "Riser"})
@@ -270,10 +286,14 @@ def test_every_template_is_whole_bars_and_uses_known_parts():
             for section in sized(template, length):
                 assert section.bars % 4 == 0 and section.bars >= 4
                 assert set(section.parts) <= {"drums", "bass", "chords", "lead"}
-                for role, spec in section.sweeps.items():
-                    assert role in template.style.filters and role in section.parts, (template.genre, section.name, role)
+                for key, spec in section.sweeps.items():
+                    role, _, target = key.partition(".")
+                    assert role in template.style.filters and role in section.parts and target in ("", "res"), (template.genre, section.name, key)
+                    low, high = (0, 100) if target else (20, 20000)
                     for name, _, _ in parse_segments(spec, section.bars):
-                        assert all(hz == "-" or 20 <= float(hz) <= 20000 for hz in name.split(">")), spec
+                        values, _, shape = name.partition("~")
+                        assert all(v == "-" or low <= float(v) <= high for v in values.split(">")), spec
+                        assert shape.partition("/")[0] in ("", "exp", "log", "sine", "triangle", "saw", "square"), spec
 
 
 async def test_genre_loops_in_the_songs_key(client, live):
@@ -466,7 +486,7 @@ async def test_peak_time_sweeps_auto_filters_clip_by_clip(client, live):
     _minor(live)
     preview, clips = await _song_notes(client, build_server(client), "peak_time_techno")
     assert preview["tracks"]["drums"]["automation"] == "Auto Filter High-pass cutoff (new device)"
-    assert preview["tracks"]["lead"]["automation"] == "Auto Filter Low-pass cutoff"
+    assert preview["tracks"]["lead"]["automation"] == "Auto Filter Low-pass cutoff and resonance"
 
     def read():
         out = {}
@@ -474,7 +494,8 @@ async def test_peak_time_sweeps_auto_filters_clip_by_clip(client, live):
             filters = [d for d in track.devices if d.class_name == "AutoFilter2"]
             if not filters:
                 continue
-            freq, kind = filters[-1].parameters[3], filters[-1].parameters[4]
+            params = {p.name: p for p in filters[-1].parameters}
+            freq, kind = params["Frequency"], params["Filter Type"]
             out[track.name] = (kind.value, {c.name: c.envelopes.get(id(freq)) for c in track.arrangement_clips})
         return {name: (kind, {clip: [env.value_at_time(t) for t in (0, 32, 60)] if env else None for clip, env in envs.items()}) for name, (kind, envs) in out.items()}
 
@@ -547,3 +568,36 @@ def test_shorter_and_longer_songs_move_the_section_borders():
     for section in house.values():
         for spec in (*section.parts.values(), *section.sweeps.values()):
             assert sum(length for _, _, length in parse_segments(spec, section.bars)) <= section.bars
+
+
+def test_throw_points_hit_the_last_beat_of_every_phrase():
+    from midibakery.compose.song import THROW_DB, _throw_points
+
+    points = _throw_points(16, 0, 16, 4.0, -20.0)
+    assert points[0] == [0.0, -20.0]
+    assert [t for t, v in points if v == THROW_DB] == [31.0, 31.99, 63.0, 63.99]  # bars 8 and 16
+    assert points[-1] == [64.0, -20.0]
+    assert _throw_points(16, 8, 16, 4.0, -20.0)[1:] == [[30.99, -20.0], [31.0, THROW_DB], [31.99, THROW_DB], [32.0, -20.0]]  # a clip from bar 9
+
+
+async def test_throws_and_resonance_ride_on_their_sections(client, live):
+    _studio(live)
+    _minor(live)
+    preview, _ = await _song_notes(client, build_server(client), "peak_time_techno")
+    chords = preview["tracks"]["chords"]
+    assert "groove, break" in chords["throws"] and preview["tracks"]["lead"]["automation"].endswith("and resonance")
+
+    def read():
+        out = {}
+        for track in live.song.tracks:
+            send = track.mixer_device.sends[1] if len(track.mixer_device.sends) > 1 else None
+            res = next((p for d in track.devices if d.class_name == "AutoFilter2" for p in d.parameters if p.name == "Resonance"), None)
+            out[track.name] = {c.name: (c.envelopes.get(id(send)), c.envelopes.get(id(res))) for c in track.arrangement_clips}
+        return out
+
+    tracks = live.on_main(read)
+    lead = next(v for k, v in tracks.items() if k.endswith("Lead"))
+    assert all(res is not None for _, res in lead.values())  # every lead clip resets the resonance
+    chord = next(v for k, v in tracks.items() if k.endswith("Chords"))
+    thrown = sorted(name for name, (send, _) in chord.items() if send is not None)
+    assert thrown and all(name.split(" ")[0] in ("Groove", "Breakdown") for name in thrown), thrown

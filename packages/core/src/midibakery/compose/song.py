@@ -35,7 +35,7 @@ import math
 import random
 import secrets
 from dataclasses import dataclass, field, replace
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -104,6 +104,8 @@ class RoleTrack:
     filter: str | None = None  # Auto Filter type the song sweeps
     filter_device: int | None = None  # its index on the track
     filter_new: bool = False
+    resonance: bool = False  # the song rides the Auto Filter's resonance too
+    throws: tuple[str, ...] = ()  # section kinds with delay throws
 
 
 @dataclass
@@ -260,10 +262,57 @@ def _sound_name(path: tuple[str, ...]) -> str:
     return path[-1].rsplit(".", 1)[0]
 
 
+THROW_DB = -4.0
+QUIET_DB = -70.0  # stands for -inf: the envelope travels as JSON
+
+
+def _db(display: str | None) -> float:
+    text = (display or "").split(" ")[0]
+    try:
+        return max(QUIET_DB, float(text))
+    except ValueError:
+        return QUIET_DB
+
+
+def _throw_levels(roles: dict[str, RoleTrack], style, returns: dict[str, ReturnPlan], mixer: dict[str, Any]) -> dict[str, tuple[str, float]]:
+    """Role -> (its send to the Delay return as a mixer envelope target, the send level between throws):
+    what the song sets, or what the track's send already is."""
+    delay = returns.get("delay")
+    if delay is None:
+        return {}
+    levels = {}
+    for role in style.throws:
+        t = roles.get(role)
+        if t is None:
+            continue
+        if t.new or delay.new:
+            base = style.mix.delay.get(role, QUIET_DB)
+        else:
+            sends = next((m["sends"] for m in mixer["tracks"] if m.get("index") == t.index), [])
+            base = _db(sends[delay.index].get("display")) if delay.index < len(sends) else QUIET_DB
+        levels[role] = (f"Send {chr(ord('A') + delay.index)}", base)
+    return levels
+
+
+def _throw_points(section_bars: int, first: int, until: int, bpb: float, base: float) -> list[list[float]]:
+    """The send at `base`, up to THROW_DB on the last beat of every 8 bars of the section."""
+    points = [[0.0, base]]
+    for end in range(PHRASE, until + 1, PHRASE):
+        if end <= first:
+            continue
+        t1 = (end - first) * bpb
+        t0 = t1 - 1.0
+        points += [[t0 - 0.01, base], [t0, THROW_DB], [t1 - 0.01, THROW_DB], [t1, base]]
+    return points
+
+
 def _filter_info(t: RoleTrack) -> dict[str, str]:
     if t.filter is None:
-        return {}
-    return {"automation": f"Auto Filter {t.filter} cutoff" + (" (new device)" if t.filter_new and not t.new else "")}
+        return {"throws": f"delay on the last beat of every {PHRASE} bars in {', '.join(t.throws)}"} if t.throws else {}
+    info = {"automation": f"Auto Filter {t.filter} cutoff" + (" and resonance" if t.resonance else "") + (" (new device)" if t.filter_new and not t.new else "")}
+    if t.throws:
+        info["throws"] = f"delay on the last beat of every {PHRASE} bars in {', '.join(t.throws)}"
+    return info
 
 
 def _fraction(hz: float) -> float:
@@ -271,20 +320,23 @@ def _fraction(hz: float) -> float:
     return min(1.0, max(0.0, math.log(max(hz, 20.0) / 20.0) / math.log(1000.0)))
 
 
-def _sweep(spec: str | None, section_bars: int, first: int, clip_length: float, bpb: float, open_hz: float) -> dict[str, Any]:
+def _sweep(spec: str | None, section_bars: int, first: int, clip_length: float, bpb: float, open_hz: float,
+           convert: Callable[[float], float] | None = None) -> dict[str, Any]:
     """Envelope points [beat in clip, 0-1] and shapes from a sweep spec ("20:8,20>300"); open without one.
     A segment "a>b~exp" (or ~log) curves, "a>b~sine/2" (or triangle, saw, square) swings between
-    a and b every 2 bars; the Remote Script draws those."""
+    a and b every 2 bars; the Remote Script draws those. convert: value -> envelope value
+    (default: Hz -> Auto Filter's 0-1 Frequency)."""
+    convert = convert or _fraction
     if not spec:
-        return {"points": [[0.0, _fraction(open_hz)]]}
+        return {"points": [[0.0, convert(open_hz)]]}
     points: list[list[float]] = []
     shapes: list[dict[str, Any]] = []
     end: tuple[float, float] | None = None  # time and value where the previous segment ended
     for name, offset, bars in parse_segments(spec, section_bars):
         name, _, shape = name.partition("~")
         start_hz, _, end_hz = name.partition(">")
-        a = _fraction(open_hz if start_hz == "-" else float(start_hz))
-        b = a if not end_hz else _fraction(float(end_hz))
+        a = convert(open_hz if start_hz == "-" else float(start_hz))
+        b = a if not end_hz else convert(float(end_hz))
         t0 = min(clip_length, max(0.0, (offset - first) * bpb))
         t1 = min(clip_length, max(0.0, (offset + bars - first) * bpb))
         if t1 <= t0:
@@ -305,7 +357,7 @@ def _sweep(spec: str | None, section_bars: int, first: int, clip_length: float, 
     envelope: dict[str, Any] = {"points": points} if points else {}
     if shapes:
         envelope["shapes"] = shapes
-    return envelope or {"points": [[0.0, _fraction(open_hz)]]}
+    return envelope or {"points": [[0.0, convert(open_hz)]]}
 
 
 def _auto_filter(track: dict[str, Any]) -> int | None:
@@ -428,6 +480,10 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     seed = request.seed if request.seed is not None else new_seed()
 
     roles, warnings = _assign_roles(session, request)
+    returns = _plan_returns(mixer["returns"]) if request.mix else {}
+    throws = _throw_levels(roles, style, returns, mixer)
+    for role in throws:
+        roles[role].throws = style.throws[role]
     existing = {t.index for t in roles.values() if not t.new}
     if request.start_bar is not None:
         start = (request.start_bar - 1) * bpb
@@ -474,6 +530,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 continue
             kind = "Low-pass"  # an earlier song's filter would stay where it ended: keep it open
         target.filter = kind
+        target.resonance = any(f"{role}.res" in s.sweeps for s in sections)
         if target.new:
             target.filter_device, target.filter_new = 1, True  # after the instrument
         else:
@@ -578,8 +635,19 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             if target.filter is not None:
                 envelope = _sweep(section.sweeps.get(role), section.bars, first, clip_length, bpb, OPEN_HZ[target.filter])
                 action["envelopes"] = [{"device": target.filter_device, "parameter": "Frequency", **envelope}]
+                if any(f"{role}.res" in s.sweeps for s in sections):  # every clip, so no resonance hangs over
+                    envelope = _sweep(section.sweeps.get(f"{role}.res"), section.bars, first, clip_length, bpb, 0.0, float)
+                    action["envelopes"].append({"device": target.filter_device, "parameter": "Resonance", "unit": "display", **envelope})
+            if role in throws and section.kind in style.throws[role]:
+                send, base = throws[role]
+                action.setdefault("envelopes", []).append(
+                    {"parameter": send, "unit": "display", "points": _throw_points(section.bars, first, until, bpb, base)})
             actions.append(action)
-    fx_plays = _fx(actions, counts, roles, sections, starts, bpb, scale, style.mix.volume.get("riser", -12.0))
+    riser = roles.get("riser")
+    preset = style.sounds.get("riser")
+    riser_macro = riser is not None and preset is not None and (
+        riser.sound is not None or not riser.new and [d.get("name") for d in session.track(riser.index).get("devices", [])][:1] == [_sound_name(preset)])
+    fx_plays = _fx(actions, counts, roles, sections, starts, bpb, scale, style.mix.volume.get("riser", -12.0), riser_macro)
     locators = [{"action": "set_locator", "time": at, "name": section.name} for section, at in zip(sections, starts)]
     if len(actions) > 256:
         raise BridgeError("INVALID_PARAMS", f"The song needs {len(actions)} clips; use a shorter length or fewer copied clips (max 256)")
@@ -591,7 +659,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         {"main": main.describe()[: max(1, round(8 * style.chords_per_bar))], "break": alt.describe()[: max(1, round(8 * style.chords_per_bar))]},
         counts, warnings,
         style.mix if request.mix else None,
-        _plan_returns(mixer["returns"]) if request.mix else {},
+        returns,
         tuple(r.get("name") for r in mixer["returns"]),
         fx_plays,
     )
@@ -601,10 +669,11 @@ RISER_BARS = 8
 
 
 def _fx(actions: list[dict[str, Any]], counts: dict[str, int], roles: dict[str, RoleTrack], sections: tuple[Section, ...],
-        starts: list[float], bpb: float, scale: Scale, riser_db: float) -> dict[str, dict[str, str]]:
+        starts: list[float], bpb: float, scale: Scale, riser_db: float, riser_macro: bool) -> dict[str, dict[str, str]]:
     """A riser over the last bars before every drop that follows another kind of section, an impact
     on the drop's first beat. The riser swells: volume from -30 dB and, on its preset, the Filter
-    Cutoff macro, both slow at first. Returns what plays per section, for the preview."""
+    Cutoff macro (riser_macro: the track has the genre's preset), both slow at first. Returns what
+    plays per section, for the preview."""
     plays: dict[str, dict[str, str]] = {}
     for i, (section, at) in enumerate(zip(sections, starts)):
         before = sections[i - 1] if i else None
@@ -615,7 +684,7 @@ def _fx(actions: list[dict[str, Any]], counts: dict[str, int], roles: dict[str, 
             length = bars * bpb - section.rest_beats
             envelopes: list[dict[str, Any]] = [{"parameter": "Volume", "unit": "display", "shapes": [
                 {"type": "exp", "length": length, "from_value": -30.0, "to_value": riser_db}]}]
-            if riser.new and riser.sound is not None:
+            if riser_macro:
                 envelopes.append({"device": 0, "parameter": "Filter Cutoff", "shapes": [{"type": "exp", "length": length, "from_value": 0.15, "to_value": 1.0}]})
             actions.append({"action": "add_clip", "track": riser.index, "start": at + (section.bars - bars) * bpb, "length": length,
                             "name": f"{section.name} Riser", "notes": [Note(60 + scale.root, 0.0, length, 100).to_spec()], "envelopes": envelopes})

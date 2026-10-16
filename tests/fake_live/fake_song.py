@@ -23,6 +23,7 @@ def make_device(name):
         device.class_name = "AutoFilter2"
         device.parameters += [
             Parameter("Frequency", 1.0),
+            PercentParameter("Resonance", 0.0),
             Parameter("Filter Type", 0.0, 0.0, 9.0, True, ("Low-pass", "High-pass", "Band-pass", "Notch", "Morph", "DJ", "Comb", "Resampling", "Notch+LP", "Vowel")),
         ]
     if name == "Reverb":
@@ -142,6 +143,13 @@ class RackDevice(Device):
 
     def insert_chain(self, index):  # Live 12.3+
         self.chains.insert(index, Chain("Chain"))
+
+
+class PercentParameter(Parameter):
+    """0-1 shown as 0-100 %, like Auto Filter's Resonance in Live 12.4."""
+
+    def str_for_value(self, value):
+        return "%.0f %%" % (value * 100)
 
 
 class DbParameter(Parameter):
