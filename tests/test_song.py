@@ -6,7 +6,7 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from fake_song import DrumRackDevice
-from midibakery.compose.structures import TEMPLATES, sized
+from midibakery.compose.structures import TEMPLATES, parse_segments, sized
 from midibakery.mcp import build_server
 
 
@@ -41,7 +41,7 @@ async def test_house_song_on_found_and_new_tracks(client, live):
     preview = await _plan(server)
     assert preview["genre"] == "House" and preview["from_bar"] == 1 and preview["bars"] == 128
     assert [s["name"] for s in preview["sections"]] == ["Intro", "Build", "Drop", "Break", "Build 2", "Drop 2", "Outro"]
-    assert preview["tracks"]["drums"] == {"track": 0, "name": "Drums"} and preview["tracks"]["bass"]["track"] == 1
+    assert preview["tracks"]["drums"] == {"track": 0, "name": "Drums", "automation": "Auto Filter High-pass cutoff (new device)"} and preview["tracks"]["bass"]["track"] == 1
     assert preview["tracks"]["chords"]["new"] and preview["tracks"]["chords"]["device"] == "Wavetable"
     assert preview["tracks"]["lead"]["device"] == "Operator"
     assert not (await client.call("arrangement.get", {}))["tracks"][0]["clips"]  # a preview changes nothing
@@ -61,7 +61,7 @@ async def test_house_song_on_found_and_new_tracks(client, live):
     bass = [c["name"] for c in arrangement["tracks"][1]["clips"]]
     assert bass == ["Drop Bass", "Drop 2 Bass", "Outro Bass"]
     new_chords = live.on_main(lambda: [d.name for d in live.song.tracks[2].devices])
-    assert new_chords == ["Wavetable"]
+    assert new_chords == ["Wavetable", "Auto Filter"]  # the instrument, then the filter for the sweeps
 
 
 async def test_same_seed_same_song_and_variation_for_the_second_drop(client, live):
@@ -128,6 +128,10 @@ def test_every_template_is_whole_bars_and_uses_known_parts():
             for section in sized(template, length):
                 assert section.bars % 4 == 0 and section.bars >= 4
                 assert set(section.parts) <= {"drums", "bass", "chords", "lead"}
+                for role, spec in section.sweeps.items():
+                    assert role in template.style.filters and role in section.parts, (template.genre, section.name, role)
+                    for name, _, _ in parse_segments(spec, section.bars):
+                        assert all(hz == "-" or 20 <= float(hz) <= 20000 for hz in name.split(">")), spec
 
 
 async def test_genre_loops_in_the_songs_key(client, live):
@@ -348,3 +352,10 @@ async def test_an_existing_auto_filter_is_reused(client, live):
     preview = await _plan(build_server(client), genre="peak_time_techno", create_missing=False)
     assert preview["tracks"]["drums"]["automation"] == "Auto Filter High-pass cutoff"
     assert any("Auto Filter is set to High-pass" in w for w in preview["warnings"])
+
+
+async def test_an_unswept_role_keeps_an_earlier_songs_filter_open(client, live):
+    _studio(live)
+    live.on_main(lambda: live.song.tracks[1].insert_device("Auto Filter", 0))  # e.g. left by a Peak-Time song
+    preview = await _plan(build_server(client), create_missing=False)  # House sweeps no bass
+    assert preview["tracks"]["bass"]["automation"] == "Auto Filter Low-pass cutoff"

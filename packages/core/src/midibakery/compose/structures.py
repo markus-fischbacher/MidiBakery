@@ -108,27 +108,36 @@ def parse_segments(spec: str, bars: int) -> list[tuple[str, int, int]]:
 TEMPLATES: dict[str, Template] = {
     # docs/GENRES.md, House: DJ intro that adds a layer after 8 bars, kick out in builds with a
     # beat of silence before the drop, open hats only in the second half of a drop, bass leaves the outro first.
-    "house": Template("house", "House", Style(124, "house", "offbeat", "stabs", swing=0.6, lead_range=(72, 89)), (
-        _s("Intro", "intro", 16, 0.4, fill=True, drums="kick_hats:8,groove", chords="-:8,pad"),
-        _s("Build", "build", 8, 0.6, fill=True, rest=1.0, drums="no_kick", chords="stabs", lead="tease"),
+    # Sweeps: the pads open out of the intro and the break, a high-pass lifts the drums in the
+    # builds, the pads close again in the outro; the drops are open.
+    "house": Template("house", "House", Style(
+        124, "house", "offbeat", "stabs", swing=0.6, lead_range=(72, 89),
+        filters={"drums": "High-pass", "chords": "Low-pass"},
+    ), (
+        _s("Intro", "intro", 16, 0.4, fill=True, drums="kick_hats:8,groove", chords="-:8,pad", sweeps={"chords": "-:8,400>6000"}),
+        _s("Build", "build", 8, 0.6, fill=True, rest=1.0, drums="no_kick", chords="stabs", lead="tease", sweeps={"drums": "20>400"}),
         _s("Drop", "drop", 32, 0.9, drums="full", bass="on", chords="stabs", lead="hook"),
-        _s("Break", "break", 16, 0.4, fill=True, drums="sparse", chords="pad", lead="tease"),
-        _s("Build 2", "build", 8, 0.7, fill=True, rest=1.0, drums="no_kick", chords="stabs", lead="tease"),
+        _s("Break", "break", 16, 0.4, fill=True, drums="sparse", chords="pad", lead="tease", sweeps={"drums": "150", "chords": "500>5000"}),
+        _s("Build 2", "build", 8, 0.7, fill=True, rest=1.0, drums="no_kick", chords="stabs", lead="tease", sweeps={"drums": "20>500"}),
         _s("Drop 2", "drop", 32, 1.0, variation=1, drums="full", bass="on", chords="stabs", lead="hook"),
-        _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8"),
+        _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8", sweeps={"chords": "20000>600:8"}),
     )),
     # docs/GENRES.md, Melodic Techno: kick/hats/pad intro, bass and pads build, arp lead, pads-only breakdown.
     "melodic_techno": Template("melodic_techno", "Melodic Techno", Style(
         122, "techno", "pulse", "sustain", chords_per_bar=0.5, lead_range=(60, 84), lead="arp",
         progressions=MELODIC_PROGRESSIONS, devices={"lead": "Wavetable", "chords": "Wavetable", "bass": "Drift"},
+        filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
     ), (
-        _s("Intro", "intro", 16, 0.3, fill=True, drums="kick_hats:8,groove", chords="pad"),
-        _s("Build", "build", 16, 0.5, fill=True, drums="groove", bass="on", chords="pad", lead="-:8,tease"),
-        _s("Drop", "drop", 32, 0.9, drums="full", bass="on", chords="pad", lead="arp"),
-        _s("Breakdown", "break", 16, 0.4, chords="pad", lead="tease"),
-        _s("Build 2", "build", 8, 0.7, fill=True, rest=1.0, drums="no_kick", chords="pad", lead="tease"),
-        _s("Climax", "drop", 32, 1.0, variation=1, drums="full", bass="on", chords="pad", lead="arp"),
-        _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8"),
+        # Sweeps: slow openings on pads and arp (the genre's long builds), a high-pass on the drums
+        # before the climax, the pads close in the outro.
+        _s("Intro", "intro", 16, 0.3, fill=True, drums="kick_hats:8,groove", chords="pad", sweeps={"chords": "300>3000"}),
+        _s("Build", "build", 16, 0.5, fill=True, drums="groove", bass="on", chords="pad", lead="-:8,tease",
+           sweeps={"drums": "20:12,20>200", "chords": "3000>12000", "lead": "-:8,500>2000"}),
+        _s("Drop", "drop", 32, 0.9, drums="full", bass="on", chords="pad", lead="arp", sweeps={"lead": "800>6000:16,6000>3000"}),
+        _s("Breakdown", "break", 16, 0.4, chords="pad", lead="tease", sweeps={"chords": "400>8000", "lead": "600>2500"}),
+        _s("Build 2", "build", 8, 0.7, fill=True, rest=1.0, drums="no_kick", chords="pad", lead="tease", sweeps={"drums": "20>350", "lead": "2500>10000"}),
+        _s("Climax", "drop", 32, 1.0, variation=1, drums="full", bass="on", chords="pad", lead="arp", sweeps={"lead": "2000>12000"}),
+        _s("Outro", "outro", 16, 0.3, drums="full:8,kick_hats", bass="on:8", chords="pad:8", sweeps={"chords": "12000>500:8"}),
     )),
     # docs/GENRES.md, Peak-Time Techno, combined from three reference tracks (Spektre remix, Katoff,
     # T78; 128 BPM, 224 bars = 7:00): tension by taking things away. Before each big drop the bass
