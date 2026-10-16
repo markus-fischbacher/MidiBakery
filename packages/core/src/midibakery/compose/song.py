@@ -7,8 +7,9 @@ Nothing changes in Live until ``apply_song``.
 
 - Roles go to existing tracks first: drums to a track with a Drum Rack, the
   others by track name (bass/sub/808, chord/pad/keys, lead/melody/synth).
-  Missing melodic roles get a new track with a native synth; missing drums a
-  new track with an empty Drum Rack (Live's API cannot load a kit).
+  Missing roles get a new track with the genre's Core Library kit or preset
+  (``sounds``), loaded after a native device that stays if the load fails; the
+  drum notes then move to the loaded kit's pads.
 - One harmony for the song, a second one for breaks. Sections of the same kind
   share their notes; a section with ``variation`` gets its own.
 - Drums, bass and chords come from the genre's recipes (grooves.py), the lead from
@@ -36,7 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
-from midibakery.compose.drums import map_pads
+from midibakery.compose.drums import DrumMap, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
@@ -77,7 +78,8 @@ class SongRequest(BaseModel):
         default_factory=dict, description="Role -> track index; others are found by Drum Rack or track name"
     )
     clips: list[UseClip] = Field(default_factory=list, description="Session clips to use for a role instead of generating it")
-    create_missing: bool = Field(True, description="New tracks with native synths for roles no track has")
+    create_missing: bool = Field(True, description="New tracks for roles no track has")
+    sounds: bool = Field(True, description="New tracks get the genre's kit and presets; false: empty Drum Rack and native synths")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174)")
     seed: Annotated[int, Field(ge=0)] | None = None
@@ -90,6 +92,7 @@ class RoleTrack:
     name: str
     new: bool = False
     device: str | None = None
+    sound: tuple[str, ...] | None = None  # browser path loaded onto a new track
     filter: str | None = None  # Auto Filter type the song sweeps
     filter_device: int | None = None  # its index on the track
     filter_new: bool = False
@@ -139,7 +142,7 @@ class SongPlan:
             "bars": int((self.end - self.start) / bpb),
             "from_bar": int(self.start / bpb) + 1,
             "seed": self.seed,
-            "tracks": {r: {"track": t.index, "name": t.name, **({"new": True, "device": t.device} if t.new else {}), **_filter_info(t)} for r, t in self.roles.items()},
+            "tracks": {r: {"track": t.index, "name": t.name, **({"new": True, "device": _sound_name(t.sound) if t.sound else t.device} if t.new else {}), **_filter_info(t)} for r, t in self.roles.items()},
             "sections": sections,
             "harmony": self.harmony,
             "notes": self.notes,
@@ -152,6 +155,10 @@ class SongPlan:
 def _duration(seconds: float) -> str:
     minutes, rest = divmod(int(round(seconds)), 60)
     return f"{minutes}:{rest:02d}"
+
+
+def _sound_name(path: tuple[str, ...]) -> str:
+    return path[-1].rsplit(".", 1)[0]
 
 
 def _filter_info(t: RoleTrack) -> dict[str, str]:
@@ -225,9 +232,10 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
     template = TEMPLATES[request.genre]
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     for offset, role in enumerate(missing):
-        roles[role] = RoleTrack(role, len(tracks) + offset, f"{template.label} {role.title()}", new=True, device=devices[role])
-        if role == "drums":
-            warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it (Live's API cannot load samples)")
+        sound = template.style.sounds.get(role) if request.sounds else None
+        roles[role] = RoleTrack(role, len(tracks) + offset, f"{template.label} {role.title()}", new=True, device=devices[role], sound=sound)
+        if role == "drums" and sound is None:
+            warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it")
     return roles, warnings
 
 
@@ -512,7 +520,8 @@ async def _undo(call: Call, error: BridgeError, steps: int) -> None:
 
 
 async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
-    """New tracks (one undo step), then all clips (one undo step), then locators and tempo."""
+    """New tracks (one undo step), their kits and presets (one step each), then tempo, all clips
+    (one undo step) and locators."""
     listed, arrangement, song = await asyncio.gather(call("tracks.list", {}), call("arrangement.get", {}), call("song.get", {}))
     tracks = listed["tracks"]
     if tuple((t.get("id"), t.get("name"), t.get("kind")) for t in tracks) != plan.track_identity:
@@ -521,6 +530,9 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         if not role_track.new and _overlap(arrangement, role_track.index, plan.start, plan.end) is not None:
             raise BridgeError("CONFLICT", f"Track index {role_track.index} '{role_track.name}' has new arrangement clips in the song's range; plan again")
     undo_steps = 0
+    warnings: list[str] = []
+    loaded: list[RoleTrack] = []
+    actions = plan.actions
     new = [t for t in plan.roles.values() if t.new]
     ops: list[dict[str, Any]] = []
     for t in sorted(new, key=lambda t: t.index):
@@ -540,10 +552,29 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
                 await _undo(call, exc, 1 if exc.details.get("completed") else 0)
                 raise
             undo_steps += 1
+        for t in sorted(new, key=lambda t: t.index):
+            if t.sound is None:
+                continue
+            try:
+                await call("browser.load", {"track": t.index, "path": list(t.sound)})
+            except BridgeError as exc:
+                if exc.code == "LIVE_ERROR" and exc.message.startswith("Live did not load"):
+                    raise  # it may still land later: roll back rather than guess
+                warnings.append(f"{_sound_name(t.sound)} could not be loaded ({exc.message}); track index {t.index} keeps {t.device}")
+                continue
+            undo_steps += 1
+            loaded.append(t)
+            if t.role == "drums":
+                try:
+                    kit = map_pads((await call("drum_rack.pads", {"track": t.index, "device": 0}))["pads"])
+                except BridgeError as exc:  # e.g. a kit wrapped in an Instrument Rack
+                    warnings.append(f"{_sound_name(t.sound)}: pads not readable ({exc.message}); the drums keep General MIDI notes")
+                else:
+                    actions = _move_to_kit(actions, t.index, kit)
         if plan.tempo is not None:
             await call("song.set", {"tempo": plan.tempo})
             undo_steps += 1
-        result = await call("arrangement.edit", {"actions": plan.actions})
+        result = await call("arrangement.edit", {"actions": actions})
         undo_steps += 1
     except BridgeError as exc:
         if not exc.details.get("rolled_back"):
@@ -557,8 +588,22 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         "plan_id": plan.id,
         "song": f"{plan.template.label}, bars {int(plan.start / plan.beats_per_bar) + 1}-{int(plan.end / plan.beats_per_bar)}",
         "clips": len(result["results"]),
-        "new_tracks": [{"track": t.index, "name": t.name, "device": t.device} for t in new],
+        "new_tracks": [{"track": t.index, "name": t.name, "device": _sound_name(t.sound) if t in loaded else t.device} for t in new],
         "automation": {r: f"track index {t.index}, device index {t.filter_device}" for r, t in plan.roles.items() if t.filter is not None},
         "locators": len(plan.locators) if not song["is_playing"] else "skipped: stop the transport and plan again for locators",
-        "undo": f"{undo_steps} undo step(s) for tracks/tempo/clips; each locator is its own step",
+        "undo": f"{undo_steps} undo step(s) for tracks/sounds/tempo/clips; each locator is its own step",
+        **({"warnings": warnings} if warnings else {}),
     }
+
+
+def _move_to_kit(actions: list[dict[str, Any]], track: int, kit: DrumMap) -> list[dict[str, Any]]:
+    """The drum clips were written for General MIDI notes (a new track has no kit while planning):
+    move each note to the pad of its role on the loaded kit."""
+    roles = {note: role for role, note in map_pads(None).notes.items()}
+    moved = []
+    for action in actions:
+        if action.get("track") == track and "notes" in action:
+            notes = [{**n, "pitch": kit.notes.get(roles.get(n["pitch"], ""), n["pitch"])} for n in action["notes"]]
+            action = {**action, "notes": notes}
+        moved.append(action)
+    return moved

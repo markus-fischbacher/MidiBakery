@@ -71,6 +71,54 @@
         "ops"
       ]
     },
+    "browser.load": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "path": [
+          "array"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "path",
+        "track"
+      ]
+    },
+    "browser.search": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "category": [
+          "string",
+          "string"
+        ],
+        "limit": [
+          "integer"
+        ],
+        "loadable_only": [
+          "boolean"
+        ],
+        "query": [
+          "string"
+        ]
+      },
+      "read_only": true,
+      "required": [
+        "query"
+      ]
+    },
     "clip.create": {
       "destructive": false,
       "min_live": [

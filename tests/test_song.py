@@ -42,8 +42,8 @@ async def test_house_song_on_found_and_new_tracks(client, live):
     assert preview["genre"] == "House" and preview["from_bar"] == 1 and preview["bars"] == 128
     assert [s["name"] for s in preview["sections"]] == ["Intro", "Build", "Drop", "Break", "Build 2", "Drop 2", "Outro"]
     assert preview["tracks"]["drums"] == {"track": 0, "name": "Drums", "automation": "Auto Filter High-pass cutoff (new device)"} and preview["tracks"]["bass"]["track"] == 1
-    assert preview["tracks"]["chords"]["new"] and preview["tracks"]["chords"]["device"] == "Wavetable"
-    assert preview["tracks"]["lead"]["device"] == "Operator"
+    assert preview["tracks"]["chords"]["new"] and preview["tracks"]["chords"]["device"] == "106 Organ"
+    assert preview["tracks"]["lead"]["device"] == "Basic Pluck Keys"
     assert not (await client.call("arrangement.get", {}))["tracks"][0]["clips"]  # a preview changes nothing
 
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
@@ -61,7 +61,31 @@ async def test_house_song_on_found_and_new_tracks(client, live):
     bass = [c["name"] for c in arrangement["tracks"][1]["clips"]]
     assert bass == ["Drop Bass", "Drop 2 Bass", "Outro Bass"]
     new_chords = live.on_main(lambda: [d.name for d in live.song.tracks[2].devices])
-    assert new_chords == ["Wavetable", "Auto Filter"]  # the instrument, then the filter for the sweeps
+    assert new_chords == ["106 Organ", "Auto Filter"]  # the genre's preset, then the filter for the sweeps
+    assert live.on_main(lambda: live.song.view.selected_track is live.song.tracks[0])  # loading kept the selection
+
+
+async def test_new_drum_track_gets_the_genre_kit_and_its_pads(client, live):
+    server = build_server(client)
+    preview = await _plan(server)
+    assert preview["tracks"]["drums"]["device"] == "909 Core Kit" and not preview["warnings"]
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    assert [t["device"] for t in applied["new_tracks"]] == ["909 Core Kit", "Basic FM House Bass", "106 Organ", "Basic Pluck Keys"]
+    assert "6 undo step(s)" in applied["undo"]  # tracks, one per sound, clips
+    drums = next(t["track"] for t in applied["new_tracks"] if t["name"] == "House Drums")
+    drop = (await client.call("notes.get", {"track": drums, "arrangement_clip": 2}))["notes"]
+    pitches = {n["pitch"] for n in drop}
+    assert 48 in pitches and 49 not in pitches  # the drop's crash moved from GM 49 to the kit's Crash pad
+
+
+async def test_sounds_off_or_missing_keep_native_devices(client, live):
+    server = build_server(client)
+    preview = await _plan(server, sounds=False)
+    assert preview["tracks"]["chords"]["device"] == "Wavetable" and "empty Drum Rack" in preview["warnings"][0]
+    trap = _payload(await server.call_tool("plan_song", {"genre": "trap", "seed": 1}))  # its sounds are not in the fake browser
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": trap["plan_id"]}))
+    assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Wavetable"]
+    assert len(applied["warnings"]) == 4 and "808 Core Kit could not be loaded" in applied["warnings"][0]
 
 
 async def test_same_seed_same_song_and_variation_for_the_second_drop(client, live):
@@ -384,7 +408,7 @@ async def test_a_failed_apply_takes_back_tracks_and_clips(client, live):
     with pytest.raises(ToolError) as exc:
         await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     assert "were undone, Live is unchanged" in str(exc.value)
-    assert live.on_main(lambda: live.song.undo_calls) - before == 3  # the clip already written, the tempo, the new tracks
+    assert live.on_main(lambda: live.song.undo_calls) - before == 5  # the clip already written, the tempo, two presets, the new tracks
 
 
 async def test_songs_need_four_four(client, live):

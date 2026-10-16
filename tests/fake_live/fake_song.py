@@ -366,6 +366,76 @@ class Track(LiveObject):
         self.devices.insert(index, make_device(name))
 
 
+class BrowserItem(LiveObject):
+    """kit: the drum pads (name -> note) a Drum Rack preset fills; device: the native device a preset is of."""
+
+    def __init__(self, name, children=(), loadable=True, device=None, kit=None):
+        self.name = name
+        self.children = list(children)
+        self.is_loadable = loadable
+        self.is_folder = not loadable
+        self.is_device = device is not None and not kit and name == device
+        self.uri = "query:Fake#" + name
+        self.device = device
+        self.kit = kit
+
+
+def _folder(name, *children):
+    return BrowserItem(name, children, loadable=False)
+
+
+class Browser(LiveObject):
+    """A small Core Library; load_item applies on a later tick, like Live."""
+
+    def __init__(self, song):
+        self.song = song
+        self.loads = []
+        self._pending = None
+        kit = {"Kick 909": 36, "Snare 909": 38, "Closed Hat 909": 42, "Open Hat 909": 46, "Clap 909": 39}
+        self.drums = BrowserItem("drums", [
+            BrowserItem("909 Core Kit.adg", device="Drum Rack", kit=kit),
+            BrowserItem("808 Core Kit.adg", device="Drum Rack", kit={"Kick 808": 36, "Snare 808": 38, "Hat 808": 42}),
+            _folder("Drum Hits", BrowserItem("Kick 909 Long.wav", device="Simpler")),
+        ])
+        self.instruments = BrowserItem("instruments", [
+            BrowserItem("Drift", [_folder("Bass", BrowserItem("Sub Bass.adv", device="Drift"))], device="Drift"),
+            BrowserItem("Wavetable", [_folder("Pad", BrowserItem("Warm Pad.adv", device="Wavetable"))], device="Wavetable"),
+        ])
+        self.audio_effects = BrowserItem("audio_effects", [BrowserItem("Reverb", device="Reverb")])
+        # The House template's sounds; pad names as in Live's 909 Core Kit.
+        core_909 = {"Bass Drum": 36, "Rim Shot": 37, "Snare Drum": 38, "Hand Clap": 39, "Closed Hi Hat": 42,
+                    "Low Tom": 44, "Open Hi Hat": 46, "Crash": 48, "Ride": 50}
+        self.packs = _folder("packs", _folder("Core Library", _folder("Racks", _folder("Drum Racks", _folder(
+            "Drum Machines", BrowserItem("909 Core Kit.adg", device="Drum Rack", kit=core_909))))))
+        self.sounds = _folder("sounds", _folder("Bass", BrowserItem("Basic FM House Bass.adg", device="Operator")),
+                              _folder("Synth Keys", BrowserItem("106 Organ.adg", device="Wavetable"), BrowserItem("Basic Pluck Keys.adg", device="Operator")))
+        for name in ("midi_effects", "user_library", "plugins"):
+            setattr(self, name, _folder(name))
+
+    def load_item(self, item):
+        self.loads.append(item.name)
+        self._pending = (self.song.view.selected_track, item)
+
+    def tick(self):
+        if self._pending is None:
+            return
+        track, item = self._pending
+        self._pending = None
+        device = make_device(item.device)
+        if item.kit:
+            device.name = item.name.rsplit(".", 1)[0]
+            for pad, note in item.kit.items():
+                device.add_pad(pad, note)
+        elif item.name != item.device:
+            device.name = item.name.rsplit(".", 1)[0]
+        instrument = device.class_name in ("DrumGroupDevice", "Drift", "Wavetable", "Operator", "Simpler")
+        replaced = [i for i, d in enumerate(track.devices) if instrument and d.class_name in ("DrumGroupDevice", "Drift", "Wavetable", "Operator", "Simpler", "InstrumentGroupDevice")]
+        if replaced:
+            track.devices[replaced[0]] = device
+        else:
+            track.devices.insert(0 if instrument else len(track.devices), device)
+
+
 class Scene(LiveObject):
     def __init__(self, name=""):
         self.name = name
@@ -462,6 +532,8 @@ class Song(LiveObject):
         self._pending_time = float(value)
 
     def tick(self):
+        if getattr(self, "browser", None) is not None:
+            self.browser.tick()
         if self._pending_time is not None:
             self._song_time, self._pending_time = self._pending_time, None
 

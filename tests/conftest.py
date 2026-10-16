@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "packages" / "remote_script"))
 
 import Live  # noqa: E402  (fake)
 import Live.Application  # noqa: E402
-from fake_song import CInstance, Song  # noqa: E402
+from fake_song import Browser, CInstance, Song  # noqa: E402
 
 TICK_SECONDS = 0.005
 
@@ -61,6 +61,7 @@ class LiveHarness:
             import MidiBakery
 
             self.song = Song()
+            self.song.browser = Live.Application.APP.browser = Browser(self.song)
             self.c_instance = CInstance(self.song)
             self.surface = MidiBakery.create_instance(self.c_instance)
         except BaseException as exc:  # surface start-up failure

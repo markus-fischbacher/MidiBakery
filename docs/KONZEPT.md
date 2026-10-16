@@ -23,6 +23,7 @@ Wichtige Erkenntnisse aus der Recherche:
   - Clip-Automation im Arrangement: Live legt Hüllkurven nur auf Session-Clips an. Ein `add_clip` mit `envelopes` entsteht deshalb in einem freien Slot und wird ins Arrangement kopiert. Die Werte sind absolut (in Live 12.4.6 gemessen).
   - `Track.insert_device` / `RackDevice.insert_chain` / `DrumChain.in_note` (12.3): native Devices lassen sich ohne Browser einfügen
   - `SimplerDevice.replace_sample` (12.4)
+  - `Application.browser.load_item`: lädt Kits und Presets wie ein Doppelklick auf die gewählte Spur. Ein Instrument oder Kit ersetzt das Instrument, ein Effekt wird angehängt, und jeder Load ist ein eigener Undo-Schritt. In Live 12.4.6 stürzte Live ab, wenn ein frisch geladenes Rack sofort wieder ersetzt wurde. `browser.load` wartet deshalb, bis die Kette stabil ist, und lässt mindestens 1 s zwischen zwei Loads. `plan_song` lädt auf neue Spuren das Kit und die Presets des Genres aus der Core Library und legt die Drum-Noten auf die Pads des Kits.
   - Notes-API mit IDs (`get_notes_extended`, `add_new_notes`, `apply_note_modifications`), dazu Probability und Velocity Deviation
 - **Max 9.1+:**
   - Node for Max nutzt Node 22; die Objekte `v8` und `v8ui` laufen auf ES6+.

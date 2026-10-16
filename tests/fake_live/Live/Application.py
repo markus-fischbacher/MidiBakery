@@ -2,6 +2,8 @@ VERSION = {"value": (12, 4, 6)}
 
 
 class _App(object):
+    browser = None  # set by the test harness to the fake song's Browser
+
     def get_major_version(self):
         return VERSION["value"][0]
 
@@ -12,5 +14,8 @@ class _App(object):
         return VERSION["value"][2]
 
 
+APP = _App()
+
+
 def get_application():
-    return _App()
+    return APP
