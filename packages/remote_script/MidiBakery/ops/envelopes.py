@@ -135,7 +135,7 @@ def _display_number(param, value):
     prefix, unit = match.group(2), (match.group(3) or "").lower()
     if prefix == "k":
         x *= 1000.0
-    if unit == "ms":
+    if unit == "ms" or prefix == "m" and unit == "s":  # the regex reads "ms" as milli + s
         x /= 1000.0
     return x
 

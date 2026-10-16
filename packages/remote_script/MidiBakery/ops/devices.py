@@ -48,6 +48,35 @@ def device_params(ctx, params):
     }
 
 
+def _raw_for_display(param, shown):
+    """The raw value Live shows as `shown`: an item of a switch, or a number (base units: s, Hz,
+    dB, %) found by bisection over Live's own display."""
+    from .envelopes import _display_number
+
+    if isinstance(shown, str):
+        items = list(param.value_items) if param.is_quantized else []
+        if shown not in items:
+            raise OpError(ErrorCode.INVALID_PARAMS, "'%s' shows no '%s'" % (param.name, shown), available=items)
+        return param.min + items.index(shown)
+    low, high = param.min, param.max
+    first, last = _display_number(param, low), _display_number(param, high)
+    if first is None or last is None:
+        raise OpError(ErrorCode.INVALID_PARAMS, "'%s' shows no number; give value" % param.name)
+    if first > last:
+        low, high, first, last = high, low, last, first
+    if shown <= first:
+        return low
+    if shown >= last:
+        return high
+    for _ in range(40):
+        middle = (low + high) / 2.0
+        if (_display_number(param, middle) or 0.0) < shown:
+            low = middle
+        else:
+            high = middle
+    return high
+
+
 @op("device.set_param")
 def device_set_param(ctx, params):
     device = ctx.device(params)
@@ -67,7 +96,7 @@ def device_set_param(ctx, params):
             )
         index = matches[0]
     param = parameters[index]
-    value = params["value"]
+    value = params["value"] if params.get("display") is None else _raw_for_display(param, params["display"])
     if not param.min <= value <= param.max:
         raise OpError(
             ErrorCode.INVALID_PARAMS,
@@ -124,3 +153,49 @@ def drum_rack_pads(ctx, params):
         if rack is None:
             raise OpError(ErrorCode.NOT_FOUND, "No Drum Rack on track %d" % params["track"], track=params["track"])
     return {"name": rack.name, "pads": _pads(rack)}
+
+
+def _device_routing(device):
+    data = {}
+    for key in ("input_routing_type", "input_routing_channel"):
+        try:
+            data[key.replace("_routing_type", "").replace("_routing", "")] = getattr(device, key).display_name
+        except Exception:
+            pass
+    data["available"] = {
+        "inputs": [e.display_name for e in device.available_input_routing_types],
+        "channels": [e.display_name for e in device.available_input_routing_channels],
+    }
+    return data
+
+
+@op("device.routing")
+def device_routing(ctx, params):
+    """A device's sidechain input (Live 12.4 lets scripts route the Compressor's): read it, or
+    set the source track and then its channel, the first of `channel` that Live offers."""
+    device = ctx.device(params)
+    if not hasattr(device, "available_input_routing_types"):
+        raise OpError(ErrorCode.UNSUPPORTED, "'%s' has no sidechain input Live lets scripts route" % device.name,
+                      attributes=sorted(a for a in dir(device) if "rout" in a.lower() or "side" in a.lower()))
+    from .mixer import _pick  # one picker for track and device routing
+
+    if params.get("input_track") is not None:
+        source = ctx.track(params["input_track"])
+        types = list(device.available_input_routing_types)
+        match = [e for e in types if getattr(e, "attached_object", None) == source] or [e for e in types if e.display_name == source.name]
+        if not match:
+            raise OpError(ErrorCode.NOT_FOUND, "Track %d '%s' is no sidechain source (a MIDI track needs an instrument)" % (params["input_track"], source.name),
+                          available=[e.display_name for e in types])
+        device.input_routing_type = match[0]
+    elif params.get("input") is not None:
+        device.input_routing_type = _pick(device.available_input_routing_types, params["input"], "sidechain input")
+    channel = params.get("channel")
+    if channel is not None:
+        wanted = [channel] if isinstance(channel, str) else list(channel)
+        channels = list(device.available_input_routing_channels)
+        found = next((e for name in wanted for e in channels if e.display_name == name), None)
+        if found is None:
+            raise OpError(ErrorCode.NOT_FOUND, "No sidechain channel %s" % " or ".join("'%s'" % w for w in wanted),
+                          available=[e.display_name for e in channels][:40])
+        device.input_routing_channel = found
+    return {"name": device.name, **_device_routing(device)}
