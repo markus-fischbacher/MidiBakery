@@ -35,6 +35,7 @@ from midibakery.compose.drums import DrumMap, generate_drums, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.plan import Call, Session, new_seed
+from midibakery.compose.rhythm import Meter
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
 from midibakery.compose.structures import ROLES, TEMPLATES, Section, Template, parse_segments, sized
@@ -51,7 +52,10 @@ DRUM_PARTS = {
     "no_kick": {"snare", "clap", "rim", "closed_hat", "pedal_hat", "open_hat", "shaker", "perc", "ride", "crash"},
     "kick_hats": {"kick", "closed_hat", "pedal_hat", "open_hat", "shaker"},
     "sparse": {"kick", "closed_hat", "rim", "shaker"},
+    "kick_only": {"kick", "rim"},
+    "drive": {"kick", "clap", "rim", "open_hat"},
 }
+PHRASE = 8  # bars
 EPSILON = 1e-6
 
 
@@ -334,6 +338,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             notes = generate_drums(meter, bars, style.drums, r, drum_map, density=0.25 + 0.6 * section.energy, swing=swing, fills=section.fill)
             return _energize(_filter_drums(notes, drum_map, {"groove": "full"}.get(part, part)), section.energy)
         if role == "bass":
+            if part == "rumble":
+                return _rumble(harmony, meter, bars)
             if request.genre in BASS:
                 return generate_recipe_bass(BASS[request.genre], harmony, meter, bars, swing, r)
             relation = "avoid" if style.bass in ("offbeat", "pulse") else "lock"
@@ -342,7 +348,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             if request.genre in CHORDS:
                 pattern = CHORDS[request.genre]
                 chords = seventh_harmony(harmony, scale) if pattern.sevenths else harmony
-                notes = generate_recipe_chords(pattern, chords, meter, bars, swing, stabs=part in ("stabs", "on", "tease"), pad=part != "tease")
+                notes = generate_recipe_chords(pattern, chords, meter, bars, swing, stabs=part in ("stabs", "on", "tease", "accent"), pad=part not in ("tease", "accent"))
+                if part == "accent":  # one hit to open each phrase (the "signal" in a groove)
+                    notes = _accents(notes, meter, offset_bars)
                 if part == "tease":  # the hook hinted at, quieter (Peak-Time: "die Hook im Intro andeuten")
                     notes = [replace(n, velocity=max(1.0, n.velocity - 28)) for n in notes]
                 return notes
@@ -379,7 +387,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                     for k in range(copies):
                         actions.append({"action": "copy_session_clip", "track": target.index, "slot": use[role].slot, "start": at + offset * bpb + k * loop})
                 continue
-            cache_key = (section.kind, section.variation, section.bars, role, spec)
+            cache_key = (section.kind, section.variation, section.bars, role, spec, section.pause_every)
             if cache_key not in cache:
                 notes: list[Note] = []
                 for part, offset, bars in playing:
@@ -387,6 +395,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                     seg_notes = part_notes(role, part, section, seg_harmony, bars, offset, section_kick)
                     seg_notes = fit_to_length(seg_notes, bars * bpb)
                     notes += [replace(n, start_time=n.start_time + (offset - first) * bpb) for n in seg_notes]
+                if section.pause_every and role in ("drums", "bass"):
+                    notes = _breathe(notes, role, section.pause_every, first, bpb, kick_pitch)
                 if section.rest_beats and until == section.bars:
                     cut = clip_length - section.rest_beats
                     notes = fit_to_length([n for n in notes if n.start_time < cut - EPSILON], cut)
@@ -414,6 +424,40 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         {"main": main.describe()[: max(1, round(8 * style.chords_per_bar))], "break": alt.describe()[: max(1, round(8 * style.chords_per_bar))]},
         counts, warnings,
     )
+
+
+def _rumble(harmony: Harmony, meter: Meter, bars: int) -> list[Note]:
+    """A quiet low pulse between the kicks for kick-less breaks: the root on each off-beat 8th."""
+    bpb = meter.beats_per_bar
+    notes = []
+    for beat in range(int(bars * bpb)):
+        t = beat + 0.5
+        root = 28 + (harmony.at(t).chord.root - 28) % 12
+        notes.append(Note(root, t, 0.45, 58))
+    return notes
+
+
+def _accents(notes: list[Note], meter: Meter, offset_bars: int) -> list[Note]:
+    """Only the first hit of each 8-bar phrase, louder."""
+    bpb = meter.beats_per_bar
+    kept = []
+    first: dict[int, float] = {}
+    for n in notes:
+        phrase = int((n.start_time / bpb + offset_bars) // PHRASE)
+        first[phrase] = min(first.get(phrase, n.start_time), n.start_time)
+    for n in notes:
+        phrase = int((n.start_time / bpb + offset_bars) // PHRASE)
+        if abs(n.start_time - first[phrase]) < EPSILON and n.start_time / bpb + offset_bars - phrase * PHRASE < 1:
+            kept.append(replace(n, velocity=min(127.0, n.velocity + 14), duration=max(n.duration, 0.5)))
+    return kept
+
+
+def _breathe(notes: list[Note], role: str, every: int, first_bar: int, bpb: float, kick_pitch: int | None) -> list[Note]:
+    """Take kick and bass out of the last bar of every `every` bars of the section (T78, Spektre)."""
+    def paused(n: Note) -> bool:
+        bar = first_bar + int(n.start_time // bpb)
+        return (bar + 1) % every == 0 and (role == "bass" or n.pitch == kick_pitch)
+    return [n for n in notes if not paused(n)]
 
 
 async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:

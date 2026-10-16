@@ -200,7 +200,7 @@ async def test_peak_time_techno_follows_the_recipe(client, live):
     _studio(live)
     _minor(live)
     preview, clips = await _song_notes(client, build_server(client), "peak_time_techno")
-    assert [s["name"] for s in preview["sections"]][:4] == ["Intro", "Groove", "Breakdown", "Peak"]
+    assert [s["name"] for s in preview["sections"]][:5] == ["Intro", "Groove", "Lift", "Peak", "Breakdown"]
     kick = [n for n in clips["Peak Drums"][1] if n["pitch"] == 36 and n["velocity"] > 100]
     assert all(abs(n["start_time"] % 1) < 1e-6 for n in kick)  # straight kick, no swing
     bass = clips["Peak Bass"][1]
@@ -213,6 +213,17 @@ async def test_peak_time_techno_follows_the_recipe(client, live):
         by_time.setdefault(n["start_time"], []).append(n["pitch"])
     shapes = {tuple(p - min(ps) for p in sorted(ps)) for ps in by_time.values()}
     assert shapes == {(0, 3, 7), (0, 3, 7, 12)}  # one minor-triad shape moved as a block, root doubled up in every 2nd phrase
+    # After the references: tension by taking things away.
+    assert not [n for n in bass if 60 <= n["start_time"] < 64]  # bar 16 of the peak: a breath without bass ...
+    assert not [n for n in kick if 60 <= n["start_time"] < 64]  # ... and without kick
+    assert [n for n in bass if 56 <= n["start_time"] < 60]
+    drive = clips["Peak 2 Drums"][1]
+    assert not [n for n in drive if n["start_time"] < 32 and n["pitch"] == 42]  # hats come in late after the breakdown
+    assert [n for n in drive if n["start_time"] >= 32 and n["pitch"] == 42]
+    rumble = clips["Breakdown Bass"][1]
+    assert rumble and all(n["pitch"] < 40 and n["velocity"] < 70 for n in rumble)
+    accents = {n["start_time"] for n in clips["Groove Chords"][1]}
+    assert accents and all(t % 32 < 4 for t in accents) and len(accents) == 2  # one hit opens each 8-bar phrase
     rhythm = lambda first: tuple(sorted({round(t % 32, 2) for t in by_time if first <= t < first + 32}))  # noqa: E731
     assert rhythm(0) != rhythm(32)  # stabs change from one 8-bar phrase to the next
     roots = {min(ps) % 12 for ps in by_time.values()}
