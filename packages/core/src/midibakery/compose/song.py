@@ -106,6 +106,7 @@ class SongPlan:
     meter: str
     beats_per_bar: float
     track_identity: tuple
+    bpm: float = 120.0  # the tempo the song will play at (the Set's, or the genre's with set_tempo)
     harmony: dict[str, list[str]] = field(default_factory=dict)
     notes: dict[str, int] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
@@ -127,6 +128,8 @@ class SongPlan:
             "scale": self.scale,
             "time_signature": self.meter,
             "tempo": self.tempo,
+            "bpm": self.bpm,
+            "duration": _duration((self.end - self.start) / self.bpm * 60),
             "bars": int((self.end - self.start) / bpb),
             "from_bar": int(self.start / bpb) + 1,
             "seed": self.seed,
@@ -138,6 +141,11 @@ class SongPlan:
             "warnings": self.warnings,
             "next": "apply_plan(plan_id) writes the song to the Arrangement View",
         }
+
+
+def _duration(seconds: float) -> str:
+    minutes, rest = divmod(int(round(seconds)), 60)
+    return f"{minutes}:{rest:02d}"
 
 
 def _is_drum_track(track: dict[str, Any]) -> bool:
@@ -402,6 +410,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         secrets.token_hex(4), template, sections, starts, start, end, roles, actions, locators,
         style.tempo if request.set_tempo else None, seed, scale.describe(), f"{meter.numerator}/{meter.denominator}", bpb,
         tuple((t.get("id"), t.get("name"), t.get("kind")) for t in session.tracks),
+        tempo,
         {"main": main.describe()[: max(1, round(8 * style.chords_per_bar))], "break": alt.describe()[: max(1, round(8 * style.chords_per_bar))]},
         counts, warnings,
     )
