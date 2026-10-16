@@ -41,8 +41,67 @@ def arrangement_get(ctx, params):
         if not hasattr(track, "arrangement_clips"):
             continue  # group tracks hold no clips
         clips = ctx.arrangement_clips(index)
-        tracks.append({"index": index, "name": track.name, "clips": [_clip(i, c) for i, c in enumerate(clips)]})
+        entry = {"index": index, "name": track.name, "clips": [_clip(i, c) for i, c in enumerate(clips)]}
+        lanes = _lanes(track)
+        if lanes:
+            entry["take_lanes"] = [
+                {"index": i, "name": lane.name, "clips": [_clip(k, c) for k, c in enumerate(sorted(lane.arrangement_clips, key=lambda c: c.start_time))]}
+                for i, lane in enumerate(lanes)
+            ]
+        tracks.append(entry)
     return {"song_length": song.song_length, "locators": _locators(song), "tracks": tracks}
+
+
+def _lanes(track):
+    """Take lanes (Live 12.2+); an empty list where Live has none."""
+    try:
+        return list(track.take_lanes)
+    except Exception:
+        return []
+
+
+def _add_take_lane(ctx, action):
+    track = ctx.track(action["track"])
+    if not hasattr(track, "create_take_lane"):
+        raise OpError(ErrorCode.UNSUPPORTED, "Take lanes need Live 12.2 or newer")
+    lane = track.create_take_lane()
+    lanes = _lanes(track)
+    if lane is None:  # older builds return nothing: the new lane is the last one
+        lane = lanes[-1]
+    if action.get("name"):
+        lane.name = action["name"]
+    index = next(i for i, candidate in enumerate(lanes) if candidate == lane)
+    return {"track": action["track"], "take_lane": index, "name": lane.name}
+
+
+def _add_take_clip(ctx, action, created):
+    track = ctx.track(action["track"])
+    lanes = _lanes(track)
+    index = action["lane"]
+    if index == -1:  # the lane this edit created last
+        if created.get(action["track"]) is None:
+            raise OpError(ErrorCode.INVALID_PARAMS, "lane -1 needs an add_take_lane on this track earlier in the same edit")
+        index = created[action["track"]]
+    if not 0 <= index < len(lanes):
+        raise OpError(ErrorCode.NOT_FOUND, "No take lane %d on track %d (it has %d)" % (index, action["track"], len(lanes)))
+    lane = lanes[index]
+    if not hasattr(lane, "create_midi_clip"):
+        raise OpError(ErrorCode.UNSUPPORTED, "This Live version cannot create clips in take lanes")
+    start, length = float(action["start"]), float(action["length"])
+    notes = action.get("notes") or []
+    for i, note in enumerate(notes):
+        _validate_note(i, note, require_all=True)
+    for clip in lane.arrangement_clips:
+        if clip.start_time < start + length - EPSILON and start < clip.end_time - EPSILON:
+            raise OpError(ErrorCode.CONFLICT, "Take lane %d already has a clip at beats %g-%g" % (index, clip.start_time, clip.end_time))
+    clip = lane.create_midi_clip(start, length)
+    if clip is None:
+        clip = next(c for c in lane.arrangement_clips if abs(c.start_time - start) < EPSILON)
+    if action.get("name"):
+        clip.name = action["name"]
+    if notes:
+        clip.add_new_notes(tuple(_make_spec(n) for n in notes))
+    return {"track": action["track"], "take_lane": index, "start": start, "end": start + length, "notes": len(notes)}
 
 
 def _check_free(ctx, track_index, start, end):
@@ -120,12 +179,21 @@ ACTIONS = {
 @op("arrangement.edit")
 def arrangement_edit(ctx, params):
     results = []
+    created = {}  # track -> index of the take lane this edit created last
     for i, action in enumerate(params.get("actions") or []):
-        handler = ACTIONS.get(action.get("action"))
-        if handler is None:
-            raise OpError(ErrorCode.INVALID_PARAMS, "actions[%d]: unknown action %r" % (i, action.get("action")))
+        kind = action.get("action")
+        handler = ACTIONS.get(kind)
+        if handler is None and kind not in ("add_take_lane", "add_take_clip"):
+            raise OpError(ErrorCode.INVALID_PARAMS, "actions[%d]: unknown action %r" % (i, kind))
         try:
-            results.append(handler(ctx, action))
+            if kind == "add_take_lane":
+                result = _add_take_lane(ctx, action)
+                created[action["track"]] = result["take_lane"]
+                results.append(result)
+            elif kind == "add_take_clip":
+                results.append(_add_take_clip(ctx, action, created))
+            else:
+                results.append(handler(ctx, action))
         except OpError as err:
             err.details["index"] = i
             err.details["completed"] = len(results)

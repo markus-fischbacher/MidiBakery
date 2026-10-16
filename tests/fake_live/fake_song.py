@@ -238,6 +238,21 @@ class ClipSlot(LiveObject):
         pass
 
 
+class TakeLane(LiveObject):
+    """Live 12.2+: a lane of takes under a track in the Arrangement View."""
+
+    def __init__(self, name):
+        self.name = name
+        self.arrangement_clips = []
+
+    def create_midi_clip(self, start_time, length):
+        clip = Clip(length)
+        clip.is_arrangement_clip = True
+        clip.start_time, clip.end_time = start_time, start_time + length
+        self.arrangement_clips.append(clip)
+        return clip
+
+
 class Track(LiveObject):
     _ptrs = itertools.count(0x7000)
 
@@ -263,6 +278,7 @@ class Track(LiveObject):
         self.devices = []
         self.clip_slots = [ClipSlot() for _ in range(scenes)]
         self.arrangement_clips = []
+        self.take_lanes = []
         self.song = None  # set by Song, for Live's side effects on the play position
         self.playing_slot_index = -1
         self.fired_slot_index = -1  # -2: Clip Stop button fired (stop pending)
@@ -288,6 +304,11 @@ class Track(LiveObject):
 
     def delete_clip(self, clip):
         self.arrangement_clips.remove(clip)
+
+    def create_take_lane(self):
+        lane = TakeLane("Take %d" % (len(self.take_lanes) + 1))
+        self.take_lanes.append(lane)
+        return lane
 
     def stop_all_clips(self, quantized=True):
         for slot in self.clip_slots:
