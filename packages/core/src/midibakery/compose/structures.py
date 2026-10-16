@@ -15,6 +15,9 @@ fast start), "400>3000~sine/2" swings between the two every 2 bars (also triangl
 
 Mix: a style's `mix` sets the faders of new tracks and the sends to a Reverb and a
 Delay return, in dB as Live shows them; a role without a send stays dry.
+
+FX: a riser fills the last bars (at most 8) before every drop that follows another kind
+of section, an impact hits the drop's first beat; `sounds` names their presets.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from typing import Literal
 
 Role = Literal["drums", "bass", "chords", "lead"]
 ROLES: tuple[Role, ...] = ("drums", "bass", "chords", "lead")
+FX_ROLES = ("riser", "impact")  # placed by the song's drops, not by the sections' parts
 Genre = Literal["house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"]
 Length = Literal["radio", "standard", "extended"]
 
@@ -127,11 +131,18 @@ def _mix(volume: str, reverb: str, delay: str, decay: float, delay_16ths: int, f
     def levels(spec: str) -> dict[str, float]:
         return {role: float(db) for role, db in zip(ROLES, spec.split(",")) if db.strip() != "-"}
 
-    return Mix(levels(volume), levels(reverb), levels(delay), decay, delay_16ths, feedback)
+    return Mix({**levels(volume), **FX_VOLUME}, {**levels(reverb), **FX_REVERB}, {**levels(delay), **FX_DELAY}, decay, delay_16ths, feedback)
+
+
+FX_VOLUME = {"riser": -12.0, "impact": -8.0}
+FX_REVERB = {"riser": -12.0, "impact": -18.0}
+FX_DELAY = {"riser": -22.0}
+FX_SOUNDS = {"riser": "Effects/Riser Basic.adg", "impact": "Bass/Sub 808 Pitch Boom.adg"}
 
 
 def _sounds(drums: tuple[str, ...], **presets: str) -> dict[str, tuple[str, ...]]:
     """The kit plus role -> "Category/Preset" in the browser's Sounds."""
+    presets = {**FX_SOUNDS, **presets}
     return {"drums": drums, **{role: ("sounds", *path.split("/")) for role, path in presets.items()}}
 
 
@@ -157,7 +168,7 @@ TEMPLATES: dict[str, Template] = {
     # docs/GENRES.md, Melodic Techno: kick/hats/pad intro, bass and pads build, arp lead, pads-only breakdown.
     "melodic_techno": Template("melodic_techno", "Melodic Techno", Style(
         122, chords_per_bar=0.5, lead_range=(60, 84), lead="arp",
-        sounds=_sounds(_kit("Electronic", "AG Techno Kit"), bass="Bass/Analogue Bass.adv", chords="Pad/Analog Soft Pad.adv", lead="Synth Lead/Basic Waves Lead.adg"),
+        sounds=_sounds(_kit("Electronic", "AG Techno Kit"), bass="Bass/Analogue Bass.adv", chords="Pad/Analog Soft Pad.adv", lead="Synth Lead/Basic Waves Lead.adg", riser="Effects/Hyper Riser.adg"),
         mix=_mix("-6,-8,-13,-12", "-26,-,-8,-12", "-,-,-20,-12", decay=4.5, delay_16ths=3, feedback=0.45),
         progressions=MELODIC_PROGRESSIONS, devices={"lead": "Wavetable", "chords": "Wavetable", "bass": "Drift"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
@@ -180,7 +191,7 @@ TEMPLATES: dict[str, Template] = {
     # follows the last peak; the outro hands over by removing bass, then kick, then hats.
     "peak_time_techno": Template("peak_time_techno", "Peak-Time Techno", Style(
         128, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
-        sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic Sub Boom.adg", chords="Pad/Butter Knife Stab.adg", lead="Bass/Basic 303 Bass.adg"),
+        sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic Sub Boom.adg", chords="Pad/Butter Knife Stab.adg", lead="Bass/Basic 303 Bass.adg", riser="Effects/Hyper Riser.adg"),
         mix=_mix("-5,-9,-12,-12", "-24,-,-12,-20", "-,-,-16,-16", decay=2.5, delay_16ths=3, feedback=0.4),
         progressions=DRONE_PROGRESSIONS, devices={"lead": "Drift", "chords": "Wavetable", "bass": "Analog"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
@@ -208,7 +219,7 @@ TEMPLATES: dict[str, Template] = {
     # 64-bar drops, a drumless 32-bar breakdown, liquid pads with 2 bars per chord, bass leaves the outro first.
     "drum_and_bass": Template("drum_and_bass", "Drum & Bass", Style(
         174, chords_per_bar=0.5, lead_range=(72, 89),
-        sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead="Synth Lead/Basic Glide Lead.adg"),
+        sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead="Synth Lead/Basic Glide Lead.adg", riser="Effects/ENCOM Riser.adg"),
         mix=_mix("-5,-8,-13,-11", "-26,-,-10,-16", "-,-,-,-16", decay=2.0, delay_16ths=3, feedback=0.3),
         progressions=DNB_PROGRESSIONS, devices={"bass": "Operator", "chords": "Wavetable", "lead": "Operator"},
     ), (

@@ -422,12 +422,13 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 | Struktur | Vorlagen nach den Rezepten, Längen Radio/Standard/Extended oder Minuten |
 | Sounds | Neue Spuren bekommen Kit und Presets des Genres aus der Core Library; die Drum-Noten landen auf den Pads des Kits |
 | Mix | Ein Reverb- und ein Delay-Return (vorhandene nutzt der Song), Fader-Pegel und Sends pro Rolle für neue Spuren; vorhandene Spuren behalten ihren Fader und senden nur in neue Returns. Nachhall und Delay-Zeit pro Genre, z. B. Melodic Techno 4,5 s, House 1,8 s |
+| FX | Ein Riser füllt die letzten Takte (höchstens 8) vor jedem Drop, der auf einen anderen Abschnitt folgt, und endet an der Pause davor; Lautstärke und Filter-Makro steigen exponentiell. Ein Impact (Sub 808 Pitch Boom) trifft die Eins des Drops. Riser-Presets: House und Trap Riser Basic, Melodic und Peak-Time Hyper Riser, D&B ENCOM Riser |
 
 **Noch offen**
 
 | Thema | Warum |
 |---|---|
-| Riser, Sidechain, Filterfahrten in anderen Genres | Filterfahrten gibt es in House, Melodic und Peak-Time Techno; Riser und Sidechain brauchen Devices bzw. Routing |
+| Sidechain, Filterfahrten in anderen Genres | Filterfahrten gibt es in House, Melodic und Peak-Time Techno; Sidechain braucht Routing |
 | Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr; Referenztracks (Abschnitte und Elemente eines Songs, der gefällt) sind als nächster Schritt dafür gedacht |
 | Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
 | Andere Taktarten | die Grooves sind 16-Schritt-Takte; `plan_song` braucht deshalb 4/4 und meldet das sonst |
@@ -436,5 +437,5 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 
 - **Lead-Dichte und Stab-Länge** nennen die Quellen kaum in Zahlen. Die Werte oben sind Konventionen (○) und gehören nach Gehör justiert.
 - **Notenraster aus Attacks „Beat Dissected“** liegen nur als Bilder vor. Die Schrittpositionen stammen aus den Texten und aus anderen Quellen.
-- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an. Filterfahrten schreibt sie als Clip-Automation eines Auto Filters (House, Melodic und Peak-Time Techno).
+- **Sound-Techniken** wie Rumble, Reese, Sidechain, Filterfahrten und Riser sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an. Filterfahrten schreibt sie als Clip-Automation eines Auto Filters (House, Melodic und Peak-Time Techno), Riser als Preset mit Hüllkurven auf Lautstärke und Filter-Makro.
 - **Breaks und Samples** (Amen, Vocal-Chops, 808-Samples) kann Lives API nicht laden.

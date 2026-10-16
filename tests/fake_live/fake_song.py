@@ -387,9 +387,10 @@ class Track(LiveObject):
 
 
 class BrowserItem(LiveObject):
-    """kit: the drum pads (name -> note) a Drum Rack preset fills; device: the native device a preset is of."""
+    """kit: the drum pads (name -> note) a Drum Rack preset fills; device: the native device a preset is of;
+    macros: the names of an Instrument Rack preset's macros."""
 
-    def __init__(self, name, children=(), loadable=True, device=None, kit=None):
+    def __init__(self, name, children=(), loadable=True, device=None, kit=None, macros=()):
         self.name = name
         self.children = list(children)
         self.is_loadable = loadable
@@ -398,6 +399,7 @@ class BrowserItem(LiveObject):
         self.uri = "query:Fake#" + name
         self.device = device
         self.kit = kit
+        self.macros = macros
 
 
 def _folder(name, *children):
@@ -428,7 +430,9 @@ class Browser(LiveObject):
         self.packs = _folder("packs", _folder("Core Library", _folder("Racks", _folder("Drum Racks", _folder(
             "Drum Machines", BrowserItem("909 Core Kit.adg", device="Drum Rack", kit=core_909))))))
         self.sounds = _folder("sounds", _folder("Bass", BrowserItem("Basic FM House Bass.adg", device="Operator")),
-                              _folder("Synth Keys", BrowserItem("106 Organ.adg", device="Wavetable"), BrowserItem("Basic Pluck Keys.adg", device="Operator")))
+                              _folder("Synth Keys", BrowserItem("106 Organ.adg", device="Wavetable"), BrowserItem("Basic Pluck Keys.adg", device="Operator")),
+                              _folder("Effects", BrowserItem("Riser Basic.adg", device="Instrument Rack", macros=("Filter Cutoff", "Filter Reso", "Rise Amount"))))
+        self.sounds.children[0].children.append(BrowserItem("Sub 808 Pitch Boom.adg", device="Instrument Rack", macros=("Filter Cutoff", "Volume")))
         for name in ("midi_effects", "user_library", "plugins"):
             setattr(self, name, _folder(name))
 
@@ -448,7 +452,9 @@ class Browser(LiveObject):
                 device.add_pad(pad, note)
         elif item.name != item.device:
             device.name = item.name.rsplit(".", 1)[0]
-        instrument = device.class_name in ("DrumGroupDevice", "Drift", "Wavetable", "Operator", "Simpler")
+        for parameter, name in zip(device.parameters[1:], item.macros):
+            parameter.name = name
+        instrument = device.class_name in ("DrumGroupDevice", "Drift", "Wavetable", "Operator", "Simpler", "InstrumentGroupDevice")
         replaced = [i for i, d in enumerate(track.devices) if instrument and d.class_name in ("DrumGroupDevice", "Drift", "Wavetable", "Operator", "Simpler", "InstrumentGroupDevice")]
         if replaced:
             track.devices[replaced[0]] = device
