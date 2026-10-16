@@ -77,6 +77,18 @@
   .plan .clip { color: var(--dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .plan svg { display: block; width: 100%; height: 34px; background: var(--bg); border-radius: 2px; cursor: zoom-in; }
   .plan svg.tall { height: 110px; cursor: zoom-out; }
+  /* Song timeline (plan_song): sections as columns sized by bars, roles as rows. */
+  .song .grid { display: grid; grid-template-columns: 44px 1fr; gap: 1px 4px; align-items: center; font-size: 10px; }
+  .song .role { color: var(--dim); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song .lane { display: flex; gap: 1px; height: 8px; }
+  .song .lane span { background: var(--bg); border-radius: 1px; }
+  .song .lane span.on { background: var(--accent); }
+  .song .lane span.half { background: linear-gradient(90deg, var(--bg) 50%, var(--accent) 50%); }
+  .song .lane span.soft { background: #7a5a3a; }
+  .song .names { display: flex; gap: 1px; height: 12px; }
+  .song .names span { color: var(--dim); overflow: hidden; white-space: nowrap; text-overflow: clip; font-size: 9px; }
+  .song .meta { color: var(--dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song .warn { color: var(--accent); font-size: 10px; }
   .plan .n-keep { fill: #6a6a6a; }
   .plan .n-add { fill: var(--ok); }
   .plan .n-mod { fill: var(--accent); }
@@ -283,6 +295,7 @@ function handle(ev) {
       call.result = ev.result;
       if (ev.is_error) add("tool err", `✗ ${ev.name === "undo" && ev.source === "user" ? "Undo: " : ""}${brief(ev.result, 220)}`);
       if (ev.name === "apply_plan") planApplied(call.input.plan_id, ev.is_error);
+      if (ev.name === "plan_song" && !ev.is_error && ev.result && ev.result.sections) showSong(ev.result);
       if (ev.name === "undo" && ev.source === "user" && !ev.is_error) add("note", "↶ Undone in Live");
       if (ev.source !== "user") showPending("Thinking");
       break;
@@ -431,8 +444,90 @@ function planApplied(planId, failed) {
   plans.delete(planId);
   plan.apply.remove();
   plan.card.classList.remove("open");
-  plan.state.textContent = "✓ applied · Undo reverts it";
+  plan.state.textContent = plan.done || "✓ applied · Undo reverts it";
   plan.state.classList.add("ok");
+}
+
+// A whole song (plan_song): one column per section, as wide as its bars; one row per role,
+// filled where the role plays ("tease"/"pad" parts lighter, parts entering late half-filled).
+const ROLE_LABELS = { drums: "Drums", bass: "Bass", chords: "Chords", lead: "Lead" };
+
+function partClass(spec) {
+  if (!spec) return "";
+  const segments = String(spec).split(",");
+  if (segments[0].startsWith("-")) return "half";
+  return /^(tease|pad|sparse|kick_hats)/.test(segments[0]) ? "soft" : "on";
+}
+
+function showSong(song) {
+  const card = add("plan song open", "");
+  const head = document.createElement("div");
+  head.className = "head";
+  const title = document.createElement("span");
+  title.className = "title";
+  title.textContent = `♪ ${song.genre} · ${song.bars} bars · ${song.duration} at ${+song.bpm} BPM · ${song.scale}`;
+  const state = document.createElement("span");
+  state.className = "state";
+  state.textContent = "preview";
+  head.append(title, state);
+  card.append(head);
+
+  const grid = document.createElement("div");
+  grid.className = "grid";
+  const label = (text) => { const el = document.createElement("span"); el.className = "role"; el.textContent = text; return el; };
+  const names = document.createElement("div");
+  names.className = "names";
+  for (const s of song.sections) {
+    const el = document.createElement("span");
+    el.style.flex = s.bars;
+    el.textContent = s.name;
+    el.title = `${s.name}: bar ${s.bar}, ${s.bars} bars, energy ${s.energy}`;
+    names.append(el);
+  }
+  grid.append(label(""), names);
+  for (const role of Object.keys(song.tracks)) {
+    const lane = document.createElement("div");
+    lane.className = "lane";
+    for (const s of song.sections) {
+      const el = document.createElement("span");
+      el.style.flex = s.bars;
+      el.className = partClass(s.plays[role]);
+      el.title = `${s.name}: ${s.plays[role] || "silent"}`;
+      lane.append(el);
+    }
+    const track = song.tracks[role];
+    const name = label(ROLE_LABELS[role] || role);
+    name.title = `track ${track.track + 1} '${track.name}'${track.new ? ` (new, ${track.device})` : ""}`;
+    grid.append(name, lane);
+  }
+  card.append(grid);
+
+  const created = Object.values(song.tracks).filter((t) => t.new);
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = `from bar ${song.from_bar} · ${song.clips} clips` + (created.length ? ` · new: ${created.map((t) => `${t.name} (${t.device})`).join(", ")}` : "");
+  card.append(meta);
+  for (const warning of song.warnings || []) {
+    const el = document.createElement("div");
+    el.className = "warn";
+    el.textContent = `⚠ ${warning}`;
+    card.append(el);
+  }
+
+  const apply = document.createElement("button");
+  apply.className = "primary";
+  apply.textContent = "Apply";
+  apply.title = "Write the song to the Arrangement View";
+  apply.onclick = () => {
+    if (busy) { add("note", "Still answering - press Stop first."); return; }
+    if (!ws || ws.readyState !== 1) { add("note", "Not connected yet."); return; }
+    apply.disabled = true;
+    ws.send(JSON.stringify({ type: "tool", name: "apply_plan", input: { plan_id: song.plan_id } }));
+    setBusy(true);
+    showPending("Writing the song");
+  };
+  head.append(apply);
+  plans.set(song.plan_id, { card, state, apply, done: "✓ in the Arrangement · Undo a few times to remove it" });
 }
 
 // One line: ▶/■ tempo · signature · scale · what plays (or starts / stops).

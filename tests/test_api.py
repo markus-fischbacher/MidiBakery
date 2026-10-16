@@ -356,3 +356,26 @@ def test_second_api_on_a_busy_port_keeps_the_running_apis_token(bridge_env):
         with pytest.raises(SystemExit):
             serve(lambda options: None, port=running.getsockname()[1])
     assert json.loads(api_info_path().read_text())["token"] == "running-token"
+
+
+def test_song_plan_reaches_the_page_and_its_apply_button_writes_it(app_factory, live):
+    """plan_song's preview carries what the timeline card draws; Apply on the card writes the song."""
+    provider = ScriptedProvider([
+        Turn("tool_use", [ToolCall("t1", "plan_song", {"genre": "trap", "seed": 3, "create_missing": True})]),
+        Turn("end_turn", text="Here is the song."),
+    ])
+    api, _ = app_factory(provider)
+    with api.websocket_connect(f"/chat?token={TOKEN}") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "user", "text": "a trap song"})
+        events = _until(ws, "done")
+        song = next(e for e in events if e["type"] == "tool_result" and e["name"] == "plan_song")["result"]
+        assert song["genre"] == "Trap" and song["duration"] and song["bpm"]
+        assert all({"name", "bar", "bars", "plays"} <= set(s) for s in song["sections"])
+        assert set(song["tracks"]) == {"drums", "bass", "chords", "lead"}
+
+        ws.send_json({"type": "tool", "name": "apply_plan", "input": {"plan_id": song["plan_id"]}})
+        events = _until(ws, "done")
+        assert not next(e for e in events if e["type"] == "tool_result")["is_error"]
+    page = api.get("/ui").text
+    assert 'if (ev.name === "plan_song"' in page and "function showSong(song)" in page
