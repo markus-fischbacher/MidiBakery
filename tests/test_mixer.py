@@ -26,7 +26,7 @@ async def test_device_on_a_return_track(client):
     await client.call("return.create", {"name": "Hall", "device": "Reverb"})
     changed = await client.call("device.set_param", {"return_track": 0, "device": 0, "parameter": "Dry/Wet", "value": 1.0})
     assert changed["value"] == 1.0
-    with pytest.raises(BridgeError, match="No return track 1"):
+    with pytest.raises(BridgeError, match="No return_track index 1"):
         await client.call("device.params", {"return_track": 1, "device": 0})
     for both_or_none in ({"track": 0, "return_track": 0}, {}):
         with pytest.raises(ValidationError, match="either track or return_track"):

@@ -1,4 +1,993 @@
 {
+  "defs": {
+    "AddClip": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "add_clip",
+          "type": [
+            "string"
+          ]
+        },
+        "color_index": {
+          "anyOf": [
+            {
+              "maximum": 69,
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "envelopes": {
+          "items": {
+            "$ref": "Envelope"
+          },
+          "maxItems": 8,
+          "type": [
+            "array"
+          ]
+        },
+        "length": {
+          "exclusiveMinimum": 0,
+          "maximum": 4096,
+          "type": [
+            "number"
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": [
+                "string"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "notes": {
+          "items": {
+            "$ref": "NoteIn"
+          },
+          "type": [
+            "array"
+          ]
+        },
+        "start": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "length",
+        "start",
+        "track"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "AddTakeClip": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "add_take_clip",
+          "type": [
+            "string"
+          ]
+        },
+        "lane": {
+          "minimum": -1,
+          "type": [
+            "integer"
+          ]
+        },
+        "length": {
+          "exclusiveMinimum": 0,
+          "maximum": 4096,
+          "type": [
+            "number"
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": [
+                "string"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "notes": {
+          "items": {
+            "$ref": "NoteIn"
+          },
+          "type": [
+            "array"
+          ]
+        },
+        "start": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "lane",
+        "length",
+        "start",
+        "track"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "AddTakeLane": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "add_take_lane",
+          "type": [
+            "string"
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": [
+                "string"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "track"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "BatchItem": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "type": [
+            "string"
+          ]
+        },
+        "params": {
+          "type": [
+            "object"
+          ]
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "ChainChange": {
+      "additionalProperties": false,
+      "properties": {
+        "chain": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        },
+        "in_note": {
+          "anyOf": [
+            {
+              "maximum": 127,
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "insert_devices": {
+          "items": {
+            "type": [
+              "string"
+            ]
+          },
+          "type": [
+            "array"
+          ]
+        },
+        "mute": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": [
+                "string"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "pan": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": -1,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "solo": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "volume_db": {
+          "anyOf": [
+            {
+              "maximum": 6,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "chain"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "ChainEdit": {
+      "additionalProperties": false,
+      "properties": {
+        "in_note": {
+          "anyOf": [
+            {
+              "maximum": 127,
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "insert_devices": {
+          "items": {
+            "type": [
+              "string"
+            ]
+          },
+          "type": [
+            "array"
+          ]
+        },
+        "mute": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": [
+                "string"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "pan": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": -1,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "solo": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "volume_db": {
+          "anyOf": [
+            {
+              "maximum": 6,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        }
+      },
+      "type": [
+        "object"
+      ]
+    },
+    "CopySessionClip": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "copy_session_clip",
+          "type": [
+            "string"
+          ]
+        },
+        "slot": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        },
+        "start": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "slot",
+        "start",
+        "track"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "DeleteArrangementClip": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "delete_clip",
+          "type": [
+            "string"
+          ]
+        },
+        "clip": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        },
+        "track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "clip",
+        "track"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "DeleteLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "delete_locator",
+          "type": [
+            "string"
+          ]
+        },
+        "time": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "time"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "Envelope": {
+      "additionalProperties": false,
+      "properties": {
+        "chain_path": {
+          "items": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "maxItems": 8,
+          "type": [
+            "array"
+          ]
+        },
+        "device": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "parameter": {
+          "type": [
+            "string"
+          ]
+        },
+        "points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "type": [
+              "array"
+            ]
+          },
+          "maxItems": 512,
+          "type": [
+            "array"
+          ]
+        },
+        "shapes": {
+          "items": {
+            "$ref": "Shape"
+          },
+          "maxItems": 32,
+          "type": [
+            "array"
+          ]
+        },
+        "unit": {
+          "enum": [
+            "fraction",
+            "display"
+          ],
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "parameter"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "MacroSet": {
+      "additionalProperties": false,
+      "properties": {
+        "macro": {
+          "maximum": 16,
+          "minimum": 1,
+          "type": [
+            "integer"
+          ]
+        },
+        "value": {
+          "maximum": 127,
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "macro",
+        "value"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "NoteChange": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "mute": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "note_id": {
+          "type": [
+            "integer"
+          ]
+        },
+        "pitch": {
+          "anyOf": [
+            {
+              "maximum": 127,
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "probability": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "release_velocity": {
+          "anyOf": [
+            {
+              "maximum": 127,
+              "minimum": 0,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "velocity": {
+          "anyOf": [
+            {
+              "maximum": 127,
+              "minimum": 1,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "velocity_deviation": {
+          "anyOf": [
+            {
+              "maximum": 127,
+              "minimum": -127,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "note_id"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "NoteIn": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "exclusiveMinimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "mute": {
+          "type": [
+            "boolean"
+          ]
+        },
+        "pitch": {
+          "maximum": 127,
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        },
+        "probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "release_velocity": {
+          "maximum": 127,
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "start_time": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "velocity": {
+          "maximum": 127,
+          "minimum": 1,
+          "type": [
+            "number"
+          ]
+        },
+        "velocity_deviation": {
+          "maximum": 127,
+          "minimum": -127,
+          "type": [
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "duration",
+        "pitch",
+        "start_time"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "SendSet": {
+      "additionalProperties": false,
+      "properties": {
+        "db": {
+          "anyOf": [
+            {
+              "maximum": 6,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "return_track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "return_track"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "SetLocator": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "set_locator",
+          "type": [
+            "string"
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": [
+                "string"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "time": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "time"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "properties": {
+        "from_value": {
+          "type": [
+            "number"
+          ]
+        },
+        "length": {
+          "exclusiveMinimum": 0,
+          "maximum": 4096,
+          "type": [
+            "number"
+          ]
+        },
+        "period": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 1024,
+              "type": [
+                "number"
+              ]
+            },
+            {
+              "type": [
+                "null"
+              ]
+            }
+          ]
+        },
+        "start": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "to_value": {
+          "type": [
+            "number"
+          ]
+        },
+        "type": {
+          "enum": [
+            "ramp",
+            "exp",
+            "log",
+            "sine",
+            "triangle",
+            "saw",
+            "square"
+          ],
+          "type": [
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "from_value",
+        "length",
+        "to_value",
+        "type"
+      ],
+      "type": [
+        "object"
+      ]
+    }
+  },
   "ops": {
     "arrangement.edit": {
       "destructive": false,
@@ -7,15 +996,44 @@
         1,
         10
       ],
-      "properties": {
-        "actions": [
-          "array"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "AddClip"
+                },
+                {
+                  "$ref": "CopySessionClip"
+                },
+                {
+                  "$ref": "DeleteArrangementClip"
+                },
+                {
+                  "$ref": "AddTakeLane"
+                },
+                {
+                  "$ref": "AddTakeClip"
+                }
+              ]
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "type": [
+              "array"
+            ]
+          }
+        },
+        "required": [
+          "actions"
+        ],
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "actions"
-      ]
+      "read_only": false
     },
     "arrangement.get": {
       "destructive": false,
@@ -24,14 +1042,30 @@
         0,
         0
       ],
-      "properties": {
-        "track": [
-          "integer",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "type": [
+          "object"
         ]
       },
-      "read_only": true,
-      "required": []
+      "read_only": true
     },
     "arrangement.locators": {
       "destructive": false,
@@ -40,15 +1074,35 @@
         0,
         0
       ],
-      "properties": {
-        "actions": [
-          "array"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "SetLocator"
+                },
+                {
+                  "$ref": "DeleteLocator"
+                }
+              ]
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "type": [
+              "array"
+            ]
+          }
+        },
+        "required": [
+          "actions"
+        ],
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "actions"
-      ]
+      "read_only": false
     },
     "batch": {
       "destructive": false,
@@ -57,19 +1111,42 @@
         0,
         0
       ],
-      "properties": {
-        "label": [
-          "string",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "ops": {
+            "items": {
+              "$ref": "BatchItem"
+            },
+            "maxItems": 256,
+            "minItems": 1,
+            "type": [
+              "array"
+            ]
+          }
+        },
+        "required": [
+          "ops"
         ],
-        "ops": [
-          "array"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "ops"
-      ]
+      "read_only": false
     },
     "browser.load": {
       "destructive": false,
@@ -78,19 +1155,36 @@
         0,
         0
       ],
-      "properties": {
-        "path": [
-          "array"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "items": {
+              "type": [
+                "string"
+              ]
+            },
+            "minItems": 2,
+            "type": [
+              "array"
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "track"
         ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "path",
-        "track"
-      ]
+      "read_only": false
     },
     "browser.search": {
       "destructive": false,
@@ -99,25 +1193,61 @@
         0,
         0
       ],
-      "properties": {
-        "category": [
-          "string",
-          "string"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "enum": [
+                  "drums",
+                  "instruments",
+                  "audio_effects",
+                  "midi_effects",
+                  "sounds",
+                  "packs",
+                  "user_library",
+                  "plugins"
+                ],
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "const": "all",
+                "type": [
+                  "string"
+                ]
+              }
+            ]
+          },
+          "limit": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": [
+              "integer"
+            ]
+          },
+          "loadable_only": {
+            "type": [
+              "boolean"
+            ]
+          },
+          "query": {
+            "minLength": 1,
+            "type": [
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "query"
         ],
-        "limit": [
-          "integer"
-        ],
-        "loadable_only": [
-          "boolean"
-        ],
-        "query": [
-          "string"
+        "type": [
+          "object"
         ]
       },
-      "read_only": true,
-      "required": [
-        "query"
-      ]
+      "read_only": true
     },
     "clip.create": {
       "destructive": false,
@@ -126,26 +1256,52 @@
         0,
         0
       ],
-      "properties": {
-        "length": [
-          "number"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "length": {
+            "exclusiveMinimum": 0,
+            "maximum": 4096,
+            "type": [
+              "number"
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "slot": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "slot",
+          "track"
         ],
-        "name": [
-          "string",
-          "null"
-        ],
-        "slot": [
-          "integer"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "slot",
-        "track"
-      ]
+      "read_only": false
     },
     "clip.delete": {
       "destructive": true,
@@ -154,23 +1310,54 @@
         0,
         0
       ],
-      "properties": {
-        "arrangement_clip": [
-          "integer",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "arrangement_clip": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "track"
         ],
-        "slot": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "track"
-      ]
+      "read_only": false
     },
     "clip.envelope": {
       "destructive": false,
@@ -179,33 +1366,75 @@
         0,
         0
       ],
-      "properties": {
-        "arrangement_clip": [
-          "integer",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "arrangement_clip": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "clear": {
+            "type": [
+              "boolean"
+            ]
+          },
+          "envelopes": {
+            "items": {
+              "$ref": "Envelope"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": [
+              "array"
+            ]
+          },
+          "replace_envelopes": {
+            "type": [
+              "boolean"
+            ]
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "envelopes",
+          "track"
         ],
-        "clear": [
-          "boolean"
-        ],
-        "envelopes": [
-          "array"
-        ],
-        "replace_envelopes": [
-          "boolean"
-        ],
-        "slot": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "envelopes",
-        "track"
-      ]
+      "read_only": false
     },
     "clip.get": {
       "destructive": false,
@@ -214,23 +1443,54 @@
         0,
         0
       ],
-      "properties": {
-        "arrangement_clip": [
-          "integer",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "arrangement_clip": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "track"
         ],
-        "slot": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": true,
-      "required": [
-        "track"
-      ]
+      "read_only": true
     },
     "clip.launch": {
       "destructive": false,
@@ -239,22 +1499,40 @@
         0,
         0
       ],
-      "properties": {
-        "action": [
-          "string"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "fire",
+              "stop"
+            ],
+            "type": [
+              "string"
+            ]
+          },
+          "slot": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "slot",
+          "track"
         ],
-        "slot": [
-          "integer"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "slot",
-        "track"
-      ]
+      "read_only": false
     },
     "clip.set": {
       "destructive": false,
@@ -263,43 +1541,128 @@
         0,
         0
       ],
-      "properties": {
-        "arrangement_clip": [
-          "integer",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "arrangement_clip": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "color_index": {
+            "anyOf": [
+              {
+                "maximum": 69,
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "loop_end": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "loop_start": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "looping": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "track"
         ],
-        "color_index": [
-          "integer",
-          "null"
-        ],
-        "loop_end": [
-          "number",
-          "null"
-        ],
-        "loop_start": [
-          "number",
-          "null"
-        ],
-        "looping": [
-          "boolean",
-          "null"
-        ],
-        "name": [
-          "string",
-          "null"
-        ],
-        "slot": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "track"
-      ]
+      "read_only": false
     },
     "device.insert": {
       "destructive": false,
@@ -308,22 +1671,36 @@
         3,
         0
       ],
-      "properties": {
-        "index": [
-          "integer"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "minimum": -1,
+            "type": [
+              "integer"
+            ]
+          },
+          "name": {
+            "type": [
+              "string"
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "track"
         ],
-        "name": [
-          "string"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "name",
-        "track"
-      ]
+      "read_only": false
     },
     "device.params": {
       "destructive": false,
@@ -332,26 +1709,66 @@
         0,
         0
       ],
-      "properties": {
-        "chain_path": [
-          "array"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "chain_path": {
+            "items": {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            "maxItems": 8,
+            "type": [
+              "array"
+            ]
+          },
+          "device": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "return_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "device"
         ],
-        "device": [
-          "integer"
-        ],
-        "return_track": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer",
-          "null"
+        "type": [
+          "object"
         ]
       },
-      "read_only": true,
-      "required": [
-        "device"
-      ]
+      "read_only": true
     },
     "device.routing": {
       "destructive": false,
@@ -360,39 +1777,119 @@
         0,
         0
       ],
-      "properties": {
-        "chain_path": [
-          "array"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "chain_path": {
+            "items": {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            "maxItems": 8,
+            "type": [
+              "array"
+            ]
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "items": {
+                  "type": [
+                    "string"
+                  ]
+                },
+                "type": [
+                  "array"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "device": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "input_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "return_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "device"
         ],
-        "channel": [
-          "string",
-          "array",
-          "null"
-        ],
-        "device": [
-          "integer"
-        ],
-        "input": [
-          "string",
-          "null"
-        ],
-        "input_track": [
-          "integer",
-          "null"
-        ],
-        "return_track": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer",
-          "null"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "device"
-      ]
+      "read_only": false
     },
     "device.set_param": {
       "destructive": false,
@@ -401,40 +1898,114 @@
         0,
         0
       ],
-      "properties": {
-        "chain_path": [
-          "array"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "chain_path": {
+            "items": {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            "maxItems": 8,
+            "type": [
+              "array"
+            ]
+          },
+          "device": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "display": {
+            "anyOf": [
+              {
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "parameter": {
+            "anyOf": [
+              {
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "string"
+                ]
+              }
+            ]
+          },
+          "return_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "device",
+          "parameter"
         ],
-        "device": [
-          "integer"
-        ],
-        "display": [
-          "number",
-          "string",
-          "null"
-        ],
-        "parameter": [
-          "integer",
-          "string"
-        ],
-        "return_track": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer",
-          "null"
-        ],
-        "value": [
-          "number",
-          "null"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "device",
-        "parameter"
-      ]
+      "read_only": false
     },
     "drum_rack.pads": {
       "destructive": false,
@@ -443,19 +2014,39 @@
         0,
         0
       ],
-      "properties": {
-        "device": [
-          "integer",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "track"
         ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": true,
-      "required": [
-        "track"
-      ]
+      "read_only": true
     },
     "history.step": {
       "destructive": false,
@@ -464,15 +2055,27 @@
         0,
         0
       ],
-      "properties": {
-        "action": [
-          "string"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "undo",
+              "redo"
+            ],
+            "type": [
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "action"
-      ]
+      "read_only": false
     },
     "live.health": {
       "destructive": false,
@@ -481,9 +2084,14 @@
         0,
         0
       ],
-      "properties": {},
-      "read_only": true,
-      "required": []
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": [
+          "object"
+        ]
+      },
+      "read_only": true
     },
     "mixer.get": {
       "destructive": false,
@@ -492,24 +2100,55 @@
         0,
         0
       ],
-      "properties": {
-        "master": [
-          "boolean"
-        ],
-        "options": [
-          "boolean"
-        ],
-        "return_track": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "master": {
+            "type": [
+              "boolean"
+            ]
+          },
+          "options": {
+            "type": [
+              "boolean"
+            ]
+          },
+          "return_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "type": [
+          "object"
         ]
       },
-      "read_only": true,
-      "required": []
+      "read_only": true
     },
     "mixer.set": {
       "destructive": false,
@@ -518,64 +2157,208 @@
         0,
         0
       ],
-      "properties": {
-        "crossfade": [
-          "string",
-          "null"
-        ],
-        "input_channel": [
-          "string",
-          "null"
-        ],
-        "input_routing": [
-          "string",
-          "null"
-        ],
-        "master": [
-          "boolean"
-        ],
-        "mute": [
-          "boolean",
-          "null"
-        ],
-        "output_channel": [
-          "string",
-          "null"
-        ],
-        "output_routing": [
-          "string",
-          "null"
-        ],
-        "pan": [
-          "number",
-          "null"
-        ],
-        "return_track": [
-          "integer",
-          "null"
-        ],
-        "sends": [
-          "array"
-        ],
-        "solo": [
-          "boolean",
-          "null"
-        ],
-        "track": [
-          "integer",
-          "null"
-        ],
-        "volume": [
-          "number",
-          "null"
-        ],
-        "volume_db": [
-          "number",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "crossfade": {
+            "anyOf": [
+              {
+                "enum": [
+                  "A",
+                  "none",
+                  "B"
+                ],
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "input_channel": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "input_routing": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "master": {
+            "type": [
+              "boolean"
+            ]
+          },
+          "mute": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "output_channel": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "output_routing": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "pan": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": -1,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "return_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "sends": {
+            "items": {
+              "$ref": "SendSet"
+            },
+            "type": [
+              "array"
+            ]
+          },
+          "solo": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "volume_db": {
+            "anyOf": [
+              {
+                "maximum": 6,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": []
+      "read_only": false
     },
     "notes.apply": {
       "destructive": true,
@@ -584,32 +2367,80 @@
         0,
         0
       ],
-      "properties": {
-        "add": [
-          "array"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "add": {
+            "items": {
+              "$ref": "NoteIn"
+            },
+            "type": [
+              "array"
+            ]
+          },
+          "arrangement_clip": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "modify": {
+            "items": {
+              "$ref": "NoteChange"
+            },
+            "type": [
+              "array"
+            ]
+          },
+          "remove": {
+            "items": {
+              "type": [
+                "integer"
+              ]
+            },
+            "type": [
+              "array"
+            ]
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "track"
         ],
-        "arrangement_clip": [
-          "integer",
-          "null"
-        ],
-        "modify": [
-          "array"
-        ],
-        "remove": [
-          "array"
-        ],
-        "slot": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "track"
-      ]
+      "read_only": false
     },
     "notes.get": {
       "destructive": false,
@@ -618,36 +2449,89 @@
         0,
         0
       ],
-      "properties": {
-        "arrangement_clip": [
-          "integer",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "arrangement_clip": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "from_pitch": {
+            "maximum": 127,
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "from_time": {
+            "minimum": 0,
+            "type": [
+              "number"
+            ]
+          },
+          "pitch_span": {
+            "maximum": 128,
+            "minimum": 1,
+            "type": [
+              "integer"
+            ]
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "time_span": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "track"
         ],
-        "from_pitch": [
-          "integer"
-        ],
-        "from_time": [
-          "number"
-        ],
-        "pitch_span": [
-          "integer"
-        ],
-        "slot": [
-          "integer",
-          "null"
-        ],
-        "time_span": [
-          "number",
-          "null"
-        ],
-        "track": [
-          "integer"
+        "type": [
+          "object"
         ]
       },
-      "read_only": true,
-      "required": [
-        "track"
-      ]
+      "read_only": true
     },
     "rack.get": {
       "destructive": false,
@@ -656,26 +2540,66 @@
         0,
         0
       ],
-      "properties": {
-        "chain_path": [
-          "array"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "chain_path": {
+            "items": {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            "maxItems": 8,
+            "type": [
+              "array"
+            ]
+          },
+          "device": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "return_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "device"
         ],
-        "device": [
-          "integer"
-        ],
-        "return_track": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer",
-          "null"
+        "type": [
+          "object"
         ]
       },
-      "read_only": true,
-      "required": [
-        "device"
-      ]
+      "read_only": true
     },
     "rack.set": {
       "destructive": false,
@@ -684,36 +2608,94 @@
         0,
         0
       ],
-      "properties": {
-        "add_chain": [
-          "object",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "add_chain": {
+            "anyOf": [
+              {
+                "$ref": "ChainEdit"
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "chain_path": {
+            "items": {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            "maxItems": 8,
+            "type": [
+              "array"
+            ]
+          },
+          "chains": {
+            "items": {
+              "$ref": "ChainChange"
+            },
+            "type": [
+              "array"
+            ]
+          },
+          "device": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "macros": {
+            "items": {
+              "$ref": "MacroSet"
+            },
+            "type": [
+              "array"
+            ]
+          },
+          "return_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "device"
         ],
-        "chain_path": [
-          "array"
-        ],
-        "chains": [
-          "array"
-        ],
-        "device": [
-          "integer"
-        ],
-        "macros": [
-          "array"
-        ],
-        "return_track": [
-          "integer",
-          "null"
-        ],
-        "track": [
-          "integer",
-          "null"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "device"
-      ]
+      "read_only": false
     },
     "return.create": {
       "destructive": false,
@@ -722,18 +2704,43 @@
         0,
         0
       ],
-      "properties": {
-        "device": [
-          "string",
-          "null"
-        ],
-        "name": [
-          "string",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "device": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": []
+      "read_only": false
     },
     "scene.create": {
       "destructive": false,
@@ -742,17 +2749,35 @@
         0,
         0
       ],
-      "properties": {
-        "index": [
-          "integer"
-        ],
-        "name": [
-          "string",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "minimum": -1,
+            "type": [
+              "integer"
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": []
+      "read_only": false
     },
     "scene.fire": {
       "destructive": false,
@@ -761,15 +2786,24 @@
         0,
         0
       ],
-      "properties": {
-        "scene": [
-          "integer"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "scene": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "scene"
+        ],
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "scene"
-      ]
+      "read_only": false
     },
     "song.get": {
       "destructive": false,
@@ -778,9 +2812,14 @@
         0,
         0
       ],
-      "properties": {},
-      "read_only": true,
-      "required": []
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": [
+          "object"
+        ]
+      },
+      "read_only": true
     },
     "song.position": {
       "destructive": false,
@@ -789,15 +2828,24 @@
         0,
         0
       ],
-      "properties": {
-        "beat": [
-          "number"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "beat": {
+            "minimum": 0,
+            "type": [
+              "number"
+            ]
+          }
+        },
+        "required": [
+          "beat"
+        ],
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "beat"
-      ]
+      "read_only": false
     },
     "song.set": {
       "destructive": false,
@@ -806,50 +2854,170 @@
         0,
         0
       ],
-      "properties": {
-        "loop": [
-          "boolean",
-          "null"
-        ],
-        "loop_length": [
-          "number",
-          "null"
-        ],
-        "loop_start": [
-          "number",
-          "null"
-        ],
-        "metronome": [
-          "boolean",
-          "null"
-        ],
-        "root_note": [
-          "integer",
-          "null"
-        ],
-        "scale_mode": [
-          "boolean",
-          "null"
-        ],
-        "scale_name": [
-          "string",
-          "null"
-        ],
-        "signature_denominator": [
-          "integer",
-          "null"
-        ],
-        "signature_numerator": [
-          "integer",
-          "null"
-        ],
-        "tempo": [
-          "number",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "loop": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "loop_length": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "loop_start": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "metronome": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "root_note": {
+            "anyOf": [
+              {
+                "maximum": 11,
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "scale_mode": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "scale_name": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "signature_denominator": {
+            "anyOf": [
+              {
+                "enum": [
+                  1,
+                  2,
+                  4,
+                  8,
+                  16
+                ],
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "signature_numerator": {
+            "anyOf": [
+              {
+                "maximum": 99,
+                "minimum": 1,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "tempo": {
+            "anyOf": [
+              {
+                "maximum": 999,
+                "minimum": 20,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": []
+      "read_only": false
     },
     "track.create": {
       "destructive": false,
@@ -858,20 +3026,44 @@
         0,
         0
       ],
-      "properties": {
-        "index": [
-          "integer"
-        ],
-        "kind": [
-          "string"
-        ],
-        "name": [
-          "string",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "minimum": -1,
+            "type": [
+              "integer"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "midi",
+              "audio"
+            ],
+            "type": [
+              "string"
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": []
+      "read_only": false
     },
     "track.delete": {
       "destructive": true,
@@ -880,15 +3072,24 @@
         0,
         0
       ],
-      "properties": {
-        "track": [
-          "integer"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "track"
+        ],
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "track"
-      ]
+      "read_only": false
     },
     "track.set": {
       "destructive": false,
@@ -897,43 +3098,128 @@
         0,
         0
       ],
-      "properties": {
-        "arm": [
-          "boolean",
-          "null"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "arm": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "color_index": {
+            "anyOf": [
+              {
+                "maximum": 69,
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "mute": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": [
+                  "string"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "pan": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": -1,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "solo": {
+            "anyOf": [
+              {
+                "type": [
+                  "boolean"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
+          "track": {
+            "minimum": 0,
+            "type": [
+              "integer"
+            ]
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "track"
         ],
-        "color_index": [
-          "integer",
-          "null"
-        ],
-        "mute": [
-          "boolean",
-          "null"
-        ],
-        "name": [
-          "string",
-          "null"
-        ],
-        "pan": [
-          "number",
-          "null"
-        ],
-        "solo": [
-          "boolean",
-          "null"
-        ],
-        "track": [
-          "integer"
-        ],
-        "volume": [
-          "number",
-          "null"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "track"
-      ]
+      "read_only": false
     },
     "tracks.list": {
       "destructive": false,
@@ -942,9 +3228,14 @@
         0,
         0
       ],
-      "properties": {},
-      "read_only": true,
-      "required": []
+      "params": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": [
+          "object"
+        ]
+      },
+      "read_only": true
     },
     "transport.control": {
       "destructive": false,
@@ -953,19 +3244,45 @@
         0,
         0
       ],
-      "properties": {
-        "action": [
-          "string"
+      "params": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "play",
+              "stop",
+              "continue",
+              "stop_clips",
+              "toggle_record"
+            ],
+            "type": [
+              "string"
+            ]
+          },
+          "from_beat": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "number"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "action"
         ],
-        "from_beat": [
-          "number",
-          "null"
+        "type": [
+          "object"
         ]
       },
-      "read_only": false,
-      "required": [
-        "action"
-      ]
+      "read_only": false
     }
   },
   "protocol": 1

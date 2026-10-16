@@ -20,7 +20,7 @@ def _target(ctx, params):
         index = params["return_track"]
         returns = song.return_tracks
         if not 0 <= index < len(returns):
-            raise OpError(ErrorCode.NOT_FOUND, "No return track %d (song has %d)" % (index, len(returns)), return_track=index)
+            raise OpError(ErrorCode.NOT_FOUND, "No return_track index %d (song has %d return tracks)" % (index, len(returns)), return_track=index)
         return "return", index, returns[index]
     if params.get("track") is not None:
         return "track", params["track"], ctx.track(params["track"])
@@ -160,7 +160,7 @@ def mixer_set(ctx, params):
         sends = mixer.sends
         i = send["return_track"]
         if not 0 <= i < len(sends):
-            raise OpError(ErrorCode.NOT_FOUND, "No send %d (song has %d return tracks)" % (i, len(sends)), return_track=i)
+            raise OpError(ErrorCode.NOT_FOUND, "No send index %d (song has %d return tracks)" % (i, len(sends)), return_track=i)
         _set_level(sends[i], send.get("value"), send.get("db"))
     for key in ("mute", "solo"):
         if params.get(key) is not None:

@@ -47,7 +47,7 @@ def _target(ctx, track, i, env):
     devices = list(track.devices)
     index = env["device"]
     if not 0 <= index < len(devices):
-        raise OpError(ErrorCode.NOT_FOUND, "envelopes[%d]: no device %d on the track (it has %d)" % (i, index, len(devices)))
+        raise OpError(ErrorCode.NOT_FOUND, "envelopes[%d]: no device index %d on the track (it has %d)" % (i, index, len(devices)))
     device = devices[index]
     path = list(env.get("chain_path") or ())
     if len(path) % 2:
@@ -55,7 +55,7 @@ def _target(ctx, track, i, env):
     for chain_index, inner_index in zip(path[0::2], path[1::2]):
         inner = list(ctx.chain(device, chain_index).devices)
         if not 0 <= inner_index < len(inner):
-            raise OpError(ErrorCode.NOT_FOUND, "envelopes[%d]: no device %d in chain %d of '%s'" % (i, inner_index, chain_index, device.name))
+            raise OpError(ErrorCode.NOT_FOUND, "envelopes[%d]: no device index %d in chain index %d of '%s'" % (i, inner_index, chain_index, device.name))
         device = inner[inner_index]
     param = next((p for p in device.parameters if p.name == name), None)
     if param is None:

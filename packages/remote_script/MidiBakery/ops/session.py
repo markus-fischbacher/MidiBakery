@@ -107,7 +107,7 @@ def scene_create(ctx, params):
     song = ctx.song
     index = params.get("index", -1)
     if index > len(song.scenes):
-        raise OpError(ErrorCode.INVALID_PARAMS, "Scene index %d beyond end (%d)" % (index, len(song.scenes)))
+        raise OpError(ErrorCode.INVALID_PARAMS, "Scene index %d is beyond the end (song has %d scenes)" % (index, len(song.scenes)))
     song.create_scene(index)
     new_index = len(song.scenes) - 1 if index == -1 else index
     if params.get("name"):

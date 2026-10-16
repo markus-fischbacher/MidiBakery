@@ -310,12 +310,12 @@ async def _target(session: Session, spec: Generate) -> tuple[ClipState, float, d
     state = await session.clip(spec.track, spec.slot)
     length = session.meter.beats_per_bar * spec.bars
     if state.planned:
-        raise BridgeError("INVALID_PARAMS", f"Clip {spec.track}/{spec.slot} is already written by an earlier step of this plan")
+        raise BridgeError("INVALID_PARAMS", f"The clip in slot index {spec.slot} on track index {spec.track} is already written by an earlier step of this plan")
     if not state.exists:
         name = spec.clip_name or spec.kind.title()  # type: ignore[attr-defined]
         return state, length, {"track": spec.track, "slot": spec.slot, "length": length, "name": name}, []
     if not state.is_midi:
-        raise BridgeError("INVALID_PARAMS", f"Clip {spec.track}/{spec.slot} is an audio clip")
+        raise BridgeError("INVALID_PARAMS", f"The clip in slot index {spec.slot} on track index {spec.track} is an audio clip")
     if spec.if_exists == "error":
         raise BridgeError(
             "CONFLICT",
@@ -356,7 +356,7 @@ async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harm
             _not_drums(session, spec.chords_from.track)
             source = await session.clip(spec.chords_from.track, spec.chords_from.slot)
             if not source.exists or not source.is_midi:
-                raise BridgeError("NOT_FOUND", f"chords_from: no MIDI clip at {spec.chords_from.track}/{spec.chords_from.slot}")
+                raise BridgeError("NOT_FOUND", f"chords_from: no MIDI clip in slot index {spec.chords_from.slot} on track index {spec.chords_from.track}")
             source_bars = max(1, round((source.length or meter.beats_per_bar) / meter.beats_per_bar))
             result = harmony_mod.detect(source.notes or [], scale, meter, source_bars, spec.chords_per_bar)
             result = result.for_length(meter, spec.bars)
@@ -375,7 +375,7 @@ async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harm
 async def _kick(session: Session, location: ClipLocation, length: float) -> tuple[list[float], dict[str, Any]]:
     source = await session.clip(location.track, location.slot)
     if not source.exists or not source.is_midi:
-        raise BridgeError("NOT_FOUND", f"follow_kick: no MIDI clip at {location.track}/{location.slot}")
+        raise BridgeError("NOT_FOUND", f"follow_kick: no MIDI clip in slot index {location.slot} on track index {location.track}")
     drum_map = map_pads(await session.drum_pads(location.track))
     kick_pitch = drum_map.note("kick")
     assert kick_pitch is not None
@@ -469,7 +469,7 @@ async def _plan_transform(session: Session, spec: TransformSpec) -> ClipChange:
         raise BridgeError("INVALID_PARAMS", "Cannot transform a clip written earlier in the same plan; apply first, then transform")
     state = await session.clip(spec.track, spec.slot)
     if not state.exists or not state.is_midi:
-        raise BridgeError("NOT_FOUND", f"No MIDI clip at {spec.track}/{spec.slot}")
+        raise BridgeError("NOT_FOUND", f"No MIDI clip in slot index {spec.slot} on track index {spec.track}")
     notes = state.notes or []
     if spec.note_ids is not None:
         known = {n["note_id"] for n in notes}
@@ -513,7 +513,7 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
             step = step.model_copy(update={"slot": session.free_slot(step.track, targets)})
         key = (step.track, step.slot)  # type: ignore[attr-defined]
         if key in targets:
-            raise BridgeError("INVALID_PARAMS", f"Two steps target clip {key[0]}/{key[1]}; use one step per clip")
+            raise BridgeError("INVALID_PARAMS", f"Two steps target slot index {key[1]} on track index {key[0]}; use one step per clip")
         targets.add(key)
         changes.append(await _PLANNERS[step.kind](session, step))  # type: ignore[attr-defined]
     fingerprints = {}
@@ -566,7 +566,7 @@ async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, A
             if state is None or state.fingerprint != expected:
                 raise BridgeError(
                     "CONFLICT",
-                    f"Clip {track}/{slot} or its track changed since plan {plan.id} was made "
+                    f"The clip in slot index {slot} on track index {track} or its track changed since plan {plan.id} was made "
                     "(tracks added, deleted or edited); plan again",
                     {"track": track, "slot": slot},
                 )

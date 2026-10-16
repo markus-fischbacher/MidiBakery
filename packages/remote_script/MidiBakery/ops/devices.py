@@ -29,7 +29,7 @@ def device_insert(ctx, params):
     if index == -1:
         index = count
     if index > count:
-        raise OpError(ErrorCode.INVALID_PARAMS, "Device index %d beyond chain end (%d)" % (index, count))
+        raise OpError(ErrorCode.INVALID_PARAMS, "Device index %d is beyond the end of the chain (it has %d)" % (index, count))
     try:
         track.insert_device(params["name"], index)
     except RuntimeError as exc:
@@ -84,7 +84,7 @@ def device_set_param(ctx, params):
     parameters = list(device.parameters)
     if isinstance(key, int):
         if not 0 <= key < len(parameters):
-            raise OpError(ErrorCode.NOT_FOUND, "No parameter %d on '%s'" % (key, device.name))
+            raise OpError(ErrorCode.NOT_FOUND, "No parameter index %d on '%s'" % (key, device.name))
         index = key
     else:
         matches = [i for i, p in enumerate(parameters) if p.name == key]
@@ -146,12 +146,12 @@ def drum_rack_pads(ctx, params):
     if index is not None:
         device = ctx.device({"track": params["track"], "device": index})
         if not getattr(device, "can_have_drum_pads", False):
-            raise OpError(ErrorCode.INVALID_PARAMS, "Device %d on track %d is not a Drum Rack" % (index, params["track"]))
+            raise OpError(ErrorCode.INVALID_PARAMS, "Device index %d on %s is not a Drum Rack" % (index, ctx.where(params["track"])))
         rack = device
     else:
         rack = next(_drum_racks(track.devices), None)
         if rack is None:
-            raise OpError(ErrorCode.NOT_FOUND, "No Drum Rack on track %d" % params["track"], track=params["track"])
+            raise OpError(ErrorCode.NOT_FOUND, "No Drum Rack on %s" % ctx.where(params["track"]), track=params["track"])
     return {"name": rack.name, "pads": _pads(rack)}
 
 
@@ -184,7 +184,7 @@ def device_routing(ctx, params):
         types = list(device.available_input_routing_types)
         match = [e for e in types if getattr(e, "attached_object", None) == source] or [e for e in types if e.display_name == source.name]
         if not match:
-            raise OpError(ErrorCode.NOT_FOUND, "Track %d '%s' is no sidechain source (a MIDI track needs an instrument)" % (params["input_track"], source.name),
+            raise OpError(ErrorCode.NOT_FOUND, "Not a sidechain source: %s (a MIDI track needs an instrument)" % ctx.where(params["input_track"]),
                           available=[e.display_name for e in types])
         device.input_routing_type = match[0]
     elif params.get("input") is not None:

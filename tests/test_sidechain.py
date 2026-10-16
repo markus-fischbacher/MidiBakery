@@ -31,7 +31,7 @@ async def test_a_compressor_is_keyed_from_a_track_and_channel(client, live):
 
 async def test_routing_needs_a_source_and_a_routable_device(client, live):
     live.on_main(lambda: _drums_and_compressor(live.song))
-    with pytest.raises(BridgeError, match="is no sidechain source") as exc:
+    with pytest.raises(BridgeError, match="Not a sidechain source") as exc:
         await client.call("device.routing", {"track": 1, "device": 0, "input_track": 1})  # not itself
     assert exc.value.code == "NOT_FOUND"
     live.on_main(lambda: live.song.tracks[1].insert_device("Auto Filter", 1))

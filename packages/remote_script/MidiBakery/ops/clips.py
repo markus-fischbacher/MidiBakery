@@ -36,9 +36,9 @@ def clip_create(ctx, params):
     track = ctx.track(params["track"])
     slot = ctx.clip_slot(params["track"], params["slot"])
     if not track.has_midi_input:
-        raise OpError(ErrorCode.INVALID_PARAMS, "Track %d is not a MIDI track" % params["track"])
+        raise OpError(ErrorCode.INVALID_PARAMS, "Not a MIDI track: %s" % ctx.where(params["track"]))
     if slot.has_clip:
-        raise OpError(ErrorCode.CONFLICT, "Slot %d/%d already has a clip" % (params["track"], params["slot"]))
+        raise OpError(ErrorCode.CONFLICT, "Slot index %d on %s already has a clip" % (params["slot"], ctx.where(params["track"])))
     slot.create_clip(float(params.get("length", 4.0)))
     if params.get("name"):
         slot.clip.name = params["name"]
@@ -94,7 +94,7 @@ def clip_launch(ctx, params):
     if params.get("action", "fire") == "fire":
         if not slot.has_clip:
             # fire() on an empty slot stops the track: almost always a wrong slot, not the intent.
-            raise OpError(ErrorCode.NOT_FOUND, "Slot %d/%d is empty; nothing to play (action 'stop' stops the track)" % (params["track"], params["slot"]))
+            raise OpError(ErrorCode.NOT_FOUND, "Slot index %d on %s is empty; nothing to play (action 'stop' stops the track)" % (params["slot"], ctx.where(params["track"])))
         _fire(ctx.song, ctx.track(params["track"]), slot)
     else:
         slot.stop()
