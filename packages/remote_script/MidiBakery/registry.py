@@ -48,11 +48,34 @@ class Context(object):
             raise OpError(ErrorCode.INVALID_PARAMS, "Clip %d/%d is not a MIDI clip" % (track_index, slot_index))
         return clip
 
-    def device(self, track_index, device_index):
+    def device(self, track_index, device_index, chain_path=()):
+        """A device on the track, or inside racks: chain_path alternates chain and device
+        indices below it, e.g. (1, 0) = the first device in the rack's second chain."""
         devices = self.track(track_index).devices
         if not 0 <= device_index < len(devices):
             raise OpError(ErrorCode.NOT_FOUND, "No device %d on track %d" % (device_index, track_index), device=device_index)
-        return devices[device_index]
+        device = devices[device_index]
+        path = list(chain_path or ())
+        if len(path) % 2:
+            raise OpError(ErrorCode.INVALID_PARAMS, "chain_path needs chain, device pairs")
+        for chain_index, inner_index in zip(path[0::2], path[1::2]):
+            chain = self.chain(device, chain_index)
+            inner = list(chain.devices)
+            if not 0 <= inner_index < len(inner):
+                raise OpError(ErrorCode.NOT_FOUND, "No device %d in chain %d of '%s'" % (inner_index, chain_index, device.name))
+            device = inner[inner_index]
+        return device
+
+    def chain(self, rack, chain_index):
+        if not getattr(rack, "can_have_chains", False):
+            raise OpError(ErrorCode.INVALID_PARAMS, "'%s' is not a rack" % rack.name)
+        chains = list(rack.chains)
+        if not 0 <= chain_index < len(chains):
+            raise OpError(
+                ErrorCode.NOT_FOUND,
+                "No chain %d in '%s' (it has %d; add_chain creates one)" % (chain_index, rack.name, len(chains)),
+            )
+        return chains[chain_index]
 
     def scene(self, index):
         scenes = self.song.scenes

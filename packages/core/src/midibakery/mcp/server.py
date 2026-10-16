@@ -53,6 +53,9 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
 - Mixer: get_mixer reads tracks, returns (A = return_track 0) and master; update_mixer
   takes volume_db and send db as Live shows them, routing by the names that
   get_mixer(options=true) lists. create_return_track can add a Reverb or Delay.
+- Racks: get_rack lists chains and macros; update_rack sets macros (0-127), edits
+  chains or adds one (Drum Rack pad: add_chain {in_note, insert_devices}).
+  Devices inside racks: pass chain_path [chain, device, ...] to the device tools.
 - Every write is undoable with the undo tool.
 Composition:
 - compose_drums / compose_bass / compose_chords / compose_melody write a new
@@ -99,6 +102,8 @@ TOOL_OPS: list[tuple[str, str, str]] = [
     ("get_mixer", "mixer.get", "Get mixer and routing"),
     ("update_mixer", "mixer.set", "Set volume, pan, sends or routing"),
     ("create_return_track", "return.create", "Create return track"),
+    ("get_rack", "rack.get", "Get rack chains and macros"),
+    ("update_rack", "rack.set", "Set macros, edit or add rack chains"),
     ("create_scene", "scene.create", "Create scene"),
     ("fire_scene", "scene.fire", "Launch scene"),
     ("undo", "history.step", "Undo / redo"),

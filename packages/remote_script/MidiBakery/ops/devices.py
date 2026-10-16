@@ -40,7 +40,7 @@ def device_insert(ctx, params):
 
 @op("device.params")
 def device_params(ctx, params):
-    device = ctx.device(params["track"], params["device"])
+    device = ctx.device(params["track"], params["device"], params.get("chain_path"))
     return {
         "name": device.name,
         "class_name": device.class_name,
@@ -50,7 +50,7 @@ def device_params(ctx, params):
 
 @op("device.set_param")
 def device_set_param(ctx, params):
-    device = ctx.device(params["track"], params["device"])
+    device = ctx.device(params["track"], params["device"], params.get("chain_path"))
     key = params["parameter"]
     parameters = list(device.parameters)
     if isinstance(key, int):

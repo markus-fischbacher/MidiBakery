@@ -162,9 +162,16 @@ class DeviceInsert(Params):
     index: int = Field(-1, ge=-1, description="Position in the chain, -1 = end")
 
 
+ChainPath = Annotated[
+    list[Annotated[int, Field(ge=0)]],
+    Field(max_length=8, description="Into racks: chain, device pairs below `device`, e.g. [1, 0] = first device of chain 2"),
+]
+
+
 class DeviceRef(Params):
     track: TrackIndex
     device: Annotated[int, Field(ge=0)]
+    chain_path: ChainPath = Field(default_factory=list)
 
 
 class DrumPadsGet(Params):
@@ -177,6 +184,7 @@ class DrumPadsGet(Params):
 class DeviceParamSet(Params):
     track: TrackIndex
     device: Annotated[int, Field(ge=0)]
+    chain_path: ChainPath = Field(default_factory=list)
     parameter: int | str = Field(description="Parameter index or exact name")
     value: float = Field(description="Raw parameter value within the parameter's min/max")
 
@@ -253,6 +261,41 @@ class ReturnCreate(Params):
     device: str | None = Field(None, description="Native device for the return, e.g. 'Reverb', 'Delay', 'Echo' (Live 12.3+)")
 
 
+class MacroSet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    macro: Annotated[int, Field(ge=1, le=16)]
+    value: Annotated[float, Field(ge=0, le=127)]
+
+
+class ChainEdit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    mute: bool | None = None
+    solo: bool | None = None
+    volume_db: Annotated[float, Field(le=6)] | None = None
+    pan: Annotated[float, Field(ge=-1, le=1)] | None = None
+    in_note: Pitch | None = Field(None, description="Drum Rack only: the pad note that plays this chain")
+    insert_devices: list[str] = Field(default_factory=list, description="Native devices to append, e.g. ['Simpler'] or ['Operator', 'Reverb']")
+
+
+class ChainChange(ChainEdit):
+    chain: Annotated[int, Field(ge=0)]
+
+
+class RackSet(DeviceRef):
+    macros: list[MacroSet] = Field(default_factory=list)
+    chains: list[ChainChange] = Field(default_factory=list)
+    add_chain: ChainEdit | None = Field(None, description="Append a chain (Live 12.3+), e.g. a Drum Rack pad: {in_note: 36, insert_devices: ['Simpler']}")
+
+    @model_validator(mode="after")
+    def _not_empty(self) -> RackSet:
+        if not (self.macros or self.chains or self.add_chain is not None):
+            raise ValueError("rack.set needs macros, chains or add_chain")
+        return self
+
+
 class SceneCreate(Params):
     index: int = Field(-1, ge=-1, description="Insert position, -1 = append")
     name: str | None = None
@@ -307,6 +350,8 @@ for spec in [
     OpSpec("mixer.get", MixerGet, "Volume, pan, sends, mute/solo, crossfade and routing of tracks, returns and master", read_only=True),
     OpSpec("mixer.set", MixerSet, "Change volume (normalised or dB), pan, sends, mute/solo, crossfade or routing", read_only=False),
     OpSpec("return.create", ReturnCreate, "Create a return track, optionally with a native device", read_only=False),
+    OpSpec("rack.get", DeviceRef, "Chains (devices, mixer, drum pad note) and macros of a rack", read_only=True),
+    OpSpec("rack.set", RackSet, "Set macros, edit chains, or add a chain to a rack", read_only=False),
     OpSpec("scene.create", SceneCreate, "Create a scene", read_only=False),
     OpSpec("scene.fire", SceneRef, "Launch a scene", read_only=False),
     OpSpec("history.step", History, "Undo or redo in Live", read_only=False),
