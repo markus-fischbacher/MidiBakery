@@ -23,7 +23,6 @@ from mcp_types import CallToolResult, InputRequiredResult, TextContent
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from midibakery.bridge import BridgeClient, BridgeError
-from midibakery.bridge.client import config_dir
 from midibakery.catalog import get_op
 from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty
 from midibakery.compose import (
@@ -35,6 +34,7 @@ from midibakery.compose import (
     build_plan,
 )
 from midibakery.compose.plan import Plan, new_seed
+from midibakery.compose.references import find_reference, load_references
 from midibakery.compose.song import SongPlan, SongRequest, apply_song, build_song
 from midibakery.compose.takes import TakesRequest, build_takes
 from midibakery.mcp.confirm import confirm, request_state
@@ -59,7 +59,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   follow_kick the drum clip; or plan_changes, where later steps share the first step's chords.
 - preview=true or plan_changes return a diff (a piano roll in MCP Apps clients) and a plan_id;
   apply_plan writes it as one undo step.
-- get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick) to model a song on.
+- get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick); plan_song(reference=name) follows one.
 - Deleting tracks or clips and replacing notes ask the user first; a declined change returns CANCELLED.
 """
 
@@ -473,19 +473,12 @@ class ReferenceQuery(BaseModel):
 
 def read_references(name: str | None = None) -> dict[str, Any]:
     """The Reference device's analyses (<MidiBakery folder>/references/*.json)."""
-    found = []
-    for path in (config_dir() / "references").glob("*.json"):
-        try:
-            found.append(json.loads(path.read_text(encoding="utf-8")))
-        except (OSError, ValueError):
-            continue
-    found.sort(key=lambda r: r.get("analyzed", ""), reverse=True)
     if name:
-        wanted = name.casefold()
-        found = [r for r in found if any(wanted in str(r.get(k, "")).casefold() for k in ("name", "file", "track"))]
-        if not found:
+        found = find_reference(name)
+        if found is None:
             raise ToolError(f"No analyzed reference matches '{name}'")
-        return found[0]
+        return found
+    found = load_references()
     brief = ("name", "track", "tempo", "key", "first_bar", "bars")
     return {"references": [{**{k: r.get(k) for k in brief}, "sections": [
         {k: s.get(k) for k in ("name", "start_bar", "bars", "kick", "elements")} for s in r.get("sections", [])

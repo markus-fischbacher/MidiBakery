@@ -7,7 +7,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from fake_song import DrumRackDevice
 from midibakery.compose.song import _batch_steps, _sweep
-from midibakery.compose.structures import TEMPLATES, parse_segments, sized
+from midibakery.compose.structures import TEMPLATES, bar_grid, from_reference, parse_segments, sized
 from midibakery.mcp import build_server
 
 
@@ -612,3 +612,78 @@ async def test_a_kit_with_only_a_kick_gets_no_snare_fills(client, live):
     live.on_main(setup)
     preview = await _plan(build_server(client), genre="drum_and_bass", seed=3, create_missing=False)
     assert preview["tracks"]["drums"]["track"] == 0
+
+
+# As the Reference Analyzer device writes it (Katoff - The Signal, shortened): 152 bars at 124 BPM.
+REFERENCE = {
+    "name": "Katoff - The Signal", "file": "/x/Katoff - The Signal.mp3", "track": "3-Katoff", "analyzed": "2026-10-16T22:23:19Z",
+    "tempo": 124, "key": "D# minor?", "genre": "auto", "bars": 152,
+    "sections": [{"name": name, "kind": kind, "start_bar": start, "bars": bars, "kick": 1, "elements": ["kick"]} for name, kind, start, bars in (
+        ("Intro", "intro", 1, 16), ("Drop", "drop", 17, 8), ("Groove", "groove", 25, 24), ("Break", "break", 49, 44),
+        ("Drop 2", "drop", 93, 32), ("Groove 2", "groove", 125, 24), ("Outro", "outro", 149, 4))],
+}
+
+
+@pytest.fixture
+def references(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    (tmp_path / "references").mkdir()
+    (tmp_path / "references" / "katoff.json").write_text(json.dumps(REFERENCE))
+
+
+def test_reference_sections_snap_to_the_genre_grid():
+    template = TEMPLATES["peak_time_techno"]
+    sections = from_reference(template, REFERENCE["sections"])
+    assert [(s.name, s.kind, s.bars) for s in sections] == [
+        ("Intro", "intro", 16), ("Drop", "drop", 8), ("Groove", "groove", 24), ("Break", "break", 48),
+        ("Drop 2", "drop", 32), ("Groove 2", "groove", 24), ("Outro", "outro", 8)]
+    # The n-th section of a kind plays the template's n-th one: Drop 2 is Peak 2, Groove 2 the stripped part.
+    assert sections[4].parts["drums"] == "drive:8,full" and sections[4].variation == 1
+    assert sections[5].parts["drums"].startswith("kick_only") and sections[5].variation == 1
+    assert sections[0].parts["drums"] == "kick_hats:8,groove"  # resized from the template's 32-bar intro
+
+    dnb = from_reference(TEMPLATES["drum_and_bass"], REFERENCE["sections"])
+    assert bar_grid(TEMPLATES["drum_and_bass"]) == 16 and all(s.bars % 16 == 0 for s in dnb)
+    assert [s.kind for s in dnb][2] == "drop"  # D&B has no groove: the drop plays
+    assert sum(s.bars for s in dnb) == 160  # borders snap, so the total stays near the reference's 152
+
+
+async def test_plan_song_follows_a_reference(client, live, references):
+    _studio(live)
+    server = build_server(client)
+    preview = await _plan(server, genre="peak_time_techno", reference="signal", minutes=3)
+    assert preview["reference"] == "Katoff - The Signal"
+    assert [(s["name"], s["bar"], s["bars"]) for s in preview["sections"]] == [
+        ("Intro", 1, 16), ("Drop", 17, 8), ("Groove", 25, 24), ("Break", 49, 48), ("Drop 2", 97, 32), ("Groove 2", 129, 24), ("Outro", 153, 8)]
+    assert preview["bars"] == 160 and preview["tempo"] is None
+    assert any("minutes ignored" in w for w in preview["warnings"])
+
+    with pytest.raises(ToolError, match="No analyzed reference matches 'nothing'"):
+        await _plan(server, reference="nothing")
+
+
+async def test_a_reference_sets_tempo_and_key_with_set_tempo(client, live, references):
+    _studio(live)
+    server = build_server(client)
+    preview = await _plan(server, genre="peak_time_techno", reference="katoff", set_tempo=True)
+    assert preview["tempo"] == 124 and preview["bpm"] == 124 and preview["scale"].startswith("D# Minor")
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    song = live.on_main(lambda: (live.song.tempo, live.song.root_note, live.song.scale_name))
+    assert song == (124, 3, "Minor")
+
+
+async def test_a_reference_song_starts_under_the_reference_clip(client, live, references, tmp_path):
+    _studio(live)
+    reference = {**REFERENCE, "sections": [{**s, "beat": (s["start_bar"] + 7) * 4} for s in REFERENCE["sections"]]}
+    (tmp_path / "references" / "katoff.json").write_text(json.dumps(reference))  # the clip starts at bar 9
+    audio = (await client.call("track.create", {"name": "Katoff"}))["track"]
+    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": audio, "start": 32, "length": 152 * 4}]})
+    server = build_server(client)
+    preview = await _plan(server, genre="peak_time_techno", reference="katoff")
+    assert preview["from_bar"] == 9 and preview["sections"][1]["bar"] == 25
+
+    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 0, "start": 100, "length": 4}]})  # the drums are busy
+    preview = await _plan(server, genre="peak_time_techno", reference="katoff")
+    assert preview["from_bar"] == 161  # after the reference clip
+    assert any("Not under the reference at bar 9" in w for w in preview["warnings"])
+    assert (await _plan(server, genre="peak_time_techno", reference="katoff", start_bar=200))["from_bar"] == 200
