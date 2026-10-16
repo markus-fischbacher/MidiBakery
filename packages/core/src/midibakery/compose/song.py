@@ -36,7 +36,7 @@ from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.plan import Call, Session, new_seed
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
-from midibakery.compose.hook import generate_hook, make_hook
+from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
 from midibakery.compose.structures import ROLES, TEMPLATES, Section, Template, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
@@ -66,7 +66,7 @@ class UseClip(BaseModel):
 class SongRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    genre: Literal["house", "techno", "drum_and_bass", "trap"]
+    genre: Literal["house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"]
     length: Literal["radio", "standard", "extended"] = "standard"
     minutes: Annotated[float, Field(ge=0.5, le=20, description="Target duration; overrides length")] | None = None
     start_bar: Annotated[int, Field(ge=1, description="Arrangement bar to start at (default: after the last clip)")] | None = None
@@ -175,9 +175,10 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
     if missing and not request.create_missing:
         warnings.append(f"No track for {', '.join(missing)}: those parts are left out (create_missing=false)")
         return roles, warnings
-    label = TEMPLATES[request.genre].label
+    template = TEMPLATES[request.genre]
+    devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     for offset, role in enumerate(missing):
-        roles[role] = RoleTrack(role, len(tracks) + offset, f"{label} {role.title()}", new=True, device=NEW_TRACK_DEVICES[role])
+        roles[role] = RoleTrack(role, len(tracks) + offset, f"{template.label} {role.title()}", new=True, device=devices[role])
         if role == "drums":
             warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it (Live's API cannot load samples)")
     return roles, warnings
@@ -260,7 +261,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     if request.start_bar is not None:
         start = (request.start_bar - 1) * bpb
     else:
-        free = _free_from(arrangement, existing)
+        # After the last clip on any track: songs follow each other, they never play over one another.
+        free = _free_from(arrangement, {t["index"] for t in arrangement.get("tracks", [])})
         start = -(-free // bpb) * bpb  # next bar line
     starts, cursor = [], start
     for section in sections:
@@ -307,6 +309,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     if groove is not None:
         swing = groove.swing
     hook = make_hook(rng("hook"))
+    arp = make_arp(rng("arp"))
+    acid = make_acid(rng("acid"))
 
     def part_notes(role: str, part: str, section: Section, harmony: Harmony, bars: int, offset_bars: int, kick: list[float] | None) -> list[Note]:
         r = rng(section.kind, section.variation, role, part, bars, offset_bars)
@@ -323,22 +327,27 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             return _energize(_filter_drums(notes, drum_map, {"groove": "full"}.get(part, part)), section.energy)
         if role == "bass":
             if request.genre in BASS:
-                return generate_recipe_bass(BASS[request.genre], harmony, meter, bars, swing)
+                return generate_recipe_bass(BASS[request.genre], harmony, meter, bars, swing, r)
             relation = "avoid" if style.bass in ("offbeat", "pulse") else "lock"
             return _energize(generate_bass(harmony, scale, meter, bars, style.bass, r, style.bass_octave, kick or None, relation, 0.3 + 0.5 * section.energy, swing), section.energy)
         if role == "chords":
             if request.genre in CHORDS:
                 pattern = CHORDS[request.genre]
                 chords = seventh_harmony(harmony, scale) if pattern.sevenths else harmony
-                return generate_recipe_chords(pattern, chords, meter, bars, swing, stabs=part in ("stabs", "on"), pad=True)
+                notes = generate_recipe_chords(pattern, chords, meter, bars, swing, stabs=part in ("stabs", "on", "tease"), pad=part != "tease")
+                if part == "tease":  # the hook hinted at, quieter (Peak-Time: "die Hook im Intro andeuten")
+                    notes = [replace(n, velocity=max(1.0, n.velocity - 28)) for n in notes]
+                return notes
             rhythm = style.break_chords if part in ("sustain", "pad") else style.chord_rhythm
             return _energize(generate_chords(harmony, meter, bars, rhythm, r, swing=swing), section.energy)
         low, high = style.lead_range
+        tease = part in ("tease", "sparse")
+        if style.lead == "arp":
+            return generate_arp(arp, harmony, scale, meter, bars, swing, low, high, tease, velocity=82 + 12 * section.energy)
+        if style.lead == "acid":
+            return generate_acid(acid, harmony, meter, bars, low, high, tease, r, lift=section.kind == "drop" and section.variation > 0)
         flip = section.variation % 2 == 1
-        return generate_hook(
-            hook, harmony, scale, meter, bars, swing, low, high,
-            tease=part in ("tease", "sparse"), velocity=88 + 12 * section.energy, flip=flip,
-        )
+        return generate_hook(hook, harmony, scale, meter, bars, swing, low, high, tease=tease, velocity=88 + 12 * section.energy, flip=flip)
 
     for section, at in zip(sections, starts):
         harmony: Harmony = (alt if section.kind == "break" else main).for_length(meter, section.bars)
