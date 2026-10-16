@@ -5,6 +5,7 @@ the only place where the Live Object Model is touched: queued jobs are
 executed there within a small time budget so Live's UI stays responsive.
 """
 
+import inspect
 import threading
 import time
 import traceback
@@ -53,6 +54,7 @@ class MidiBakerySurface(object):
             self.log("could not start bridge: %s" % exc)
             self.show_message("MidiBakery: bridge failed to start (%s)" % exc)
 
+        self._continuations = []  # (job, generator) of multi-tick ops, advanced once per tick
         self._state = StateWatcher(c_instance.song(), self._server, self.log)
         self._api = ApiLauncher(self.log)
         self._api.start()
@@ -63,6 +65,8 @@ class MidiBakerySurface(object):
 
     def update_display(self):
         self._state.tick()
+        for job, steps in list(self._continuations):
+            self._advance(job, steps)
         started = time.monotonic()
         jobs = self._server.jobs
         while time.monotonic() - started < TICK_BUDGET_SECONDS:
@@ -86,7 +90,31 @@ class MidiBakerySurface(object):
             self.log("op %s failed:\n%s" % (job.op, traceback.format_exc()))
             job.client.fail(job.id, OpError(ErrorCode.LIVE_ERROR, str(exc) or exc.__class__.__name__, op=job.op))
         else:
-            job.client.reply(job.id, result)
+            if inspect.isgenerator(result):
+                self._continuations.append((job, result))
+                self._advance(job, result)
+            else:
+                job.client.reply(job.id, result)
+
+    def _advance(self, job, steps):
+        """One step of a multi-tick op: it yields while Live applies a change on a later tick."""
+        if not job.client.alive or time.monotonic() > job.deadline:
+            self._continuations.remove((job, steps))
+            steps.close()
+            job.client.fail(job.id, OpError(ErrorCode.TIMEOUT, "'%s' did not finish in time" % job.op))
+            return
+        try:
+            next(steps)
+        except StopIteration as done:
+            self._continuations.remove((job, steps))
+            job.client.reply(job.id, done.value)
+        except OpError as err:
+            self._continuations.remove((job, steps))
+            job.client.fail(job.id, err)
+        except Exception as exc:
+            self._continuations.remove((job, steps))
+            self.log("op %s failed:\n%s" % (job.op, traceback.format_exc()))
+            job.client.fail(job.id, OpError(ErrorCode.LIVE_ERROR, str(exc) or exc.__class__.__name__, op=job.op))
 
     def execute(self, op_name, params, in_batch=False):
         """Validate and run one op. Write ops are wrapped in their own undo step,
@@ -99,6 +127,11 @@ class MidiBakerySurface(object):
                 "'%s' needs Live %s or newer" % (op_name, ".".join(str(v) for v in spec["min_live"])),
             )
         handler = HANDLERS[op_name]
+        if getattr(handler, "multi_tick", False):
+            # Runs across ticks while Live applies changes, so it cannot share a batch's tick or undo step.
+            if in_batch:
+                raise OpError(ErrorCode.INVALID_PARAMS, "'%s' cannot run inside a batch" % op_name)
+            return handler(self._ctx, params)
         if op_name == "batch":
             if in_batch:
                 raise OpError(ErrorCode.INVALID_PARAMS, "Batches cannot be nested")

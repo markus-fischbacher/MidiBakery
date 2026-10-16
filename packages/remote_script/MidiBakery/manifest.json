@@ -1,5 +1,55 @@
 {
   "ops": {
+    "arrangement.edit": {
+      "destructive": false,
+      "min_live": [
+        12,
+        1,
+        10
+      ],
+      "properties": {
+        "actions": [
+          "array"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "actions"
+      ]
+    },
+    "arrangement.get": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "track": [
+          "integer",
+          "null"
+        ]
+      },
+      "read_only": true,
+      "required": []
+    },
+    "arrangement.locators": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "actions": [
+          "array"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "actions"
+      ]
+    },
     "batch": {
       "destructive": false,
       "min_live": [
@@ -57,8 +107,13 @@
         0
       ],
       "properties": {
+        "arrangement_clip": [
+          "integer",
+          "null"
+        ],
         "slot": [
-          "integer"
+          "integer",
+          "null"
         ],
         "track": [
           "integer"
@@ -66,7 +121,6 @@
       },
       "read_only": false,
       "required": [
-        "slot",
         "track"
       ]
     },
@@ -78,8 +132,13 @@
         0
       ],
       "properties": {
+        "arrangement_clip": [
+          "integer",
+          "null"
+        ],
         "slot": [
-          "integer"
+          "integer",
+          "null"
         ],
         "track": [
           "integer"
@@ -87,7 +146,6 @@
       },
       "read_only": true,
       "required": [
-        "slot",
         "track"
       ]
     },
@@ -123,6 +181,10 @@
         0
       ],
       "properties": {
+        "arrangement_clip": [
+          "integer",
+          "null"
+        ],
         "color_index": [
           "integer",
           "null"
@@ -144,7 +206,8 @@
           "null"
         ],
         "slot": [
-          "integer"
+          "integer",
+          "null"
         ],
         "track": [
           "integer"
@@ -152,7 +215,6 @@
       },
       "read_only": false,
       "required": [
-        "slot",
         "track"
       ]
     },
@@ -389,6 +451,10 @@
         "add": [
           "array"
         ],
+        "arrangement_clip": [
+          "integer",
+          "null"
+        ],
         "modify": [
           "array"
         ],
@@ -396,7 +462,8 @@
           "array"
         ],
         "slot": [
-          "integer"
+          "integer",
+          "null"
         ],
         "track": [
           "integer"
@@ -404,7 +471,6 @@
       },
       "read_only": false,
       "required": [
-        "slot",
         "track"
       ]
     },
@@ -416,6 +482,10 @@
         0
       ],
       "properties": {
+        "arrangement_clip": [
+          "integer",
+          "null"
+        ],
         "from_pitch": [
           "integer"
         ],
@@ -426,7 +496,8 @@
           "integer"
         ],
         "slot": [
-          "integer"
+          "integer",
+          "null"
         ],
         "time_span": [
           "number",
@@ -438,7 +509,6 @@
       },
       "read_only": true,
       "required": [
-        "slot",
         "track"
       ]
     },
@@ -566,6 +636,23 @@
       "properties": {},
       "read_only": true,
       "required": []
+    },
+    "song.position": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "beat": [
+          "number"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "beat"
+      ]
     },
     "song.set": {
       "destructive": false,

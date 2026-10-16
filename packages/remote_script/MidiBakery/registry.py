@@ -5,10 +5,14 @@ from .protocol import ErrorCode, OpError
 HANDLERS = {}
 
 
-def op(name):
+def op(name, multi_tick=False):
+    """multi_tick: the handler is a generator that yields while Live applies a change;
+    the executor advances it once per update_display() tick and replies with its return value."""
+
     def decorate(fn):
         if name in HANDLERS:
             raise ValueError("duplicate handler for %s" % name)
+        fn.multi_tick = multi_tick
         HANDLERS[name] = fn
         return fn
 
@@ -41,6 +45,33 @@ class Context(object):
         if not slot.has_clip:
             raise OpError(ErrorCode.NOT_FOUND, "Slot %d/%d is empty" % (track_index, slot_index), track=track_index, slot=slot_index)
         return slot.clip
+
+    def arrangement_clips(self, track_index):
+        """The track's arrangement clips in time order; `arrangement_clip` indices count in this order."""
+        track = self.track(track_index)
+        if not hasattr(track, "arrangement_clips"):
+            raise OpError(ErrorCode.UNSUPPORTED, "Track %d has no arrangement clips (group or return track)" % track_index)
+        return sorted(track.arrangement_clips, key=lambda c: c.start_time)
+
+    def clip_at(self, params):
+        """The clip a request names: a session `slot` or an `arrangement_clip` index."""
+        index = params.get("arrangement_clip")
+        if index is None:
+            return self.clip(params["track"], params["slot"])
+        clips = self.arrangement_clips(params["track"])
+        if not 0 <= index < len(clips):
+            raise OpError(
+                ErrorCode.NOT_FOUND,
+                "No arrangement clip %d on track %d (it has %d)" % (index, params["track"], len(clips)),
+                track=params["track"],
+            )
+        return clips[index]
+
+    def midi_clip_at(self, params):
+        clip = self.clip_at(params)
+        if not clip.is_midi_clip:
+            raise OpError(ErrorCode.INVALID_PARAMS, "That clip on track %d is not a MIDI clip" % params["track"])
+        return clip
 
     def midi_clip(self, track_index, slot_index):
         clip = self.clip(track_index, slot_index)

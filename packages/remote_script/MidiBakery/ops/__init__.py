@@ -1,1 +1,1 @@
-from . import clips, devices, mixer, notes, racks, session, tracks  # noqa: F401
+from . import arrangement, clips, devices, mixer, notes, racks, session, tracks  # noqa: F401

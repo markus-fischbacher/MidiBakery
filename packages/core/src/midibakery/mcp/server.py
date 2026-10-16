@@ -11,7 +11,7 @@ import inspect
 import json
 from collections.abc import Awaitable, Callable
 from importlib.resources import files
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.server.apps import Apps
@@ -19,11 +19,11 @@ from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from mcp_types import CallToolResult, InputRequiredResult, TextContent
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.catalog import get_op
-from midibakery.catalog.ops import ClipRef, Empty
+from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty
 from midibakery.compose import (
     BassSpec,
     ChordsSpec,
@@ -56,6 +56,9 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
 - Racks: get_rack lists chains and macros; update_rack sets macros (0-127), edits
   chains or adds one (Drum Rack pad: add_chain {in_note, insert_devices}).
   Devices inside racks: pass chain_path [chain, device, ...] to the device tools.
+- Arrangement: positions are beats from the song start (bar n starts at (n-1) * beats per bar).
+  edit_arrangement adds clips with notes, copies session clips, sets locators; it never
+  overwrites a clip. Clip tools take arrangement_clip (index from get_arrangement) instead of slot.
 - Every write is undoable with the undo tool.
 Composition:
 - compose_drums / compose_bass / compose_chords / compose_melody write a new
@@ -104,6 +107,7 @@ TOOL_OPS: list[tuple[str, str, str]] = [
     ("create_return_track", "return.create", "Create return track"),
     ("get_rack", "rack.get", "Get rack chains and macros"),
     ("update_rack", "rack.set", "Set macros, edit or add rack chains"),
+    ("get_arrangement", "arrangement.get", "Get arrangement clips and locators"),
     ("create_scene", "scene.create", "Create scene"),
     ("fire_scene", "scene.fire", "Launch scene"),
     ("undo", "history.step", "Undo / redo"),
@@ -149,14 +153,27 @@ COMPOSE_TOOLS: list[tuple[str, type[BaseModel], str, str]] = [
 ]
 
 
+class PlanStep(BaseModel):
+    """One step: `kind` plus the fields of that compose tool. The schema stays small (it would
+    otherwise repeat every compose tool); the full step is validated when the plan is built."""
+
+    model_config = ConfigDict(extra="allow")
+
+    kind: Literal["drums", "bass", "chords", "melody", "transform"] = Field(
+        description="drums/bass/chords/melody take the compose_<kind> fields, transform the transform_notes fields"
+    )
+
+
+STEP = TypeAdapter(Step)
+
+
 class PlanChanges(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    steps: list[Step] = Field(
-        min_length=1,
-        max_length=16,
-        description="Composition steps by kind: drums, bass, chords, melody, transform (same fields as the compose_* tools)",
-    )
+    steps: list[PlanStep] = Field(min_length=1, max_length=16, description="Composition steps, in order")
+
+    def specs(self) -> list[Any]:
+        return [STEP.validate_python(step.model_dump()) for step in self.steps]
 
 
 class ApplyPlan(BaseModel):
@@ -275,6 +292,8 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         if op == "track.delete":
             clips = len(track.get("clips", []))
             return f"Delete {track_name} with {clips} clip(s)?"
+        if params.get("arrangement_clip") is not None:
+            return f"Delete arrangement clip {params['arrangement_clip'] + 1} of {track_name}?"
         clip = next((c for c in track.get("clips", []) if c["slot"] == params.get("slot")), {})
         return f"Delete clip '{clip.get('name') or 'unnamed'}' in slot {params.get('slot', 0) + 1} of {track_name}?"
 
@@ -292,6 +311,31 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         title="Get clip with notes",
         description="Clip properties and, for MIDI clips, all notes with note_id, probability and velocity deviation.",
         annotations=read_only,
+    )
+
+    async def edit_arrangement(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
+        # One tool for the model; two ops for Live: locators need ticks of their own (see arrangement.locators).
+        actions = ArrangementTool.model_validate(args).model_dump(exclude_none=True)["actions"]
+        clips = [a for a in actions if a["action"] in ("add_clip", "copy_session_clip", "delete_clip")]
+        locators = [a for a in actions if a["action"] in ("set_locator", "delete_locator")]
+        result: dict[str, Any] = {}
+        song = await bridge.call("song.get")
+        if clips:
+            result.update(await bridge.call("arrangement.edit", {"actions": clips}))
+        if locators:
+            result["locators"] = (await bridge.call("arrangement.locators", {"actions": locators}))["locators"]
+        # Copying a session clip moves Live's play position to the copy's end; put it back where the user was.
+        if not song["is_playing"] and (await bridge.call("song.get"))["current_song_time"] != song["current_song_time"]:
+            await bridge.call("song.position", {"beat": song["current_song_time"]})
+        return result
+
+    server.add_tool(
+        _make_tool(ArrangementTool, edit_arrangement),
+        name="edit_arrangement",
+        title="Add, copy or delete arrangement clips and locators",
+        description="Add MIDI clips with notes, copy session clips, delete arrangement clips, set or delete locators. "
+        + inspect.cleandoc(ArrangementTool.__doc__ or ""),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     )
 
     for tool_name, op_name, title in TOOL_OPS:
@@ -363,7 +407,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
 
     async def plan_changes(args: dict[str, Any], ctx: Context | None) -> Any:
         request = PlanChanges.model_validate(args)
-        plan = await build_plan(bridge.call, list(request.steps))
+        plan = await build_plan(bridge.call, request.specs())
         plans.put(plan)
         return _with_roll(plan, {**plan.preview(), "next": "apply_plan(plan_id) writes all steps as one undo step"}, False)
 
