@@ -16,10 +16,14 @@ Nothing changes in Live until ``apply_song``.
   every section where that role plays.
 - Nothing lands on top of an existing arrangement clip: the plan refuses and
   names the first free bar instead.
+- Automation: a role the style filters gets an Auto Filter (the track's last one,
+  else a new one at the end of its chain) and every one of its clips an envelope
+  of the cutoff, so a sweep never carries over into the next section.
 """
 
 from __future__ import annotations
 
+import math
 import random
 import secrets
 from dataclasses import dataclass, field, replace
@@ -56,6 +60,8 @@ DRUM_PARTS = {
     "drive": {"kick", "clap", "rim", "open_hat"},
 }
 PHRASE = 8  # bars
+FILTER_TYPES = {"Low-pass": 0, "High-pass": 1}  # Auto Filter (Live 12) "Filter Type" values
+OPEN_HZ = {"Low-pass": 20000.0, "High-pass": 20.0}
 EPSILON = 1e-6
 
 
@@ -91,6 +97,9 @@ class RoleTrack:
     name: str
     new: bool = False
     device: str | None = None
+    filter: str | None = None  # Auto Filter type the song sweeps
+    filter_device: int | None = None  # its index on the track
+    filter_new: bool = False
 
 
 @dataclass
@@ -137,7 +146,7 @@ class SongPlan:
             "bars": int((self.end - self.start) / bpb),
             "from_bar": int(self.start / bpb) + 1,
             "seed": self.seed,
-            "tracks": {r: {"track": t.index, "name": t.name, **({"new": True, "device": t.device} if t.new else {})} for r, t in self.roles.items()},
+            "tracks": {r: {"track": t.index, "name": t.name, **({"new": True, "device": t.device} if t.new else {}), **_filter_info(t)} for r, t in self.roles.items()},
             "sections": sections,
             "harmony": self.harmony,
             "notes": self.notes,
@@ -150,6 +159,43 @@ class SongPlan:
 def _duration(seconds: float) -> str:
     minutes, rest = divmod(int(round(seconds)), 60)
     return f"{minutes}:{rest:02d}"
+
+
+def _filter_info(t: RoleTrack) -> dict[str, str]:
+    if t.filter is None:
+        return {}
+    return {"automation": f"Auto Filter {t.filter} cutoff" + (" (new device)" if t.filter_new and not t.new else "")}
+
+
+def _fraction(hz: float) -> float:
+    """Auto Filter's Frequency: 0-1 is 20 Hz-20 kHz, logarithmic (measured in Live 12.4)."""
+    return min(1.0, max(0.0, math.log(max(hz, 20.0) / 20.0) / math.log(1000.0)))
+
+
+def _sweep(spec: str | None, section_bars: int, first: int, clip_length: float, bpb: float, open_hz: float) -> list[list[float]]:
+    """Envelope points [beat in clip, 0-1] from a sweep spec ("20:8,20>300"); open without one."""
+    if not spec:
+        return [[0.0, _fraction(open_hz)]]
+    points: list[list[float]] = []
+    for name, offset, bars in parse_segments(spec, section_bars):
+        start_hz, _, end_hz = name.partition(">")
+        a = open_hz if start_hz == "-" else float(start_hz)
+        b = a if not end_hz else float(end_hz)
+        t0 = min(clip_length, max(0.0, (offset - first) * bpb))
+        t1 = min(clip_length, max(0.0, (offset + bars - first) * bpb))
+        if t1 <= t0:
+            continue
+        if points and abs(points[-1][0] - t0) < EPSILON and abs(points[-1][1] - _fraction(a)) > EPSILON:
+            t0 += 0.01  # a jump: Live keeps one value per time
+        if not points or abs(points[-1][0] - t0) > EPSILON:
+            points.append([round(t0, 3), round(_fraction(a), 4)])
+        points.append([round(t1, 3), round(_fraction(b), 4)])
+    return points or [[0.0, _fraction(open_hz)]]
+
+
+def _auto_filter(track: dict[str, Any]) -> int | None:
+    devices = track.get("devices", [])
+    return next((d.get("index", i) for i, d in reversed(list(enumerate(devices))) if str(d.get("class_name", "")).startswith("AutoFilter")), None)
 
 
 def _is_drum_track(track: dict[str, Any]) -> bool:
@@ -307,6 +353,19 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     swing = style.swing
 
     use = {c.role: c for c in request.clips}
+    for role, kind in style.filters.items():
+        target = roles.get(role)
+        if target is None or role in use:
+            continue
+        target.filter = kind
+        if target.new:
+            target.filter_device, target.filter_new = 1, True  # after the instrument
+        else:
+            found = _auto_filter(session.track(target.index))
+            target.filter_new = found is None
+            target.filter_device = len(session.track(target.index).get("devices", [])) if found is None else found
+            if found is not None:
+                warnings.append(f"Track {target.index + 1}: its Auto Filter is set to {kind} for the song's sweeps")
     loops: dict[str, float] = {}
     for role, clip in use.items():
         found = next((c for c in session.track(clip.track).get("clips", []) if c["slot"] == clip.slot), None)
@@ -405,14 +464,18 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             if role == "drums" and kick_pitch is not None:
                 section_kick = [n.start_time + first * bpb for n in notes if n.pitch == kick_pitch]
             counts[role] += len(notes)
-            actions.append({
+            action = {
                 "action": "add_clip",
                 "track": target.index,
                 "start": at + first * bpb,
                 "length": clip_length,
                 "name": f"{section.name} {role.title()}",
                 "notes": [n.to_spec() for n in notes],
-            })
+            }
+            if target.filter is not None:
+                points = _sweep(section.sweeps.get(role), section.bars, first, clip_length, bpb, OPEN_HZ[target.filter])
+                action["envelopes"] = [{"device": target.filter_device, "parameter": "Frequency", "points": points}]
+            actions.append(action)
     locators = [{"action": "set_locator", "time": at, "name": section.name} for section, at in zip(sections, starts)]
     if len(actions) > 256:
         raise BridgeError("INVALID_PARAMS", f"The song needs {len(actions)} clips; use a shorter length or fewer copied clips (max 256)")
@@ -472,11 +535,17 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     song = await call("song.get", {})
     undo_steps = 0
     new = [t for t in plan.roles.values() if t.new]
-    if new:
-        ops: list[dict[str, Any]] = []
-        for t in sorted(new, key=lambda t: t.index):
-            ops.append({"op": "track.create", "params": {"kind": "midi", "name": t.name}})
-            ops.append({"op": "device.insert", "params": {"track": t.index, "name": t.device}})
+    ops: list[dict[str, Any]] = []
+    for t in sorted(new, key=lambda t: t.index):
+        ops.append({"op": "track.create", "params": {"kind": "midi", "name": t.name}})
+        ops.append({"op": "device.insert", "params": {"track": t.index, "name": t.device}})
+    for t in plan.roles.values():
+        if t.filter is None:
+            continue
+        if t.filter_new:
+            ops.append({"op": "device.insert", "params": {"track": t.index, "name": "Auto Filter"}})
+        ops.append({"op": "device.set_param", "params": {"track": t.index, "device": t.filter_device, "parameter": "Filter Type", "value": FILTER_TYPES[t.filter]}})
+    if ops:
         await call("batch", {"ops": ops, "label": f"MidiBakery song {plan.id}: tracks"})
         undo_steps += 1
     if plan.tempo is not None:
@@ -493,6 +562,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         "song": f"{plan.template.label}, bars {int(plan.start / plan.beats_per_bar) + 1}-{int(plan.end / plan.beats_per_bar)}",
         "clips": len(result["results"]),
         "new_tracks": [{"track": t.index, "name": t.name, "device": t.device} for t in new],
+        "automation": {r: f"track {t.index + 1}, device {t.filter_device + 1}" for r, t in plan.roles.items() if t.filter is not None},
         "locators": len(plan.locators) if not song["is_playing"] else "skipped: stop the transport and plan again for locators",
         "undo": f"{undo_steps} undo step(s) for tracks/tempo/clips; each locator is its own step",
     }

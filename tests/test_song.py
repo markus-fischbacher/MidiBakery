@@ -313,3 +313,38 @@ async def test_no_ride_on_a_crash_when_the_kit_has_no_ride(client, live):
     _, clips = await _song_notes(client, build_server(client), "peak_time_techno", create_missing=False)
     cymbal = [n for n in clips["Peak Drums"][1] if n["pitch"] == 49]
     assert len(cymbal) <= 1  # at most the crash accent on bar 1, never a ride pattern on the crash
+
+
+async def test_peak_time_sweeps_auto_filters_clip_by_clip(client, live):
+    _studio(live)
+    _minor(live)
+    preview, clips = await _song_notes(client, build_server(client), "peak_time_techno")
+    assert preview["tracks"]["drums"]["automation"] == "Auto Filter High-pass cutoff (new device)"
+    assert preview["tracks"]["lead"]["automation"] == "Auto Filter Low-pass cutoff"
+
+    def read():
+        out = {}
+        for track in live.song.tracks:
+            filters = [d for d in track.devices if d.class_name == "AutoFilter2"]
+            if not filters:
+                continue
+            freq, kind = filters[-1].parameters[3], filters[-1].parameters[4]
+            out[track.name] = (kind.value, {c.name: c.automation_envelope(freq) for c in track.arrangement_clips})
+        return {name: (kind, {clip: [env.value_at_time(t) for t in (0, 32, 60)] if env else None for clip, env in envs.items()}) for name, (kind, envs) in out.items()}
+
+    tracks = live.on_main(read)
+    kind, drums = tracks["Drums"]
+    assert kind == 1.0  # High-pass
+    assert all(values is not None for values in drums.values())  # every clip resets the filter
+    assert drums["Lift Drums"][0] == 0.0 and drums["Lift Drums"][2] == pytest.approx(0.36, abs=0.03)  # 20 Hz -> ~250 Hz before the peak
+    assert drums["Peak Drums"] == [0.0, 0.0, 0.0]  # the kick slams back in
+    kind, lead = tracks["Peak-Time Techno Lead"]
+    assert kind == 0.0 and lead["Peak Lead"][0] < lead["Peak Lead"][1] < lead["Peak Lead"][2]  # the acid opens over the peak
+
+
+async def test_an_existing_auto_filter_is_reused(client, live):
+    _studio(live)
+    live.on_main(lambda: live.song.tracks[0].insert_device("Auto Filter", 1))
+    preview = await _plan(build_server(client), genre="peak_time_techno", create_missing=False)
+    assert preview["tracks"]["drums"]["automation"] == "Auto Filter High-pass cutoff"
+    assert any("Auto Filter is set to High-pass" in w for w in preview["warnings"])

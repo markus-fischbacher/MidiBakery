@@ -18,7 +18,14 @@ def make_device(name):
         return DrumRackDevice()
     if name in RACK_CLASSES:
         return RackDevice(name, [])
-    return Device(name)
+    device = Device(name)
+    if name == "Auto Filter":  # Live 12's AutoFilter2, the parameters the song engine automates
+        device.class_name = "AutoFilter2"
+        device.parameters += [
+            Parameter("Frequency", 1.0),
+            Parameter("Filter Type", 0.0, 0.0, 9.0, True, ("Low-pass", "High-pass", "Band-pass", "Notch", "Morph", "DJ", "Comb", "Resampling", "Notch+LP", "Vowel")),
+        ]
+    return device
 
 
 class Parameter(LiveObject):
@@ -159,6 +166,32 @@ class MidiNote(LiveObject):
             setattr(self, key, fields[key])
 
 
+class Envelope(LiveObject):
+    """Breakpoints (time, value) with lines between, like Live's AutomationEnvelope."""
+
+    def __init__(self, parameter):
+        self.parameter = parameter
+        self.events = []
+
+    def create_event(self, time, value):
+        self.events = sorted([e for e in self.events if abs(e[0] - time) > 1e-9] + [(time, value)])
+
+    def insert_step(self, time, duration, value):
+        self.create_event(time, value)
+        self.create_event(time + duration - 1e-6, value)
+
+    def value_at_time(self, time):
+        events = self.events
+        if not events:
+            return self.parameter.value
+        if time <= events[0][0]:
+            return events[0][1]
+        for (t0, v0), (t1, v1) in zip(events, events[1:]):
+            if time <= t1:
+                return v0 + (v1 - v0) * (time - t0) / (t1 - t0)
+        return events[-1][1]
+
+
 class Clip(LiveObject):
     _ids = itertools.count(1)
 
@@ -181,6 +214,15 @@ class Clip(LiveObject):
         self.is_arrangement_clip = False
         self.start_time = 0.0
         self.end_time = length
+        self.envelopes = {}  # parameter -> Envelope
+
+    def automation_envelope(self, parameter):
+        return self.envelopes.get(id(parameter))
+
+    def create_automation_envelope(self, parameter):
+        if self.is_arrangement_clip:  # what Live 12.4 answers for arrangement clips
+            raise RuntimeError("Not a session clip or parameter belongs to another track.")
+        return self.envelopes.setdefault(id(parameter), Envelope(parameter))
 
     def get_notes_extended(self, from_pitch, pitch_span, from_time, time_span):
         return [
@@ -295,6 +337,8 @@ class Track(LiveObject):
         copy_ = Clip(clip.length, clip.is_midi_clip)
         copy_.name = clip.name
         copy_.notes = copy.deepcopy(clip.notes)
+        copy_.color_index = clip.color_index
+        copy_.envelopes = dict(clip.envelopes)
         copy_.is_arrangement_clip = True
         copy_.start_time, copy_.end_time = destination_time, destination_time + clip.length
         self.arrangement_clips.append(copy_)
@@ -460,6 +504,11 @@ class Song(LiveObject):
             self.scenes.insert(index, scene)
         for track in self.tracks:
             track.clip_slots.insert(len(track.clip_slots) if index == -1 else index, ClipSlot())
+
+    def delete_scene(self, index):
+        del self.scenes[index]
+        for track in self.tracks:
+            del track.clip_slots[index]
 
 
 class CInstance(object):

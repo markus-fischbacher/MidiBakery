@@ -6,6 +6,11 @@ every role a part: drums "full" / "no_kick" / "kick_hats" / "sparse" (Peak-Time 
 "rumble" and chords "accent" are the quiet break pulse and one hit per phrase. Energy (0-1) drives density and
 velocity. Sections of the same kind share their notes, which keeps a song
 together; `variation` gives a later section of that kind its own notes.
+
+Automation: a style names an Auto Filter type per role (`filters`), a section moves
+its cutoff with `sweeps`, in Hz and in the segment syntax of the parts: "20:8,20>300"
+holds 20 Hz for 8 bars, then sweeps to 300 Hz. A filtered role without a sweep
+stays open (Low-pass 20 kHz, High-pass 20 Hz).
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ class Section:
     variation: int = 0  # >0: own notes instead of sharing them with the earlier section of this kind
     rest_beats: float = 0.0  # silence at the end, e.g. the beat before a drop
     pause_every: int = 0  # >0: the last bar of every N bars without kick and bass (a short breath)
+    sweeps: dict[str, str] = field(default_factory=dict)  # role -> Auto Filter cutoff in Hz, e.g. "20:8,20>300"
 
 
 EDM_PROGRESSIONS = {
@@ -63,6 +69,7 @@ class Style:
     lead_range: tuple[int, int] = (64, 86)
     lead: str = "hook"  # "hook" (call/response), "arp" (Melodic Techno), "acid" (Peak-Time)
     devices: dict[str, str] = field(default_factory=dict)  # role -> native device for new tracks
+    filters: dict[str, str] = field(default_factory=dict)  # role -> Auto Filter type ("Low-pass", "High-pass") for sweeps
     # Scale degrees (0 = tonic) of typical loops, diatonic in the song's scale; by its third.
     progressions: dict[str, tuple[tuple[int, ...], ...]] = field(default_factory=lambda: dict(EDM_PROGRESSIONS))
 
@@ -79,8 +86,8 @@ class Template:
         return sum(s.bars for s in self.sections)
 
 
-def _s(name, kind, bars, energy, fill=False, variation=0, rest=0.0, pause=0, **parts) -> Section:
-    return Section(name, kind, bars, energy, dict(parts), fill, variation, rest, pause)
+def _s(name, kind, bars, energy, fill=False, variation=0, rest=0.0, pause=0, sweeps=None, **parts) -> Section:
+    return Section(name, kind, bars, energy, dict(parts), fill, variation, rest, pause, dict(sweeps or {}))
 
 
 def parse_segments(spec: str, bars: int) -> list[tuple[str, int, int]]:
@@ -131,15 +138,24 @@ TEMPLATES: dict[str, Template] = {
     "peak_time_techno": Template("peak_time_techno", "Peak-Time Techno", Style(
         128, "techno", "pulse", "stabs", swing=0.15, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
         progressions=DRONE_PROGRESSIONS, devices={"lead": "Drift", "chords": "Wavetable", "bass": "Analog"},
+        filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"},
     ), (
+        # Sweeps: the drums' high-pass thins the kick out before each peak and lets it slam back in;
+        # the acid opens over a peak and closes a little, chords open out of the breakdown.
         _s("Intro", "intro", 32, 0.4, fill=True, drums="kick_hats:16,groove", bass="-:16,on"),
         _s("Groove", "groove", 16, 0.6, fill=True, pause=8, drums="groove", bass="on", chords="accent"),
-        _s("Lift", "build", 16, 0.7, fill=True, rest=1.0, drums="groove:12,sparse", chords="tease:8,stabs", lead="-:8,tease"),
-        _s("Peak", "drop", 32, 0.9, fill=True, pause=16, drums="full", bass="on", chords="stabs", lead="acid"),
-        _s("Breakdown", "break", 24, 0.5, drums="sparse:8", bass="rumble:16", chords="tease:8,stabs:2,-:2,stabs:2,-:2,stabs:6", lead="-:16,tease:6"),
-        _s("Peak 2", "drop", 32, 1.0, variation=1, fill=True, pause=16, drums="drive:8,full", bass="on", chords="stabs", lead="acid"),
-        _s("Lift 2", "build", 8, 0.8, variation=1, fill=True, rest=1.0, drums="groove:5,sparse", chords="stabs", lead="acid"),
-        _s("Peak 3", "drop", 16, 1.0, variation=2, drums="full", bass="on", chords="stabs", lead="acid"),
+        _s("Lift", "build", 16, 0.7, fill=True, rest=1.0, drums="groove:12,sparse", chords="tease:8,stabs", lead="-:8,tease",
+           sweeps={"drums": "20:8,20>300", "chords": "500>8000", "lead": "600>2500"}),
+        _s("Peak", "drop", 32, 0.9, fill=True, pause=16, drums="full", bass="on", chords="stabs", lead="acid",
+           sweeps={"lead": "400>5000:24,5000>1500"}),
+        _s("Breakdown", "break", 24, 0.5, drums="sparse:8", bass="rumble:16", chords="tease:8,stabs:2,-:2,stabs:2,-:2,stabs:6", lead="-:16,tease:6",
+           sweeps={"drums": "250", "chords": "300>9000", "lead": "800>3000"}),
+        _s("Peak 2", "drop", 32, 1.0, variation=1, fill=True, pause=16, drums="drive:8,full", bass="on", chords="stabs", lead="acid",
+           sweeps={"lead": "800>8000:16,8000>2000"}),
+        _s("Lift 2", "build", 8, 0.8, variation=1, fill=True, rest=1.0, drums="groove:5,sparse", chords="stabs", lead="acid",
+           sweeps={"drums": "20>400", "lead": "2000>12000"}),
+        _s("Peak 3", "drop", 16, 1.0, variation=2, drums="full", bass="on", chords="stabs", lead="acid",
+           sweeps={"lead": "6000>3000"}),
         _s("Stripped", "groove", 8, 0.6, variation=1, drums="kick_only:6", bass="on:6"),
         _s("Outro", "outro", 40, 0.4, drums="groove:24,kick_hats:8,sparse", bass="on:24"),
     )),
