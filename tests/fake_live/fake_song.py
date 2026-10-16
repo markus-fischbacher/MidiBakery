@@ -7,7 +7,18 @@ from Live import LiveObject
 
 NOTE_FIELDS = ("pitch", "start_time", "duration", "velocity", "mute",
                "probability", "velocity_deviation", "release_velocity")
-NATIVE_DEVICES = {"Operator", "Drift", "Wavetable", "Reverb", "Auto Filter", "Drum Rack", "Simpler"}
+NATIVE_DEVICES = {"Operator", "Drift", "Wavetable", "Reverb", "Auto Filter", "Drum Rack", "Simpler", "Instrument Rack", "Audio Effect Rack"}
+RACK_CLASSES = {"Instrument Rack": "InstrumentGroupDevice", "Audio Effect Rack": "AudioEffectGroupDevice", "Drum Rack": "DrumGroupDevice"}
+
+
+def make_device(name):
+    if name not in NATIVE_DEVICES:
+        raise RuntimeError("Unknown device")
+    if name == "Drum Rack":
+        return DrumRackDevice()
+    if name in RACK_CLASSES:
+        return RackDevice(name, [])
+    return Device(name)
 
 
 class Parameter(LiveObject):
@@ -42,6 +53,18 @@ class Chain(LiveObject):
     def __init__(self, name, devices=()):
         self.name = name
         self.devices = list(devices)
+        self.mute = False
+        self.solo = False
+        self.mixer_device = ChainMixer()
+
+    def insert_device(self, name, index):  # Live 12.3+
+        self.devices.insert(index, make_device(name))
+
+
+class ChainMixer(LiveObject):
+    def __init__(self):
+        self.volume = DbParameter("Chain Volume", 0.85)
+        self.panning = Parameter("Chain Panning", 0.0, -1.0, 1.0)
 
 
 class DrumChain(Chain):
@@ -71,6 +94,12 @@ class DrumRackDevice(Device):
         self.legacy = legacy
         self.chains = []
         self.drum_pads = [DrumPad(n) for n in range(128)]
+        self.visible_macro_count = 8
+        self.parameters = [Parameter("Device On", 1.0, 0.0, 1.0, True, ("Off", "On"))] + [
+            Parameter("Macro %d" % n, 0.0, 0.0, 127.0) for n in range(1, 17)
+        ]
+        if not legacy:  # insert_chain and DrumChain.in_note arrived in Live 12.3
+            self.insert_chain = lambda index: self.chains.insert(index, DrumChain("Chain", 36))
 
     def add_pad(self, name, note):
         chain = Chain(name) if self.legacy else DrumChain(name, note)
@@ -85,7 +114,15 @@ class RackDevice(Device):
 
     def __init__(self, name, chains):
         Device.__init__(self, name)
+        self.class_name = RACK_CLASSES.get(name, "InstrumentGroupDevice")
         self.chains = list(chains)
+        self.visible_macro_count = 8
+        self.parameters = [Parameter("Device On", 1.0, 0.0, 1.0, True, ("Off", "On"))] + [
+            Parameter("Macro %d" % n, 0.0, 0.0, 127.0) for n in range(1, 17)
+        ]
+
+    def insert_chain(self, index):  # Live 12.3+
+        self.chains.insert(index, Chain("Chain"))
 
 
 class DbParameter(Parameter):
@@ -235,9 +272,7 @@ class Track(LiveObject):
             self.stopped_unquantized += 1
 
     def insert_device(self, name, index):
-        if name not in NATIVE_DEVICES:
-            raise RuntimeError("Unknown device")
-        self.devices.insert(index, DrumRackDevice() if name == "Drum Rack" else Device(name))
+        self.devices.insert(index, make_device(name))
 
 
 class Scene(LiveObject):

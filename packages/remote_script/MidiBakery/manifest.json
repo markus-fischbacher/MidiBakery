@@ -188,6 +188,9 @@
         0
       ],
       "properties": {
+        "chain_path": [
+          "array"
+        ],
         "device": [
           "integer"
         ],
@@ -209,6 +212,9 @@
         0
       ],
       "properties": {
+        "chain_path": [
+          "array"
+        ],
         "device": [
           "integer"
         ],
@@ -433,6 +439,64 @@
       "read_only": true,
       "required": [
         "slot",
+        "track"
+      ]
+    },
+    "rack.get": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "chain_path": [
+          "array"
+        ],
+        "device": [
+          "integer"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": true,
+      "required": [
+        "device",
+        "track"
+      ]
+    },
+    "rack.set": {
+      "destructive": false,
+      "min_live": [
+        12,
+        0,
+        0
+      ],
+      "properties": {
+        "add_chain": [
+          "object",
+          "null"
+        ],
+        "chain_path": [
+          "array"
+        ],
+        "chains": [
+          "array"
+        ],
+        "device": [
+          "integer"
+        ],
+        "macros": [
+          "array"
+        ],
+        "track": [
+          "integer"
+        ]
+      },
+      "read_only": false,
+      "required": [
+        "device",
         "track"
       ]
     },
