@@ -88,10 +88,31 @@ class RackDevice(Device):
         self.chains = list(chains)
 
 
+class DbParameter(Parameter):
+    """Fader-like: Live shows dB, rising with the value (0.85 = 0 dB here, 0 = -inf)."""
+
+    def str_for_value(self, value):
+        if value <= 0:
+            return "-inf dB"
+        return "%.1f dB" % ((value - 0.85) * 40)
+
+
 class Mixer(LiveObject):
-    def __init__(self):
-        self.volume = Parameter("Track Volume", 0.85)
+    def __init__(self, sends=0):
+        self.volume = DbParameter("Track Volume", 0.85)
         self.panning = Parameter("Track Panning", 0.0, -1.0, 1.0)
+        self.sends = []
+        self.crossfade_assign = 1  # 0 A, 1 none, 2 B
+        for _ in range(sends):
+            self.add_send()
+
+    def add_send(self):
+        self.sends.append(DbParameter("%s-Send" % "ABCDEFGHIJKL"[len(self.sends)], 0.0))
+
+
+class RoutingType(LiveObject):
+    def __init__(self, display_name):
+        self.display_name = display_name
 
 
 class MidiNote(LiveObject):
@@ -191,6 +212,14 @@ class Track(LiveObject):
         self.solo = False
         self.color_index = 0
         self.mixer_device = Mixer()
+        self.available_input_routing_types = [RoutingType(n) for n in ("All Ins", "No Input", "Computer Keyboard")]
+        self.available_input_routing_channels = [RoutingType(n) for n in ("All Channels", "Ch. 1", "Ch. 2")]
+        self.available_output_routing_types = [RoutingType(n) for n in ("Master", "Sends Only")]
+        self.available_output_routing_channels = [RoutingType("Track In")]
+        self.input_routing_type = self.available_input_routing_types[0]
+        self.input_routing_channel = self.available_input_routing_channels[0]
+        self.output_routing_type = self.available_output_routing_types[0]
+        self.output_routing_channel = self.available_output_routing_channels[0]
         self.devices = []
         self.clip_slots = [ClipSlot() for _ in range(scenes)]
         self.playing_slot_index = -1
@@ -231,6 +260,7 @@ class Song(LiveObject):
         self.scenes = [Scene() for _ in range(scenes)]
         self.tracks = [Track("%d-MIDI" % (i + 1), scenes=scenes) for i in range(tracks)]
         self.return_tracks = []
+        self.master_track = Track("Main", scenes=0)
         self.view = SongView(self)
         self.tempo = 120.0
         self.signature_numerator = 4
@@ -282,7 +312,16 @@ class Song(LiveObject):
     def create_audio_track(self, index):
         self._insert_track(Track("Audio", False, len(self.scenes)), index)
 
+    def create_return_track(self):
+        track = Track("%s-Return" % "ABCDEFGHIJKL"[len(self.return_tracks)], scenes=0)
+        self.return_tracks.append(track)
+        for other in self.tracks + self.return_tracks:
+            while len(other.mixer_device.sends) < len(self.return_tracks):
+                other.mixer_device.add_send()
+
     def _insert_track(self, track, index):
+        for _ in self.return_tracks:
+            track.mixer_device.add_send()
         if index == -1:
             self.tracks.append(track)
         else:

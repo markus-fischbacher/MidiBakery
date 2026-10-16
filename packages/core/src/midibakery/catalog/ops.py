@@ -1,4 +1,4 @@
-"""Op catalog: session, transport, tracks, clips, notes, devices, drum racks, scenes."""
+"""Op catalog: session, transport, tracks, clips, notes, devices, drum racks, scenes, mixer and routing."""
 
 from __future__ import annotations
 
@@ -181,6 +181,78 @@ class DeviceParamSet(Params):
     value: float = Field(description="Raw parameter value within the parameter's min/max")
 
 
+ReturnIndex = Annotated[int, Field(ge=0, description="Zero-based index into the return tracks (A = 0)")]
+
+
+class MixerTarget(Params):
+    """Exactly one of track, return_track or master."""
+
+    track: TrackIndex | None = None
+    return_track: ReturnIndex | None = None
+    master: bool = False
+
+    def _targets(self) -> int:
+        return (self.track is not None) + (self.return_track is not None) + bool(self.master)
+
+
+class MixerGet(MixerTarget):
+    options: bool = Field(False, description="Also list the available input/output routings and channels (single target only)")
+
+    @model_validator(mode="after")
+    def _one_or_none(self) -> MixerGet:
+        if self._targets() > 1:
+            raise ValueError("give at most one of track, return_track, master (none = the whole mixer)")
+        if self.options and not self._targets():
+            raise ValueError("options needs a track, return_track or master")
+        return self
+
+
+class SendSet(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    return_track: ReturnIndex
+    value: Annotated[float, Field(ge=0, le=1, description="Normalised send level")] | None = None
+    db: Annotated[float, Field(le=6, description="Send level in dB as Live shows it, e.g. -12")] | None = None
+
+    @model_validator(mode="after")
+    def _one_level(self) -> SendSet:
+        if (self.value is None) == (self.db is None):
+            raise ValueError("give either value or db for a send")
+        return self
+
+
+class MixerSet(MixerTarget):
+    volume: Annotated[float, Field(ge=0, le=1, description="Normalised fader value; 0.85 = 0 dB")] | None = None
+    volume_db: Annotated[float, Field(le=6, description="Fader in dB as Live shows it, e.g. -6")] | None = None
+    pan: Annotated[float, Field(ge=-1, le=1)] | None = None
+    sends: list[SendSet] = Field(default_factory=list)
+    mute: bool | None = None
+    solo: bool | None = None
+    crossfade: Literal["A", "none", "B"] | None = None
+    input_routing: str | None = Field(None, description="Input type as Live names it, e.g. 'All Ins', 'No Input', a track name")
+    input_channel: str | None = Field(None, description="Input channel as Live names it, e.g. 'All Channels', 'Post FX'")
+    output_routing: str | None = Field(None, description="Output type as Live names it, e.g. 'Master', 'Sends Only', a track name")
+    output_channel: str | None = Field(None, description="Output channel as Live names it, e.g. 'Track In'")
+
+    @model_validator(mode="after")
+    def _valid(self) -> MixerSet:
+        if self._targets() != 1:
+            raise ValueError("give exactly one of track, return_track, master")
+        if self.volume is not None and self.volume_db is not None:
+            raise ValueError("give volume or volume_db, not both")
+        changes = self.model_dump(exclude={"track", "return_track", "master"}, exclude_none=True, exclude_defaults=True)
+        if not changes:
+            raise ValueError("mixer.set needs at least one change")
+        if self.master and (self.sends or self.mute is not None or self.solo is not None or self.crossfade is not None):
+            raise ValueError("the master track has no mute, solo, sends or crossfade assignment")
+        return self
+
+
+class ReturnCreate(Params):
+    name: str | None = None
+    device: str | None = Field(None, description="Native device for the return, e.g. 'Reverb', 'Delay', 'Echo' (Live 12.3+)")
+
+
 class SceneCreate(Params):
     index: int = Field(-1, ge=-1, description="Insert position, -1 = append")
     name: str | None = None
@@ -232,6 +304,9 @@ for spec in [
     OpSpec("device.params", DeviceRef, "Parameters of a device with ranges and display values", read_only=True),
     OpSpec("drum_rack.pads", DrumPadsGet, "Filled Drum Rack pads with their MIDI note and name", read_only=True),
     OpSpec("device.set_param", DeviceParamSet, "Set one device parameter", read_only=False),
+    OpSpec("mixer.get", MixerGet, "Volume, pan, sends, mute/solo, crossfade and routing of tracks, returns and master", read_only=True),
+    OpSpec("mixer.set", MixerSet, "Change volume (normalised or dB), pan, sends, mute/solo, crossfade or routing", read_only=False),
+    OpSpec("return.create", ReturnCreate, "Create a return track, optionally with a native device", read_only=False),
     OpSpec("scene.create", SceneCreate, "Create a scene", read_only=False),
     OpSpec("scene.fire", SceneRef, "Launch a scene", read_only=False),
     OpSpec("history.step", History, "Undo or redo in Live", read_only=False),

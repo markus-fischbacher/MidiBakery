@@ -50,6 +50,9 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
 - edit_notes is a diff: add new notes, modify or remove existing ones by the
   note_id returned from get_clip. Never rewrite a whole clip to change a few notes.
 - Use run_batch for multi-step edits; it becomes a single undo step in Live.
+- Mixer: get_mixer reads tracks, returns (A = return_track 0) and master; update_mixer
+  takes volume_db and send db as Live shows them, routing by the names that
+  get_mixer(options=true) lists. create_return_track can add a Reverb or Delay.
 - Every write is undoable with the undo tool.
 Composition:
 - compose_drums / compose_bass / compose_chords / compose_melody write a new
@@ -93,6 +96,9 @@ TOOL_OPS: list[tuple[str, str, str]] = [
     ("get_device_parameters", "device.params", "Get device parameters"),
     ("get_drum_pads", "drum_rack.pads", "Get Drum Rack pads"),
     ("set_device_parameter", "device.set_param", "Set device parameter"),
+    ("get_mixer", "mixer.get", "Get mixer and routing"),
+    ("update_mixer", "mixer.set", "Set volume, pan, sends or routing"),
+    ("create_return_track", "return.create", "Create return track"),
     ("create_scene", "scene.create", "Create scene"),
     ("fire_scene", "scene.fire", "Launch scene"),
     ("undo", "history.step", "Undo / redo"),
