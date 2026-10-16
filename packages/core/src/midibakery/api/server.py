@@ -6,7 +6,8 @@
   the page's own buttons (``apply_plan`` on a plan preview, ``undo``; see
   ``UI_TOOLS``); the server streams agent events (``text``, ``thinking``,
   ``tool_call``, ``tool_result``, ``plan``, ``confirm``, ``done``, ``error``) as
-  JSON messages. Tool events carry ``source``: ``model`` or ``user``.
+  JSON messages. Tool events carry ``source``: ``model`` or ``user``. ``live_state``
+  messages (``connected``, ``state``) follow what Live plays, for the status line.
 - ``POST /miditool/generate`` and ``/miditool/transform``: the clip-view MIDI
   Tools. Notes in, notes out; nothing is written to Live by the server.
 - ``GET /health``: server and Live bridge status.
@@ -23,6 +24,7 @@ WebSockets, ``?token=<token>``.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hmac
 import itertools
 import json
@@ -45,6 +47,7 @@ from midibakery.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
 from midibakery.compose.standalone import GenerateRequest, TransformRequest, generate, transform
+from midibakery.api.live_state import LiveState
 from midibakery.api.models import list_models
 from midibakery.mcp import build_server
 
@@ -78,7 +81,8 @@ def _bearer(request: Request) -> str | None:
     return header[7:] if header.lower().startswith("bearer ") else None
 
 
-def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: str) -> Starlette:
+def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: str, live: LiveState | None = None) -> Starlette:
+    live = live or LiveState()
     server = build_server(bridge)
 
     def guard(handler):
@@ -186,6 +190,24 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         async with ToolHost(server, confirm, allowed) as host:
             agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=provider.name in LOCAL_PROVIDERS)
             await emit({"type": "ready", "provider": provider.name, "model": provider.model, "tools": len(host.tools)})
+            changed = live.watch()
+
+            async def live_status() -> None:
+                # The page's status line: what Live plays, tempo, scale; the latest state only.
+                sent = False
+                try:
+                    while True:
+                        await changed.wait()
+                        changed.clear()
+                        message = live.message()
+                        if not sent and message["state"] is None:
+                            continue  # nothing known yet; the page keeps the line hidden
+                        sent = True
+                        await emit(message)
+                except (WebSocketDisconnect, RuntimeError):
+                    pass
+
+            status = asyncio.create_task(live_status())
             try:
                 while True:
                     message = await ws.receive_json()
@@ -217,13 +239,24 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             except WebSocketDisconnect:
                 pass
             finally:
+                status.cancel()
+                live.unwatch(changed)
                 for future in pending.values():
                     if not future.done():
                         future.set_result(False)
                 if running is not None and not running.done():
                     running.cancel()
 
+    @contextlib.asynccontextmanager
+    async def lifespan(app: Starlette):
+        follow = asyncio.create_task(live.run())
+        try:
+            yield
+        finally:
+            follow.cancel()
+
     return Starlette(
+        lifespan=lifespan,
         routes=[
             Route("/health", guard(health), methods=["GET"]),
             Route("/ui", ui, methods=["GET"]),

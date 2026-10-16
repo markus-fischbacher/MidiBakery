@@ -53,6 +53,7 @@ flowchart LR
 - Jede schreibende Operation ist ein Undo-Schritt; ein `batch` ist ein gemeinsamer Undo-Schritt.
 - Beim Start schreibt es Port und Token nach `~/Library/Application Support/MidiBakery/bridge.json` (nur für dich lesbar). Clients lesen diese Datei und melden sich mit dem Token an.
 - Mehrere Clients gleichzeitig sind erlaubt: der MCP-Server von Claude Code und die API zum Beispiel. Live arbeitet ihre Aufträge nacheinander ab.
+- **Events:** Ein Client kann `{"subscribe": ["state"]}` senden. Dann liest `update_display()` etwa alle 200 ms einen kompakten Zustand (Tempo, Taktart, Scale, Transport, Auswahl, was pro Track spielt, startet oder stoppt) und schickt ihn als `state`-Event, sobald er sich ändert. Abfragen statt LOM-Listener: Es gibt nichts an- und abzumelden, wenn Tracks, Clips oder das Set wechseln. Die API folgt diesen Events und zeigt sie in der Statuszeile des Chats.
 
 ### Core: Engine, MCP-Server, Agent, API
 
