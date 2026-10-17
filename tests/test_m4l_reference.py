@@ -40,13 +40,16 @@ def test_sections_kick_and_key_of_a_synthetic_song():
 def test_band_sensitivity_weights_what_counts_as_a_change():
     harness = (str(ROOT / "tests/reference_harness.js"), str(ROOT / "packages/m4l/src/reference-analysis.js"))
     full = json.loads(_node(*harness))
-    assert full["sensitivity"] == {"kick": 100, "low": 100, "bass": 100, "mid": 100, "high": 100}
-    # deaf to every band: no change is big enough, the song is one section
-    deaf = json.loads(_node(*harness, sensitivity=dict.fromkeys(["kick", "low", "bass", "mid", "high"], 0)))
-    assert [s["start_bar"] for s in deaf["sections"]] == [1]
+    assert full["sensitivity"] == {"kick": 50, "low": 50, "bass": 50, "mid": 50, "high": 50}
     # the kick alone still hears where it stops (bar 17) and comes back (bar 33)
     kick = json.loads(_node(*harness, sensitivity={"kick": 100, "low": 0, "bass": 0, "mid": 0, "high": 0}))
     assert [s["start_bar"] for s in kick["sections"]] == [1, 17, 33] and kick["sensitivity"]["mid"] == 0
+    # hearing only the hats (they stop for the break and come back): the same changes
+    hats = json.loads(_node(*harness, sensitivity={"kick": 0, "low": 0, "bass": 0, "mid": 0, "high": 100}))
+    assert [s["start_bar"] for s in hats["sections"]] == [1, 17, 33]
+    # hearing only the mids (the pad plays from the break on): the intro-to-break change is all there is
+    mids = json.loads(_node(*harness, sensitivity={"kick": 0, "low": 0, "bass": 0, "mid": 100, "high": 0}))
+    assert [s["start_bar"] for s in mids["sections"]] == [1, 17]
 
 
 LOCK = """
@@ -54,6 +57,8 @@ const vm = require("vm"), fs = require("fs");
 const sent = [];
 const ctx = { outlet(n, ...a) { if (n === 2) sent.push(a); }, post() {}, LiveAPI: function () {}, Task: function () {}, Dict: function () {} };
 vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), ctx);
+for (const b of ["kick", "low", "bass", "mid", "high"]) ctx.band(b, 100);  // the fields start at 50
+sent.length = 0;
 ctx.band("high", 60);           // unlocked: only High moves
 ctx.lock(1);
 ctx.band("kick", 80);           // locked: the others follow by -20, kept within 0..100
@@ -176,12 +181,12 @@ const found = [["intro", 1, 16], ["drop", 17, 8], ["groove", 25, 24], ["break", 
 const bars = Array.from({ length: 157 }, () => ({ low: -3, bass: -3, mid: -3, high: -3, total: -3, centroid: 1000, kick: 1 }));
 const out = {};
 const all = (n) => weights({ kick: n, low: n, bass: n, mid: n, high: n });
-for (const [level, n] of [["coarse", 40], ["normal", 100]])
+for (const [level, n] of [["coarse", 0], ["normal", 50], ["fine", 100]])
   out[level] = merge(found.map((s) => ({ ...s })), bars, { break: "Breakdown" }, all(n))
     .map((s) => [s.name, s.start_bar, s.bars, (s.phrases || []).map((p) => p.start_bar)]);
-// two breaks 16 dB apart: they merge once the fields weigh that under the 12 dB limit
-const loud = bars.map((b, i) => (i >= 56 && i < 64 ? { ...b, low: 13, bass: 13, mid: 13, high: 13, total: 13 } : b));
-out.fields = [100, 90, 85, 80, 50].map((n) => merge(found.slice(3, 5).map((s) => ({ ...s })), loud, {}, all(n)).length);
+// two breaks 4 dB apart: they merge once the fields' mean is low enough (limit (1 - mean/100) * 24 dB)
+const loud = bars.map((b, i) => (i >= 56 && i < 64 ? { ...b, low: 1, bass: 1, mid: 1, high: 1, total: 1 } : b));
+out.fields = [100, 90, 85, 84, 50].map((n) => merge(found.slice(3, 5).map((s) => ({ ...s })), loud, {}, all(n)).length);
 console.log(JSON.stringify(out));
 """
 
@@ -189,12 +194,13 @@ console.log(JSON.stringify(out));
 @needs_node
 def test_neighbours_of_the_same_kind_merge_and_keep_their_phrases():
     out = json.loads(_node("-e", MERGE, str(ROOT / "packages/m4l/src/reference-analysis.js")))
-    # all fields at 100 (default): the four breaks in a row are one breakdown of 44 bars; where they changed stays as phrases
+    # all fields at 50 (default): the four breaks in a row are one breakdown of 44 bars; where they changed stays as phrases
     assert out["normal"] == [["Intro", 1, 16, []], ["Drop", 17, 8, []], ["Groove", 25, 24, []],
                              ["Breakdown", 49, 44, [49, 57, 65, 73]], ["Drop 2", 93, 32, []], ["Groove 2", 125, 24, []],
                              ["Outro", 149, 9, []]]
-    # all fields at 40: a drop and its groove are one drop as well
+    # all fields at 0: a drop and its groove are one drop as well
     assert out["coarse"] == [["Intro", 1, 16, []], ["Drop", 17, 32, [17, 25]], ["Breakdown", 49, 44, [49, 57, 65, 73]],
                              ["Drop 2", 93, 56, [93, 125]], ["Outro", 149, 9, []]]
-    # breaks 16 dB apart (the distance over five features plus the kick: ~14.6) merge from about 82 down
+    # breaks 4 dB apart (the distance over five features plus the kick: ~3.65) merge from 84 down
     assert out["fields"] == [2, 2, 2, 1, 1]
+    assert [(s[1], s[2], s[3]) for s in out["fine"]][3:7] == [(49, 8, []), (57, 8, []), (65, 8, []), (73, 20, [])]  # as found
