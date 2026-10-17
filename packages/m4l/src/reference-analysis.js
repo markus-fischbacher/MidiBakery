@@ -307,12 +307,13 @@ const FEATURES = ["low", "bass", "mid", "high", "total"];
 // The device's Sensitivity fields, 0..100 each (default 50). Their mean is how finely the song is split:
 // at 100 every change found is a section, lower merges more (MERGING). Their ratio is what counts as a
 // change: each band weighs as much as its field against the highest one, the total level as their mean.
-const SENSITIVITY = ["kick", "low", "bass", "mid", "high"];
+// The fields are the view's lanes: Kick, Lows (30-300 Hz: the low and bass bands), Mids, Hats (high).
+const SENSITIVITY = ["kick", "low", "mid", "high"];
 const DEFAULT_SENSITIVITY = 50;
 const FULL_SENSITIVITY = [1, 1, 1, 1, 1, 1];
 
 /** {values: the fields, level: their mean 0..1, shape: weights in vector()'s order (low, bass, mid, high,
- * total, kick), each field over the highest} from {kick, low, ...: 0..100}. */
+ * total, kick), each field over the highest} from {kick, low, mid, high: 0..100}. */
 function weights(sensitivity = {}) {
   const values = {};
   for (const band of SENSITIVITY) {
@@ -321,7 +322,7 @@ function weights(sensitivity = {}) {
   }
   const top = Math.max(...SENSITIVITY.map((band) => values[band]));
   const w = (band) => (top > 0 ? values[band] / top : 1);
-  const shape = [w("low"), w("bass"), w("mid"), w("high"), mean(SENSITIVITY.map(w)), w("kick")];
+  const shape = [w("low"), w("low"), w("mid"), w("high"), mean(SENSITIVITY.map(w)), w("kick")];
   return { values, level: mean(SENSITIVITY.map((band) => values[band])) / 100, shape };
 }
 
