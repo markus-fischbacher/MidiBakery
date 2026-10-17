@@ -13,16 +13,16 @@ routes = [
 binding = "RELEASES"
 bucket_name = "midibakery-releases"
 
-# Licensing (src/licenses.js). Until it is set up the license endpoints answer 503 and the app's
-# licensing stays off (LICENSE_KEYS in packages/core/src/midibakery/license.py is empty).
-# 1. npx wrangler d1 create midibakery  -> put its database_id below and uncomment the block
-# 2. npx wrangler d1 migrations apply midibakery --remote
-# 3. npx wrangler secret put LICENSE_SIGNING_KEY  (the line keygen.py --license printed for it)
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "midibakery"
-# database_id = "<from wrangler d1 create>"
-# migrations_dir = "migrations"
+# Licensing (src/licenses.js). The database exists (Western Europe, migrations applied up to 0001).
+# Until the Worker has the secret LICENSE_SIGNING_KEY (npx wrangler secret put LICENSE_SIGNING_KEY, the line
+# keygen.py --license wrote) the license endpoints answer 503; the app's licensing stays off until
+# LICENSE_KEYS in packages/core/src/midibakery/license.py has the public key.
+# New migrations: npx wrangler d1 migrations apply midibakery --remote
+[[d1_databases]]
+binding = "DB"
+database_name = "midibakery"
+database_id = "f3a64052-9a56-4555-a7ee-fd44a76474e2"
+migrations_dir = "migrations"
 
 [vars]
 # {"<key id>": "<base64 public key>"}: the license keys whose tokens may download updates
