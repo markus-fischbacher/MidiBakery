@@ -243,6 +243,11 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
         top = const["HEADER"] + 2 + const["BLOCKS"] + 4 + const["LANE"] * n
         _, fy, _, fh = boxes[fields[f"Sensitivity {label}"]]["presentation_rect"]
         assert fy + fh / 2 == top + (const["LANE"] - 2) / 2
+    # the right column and Lock on the same rows: every control's centre on a row of the lane grid
+    for b in boxes.values():
+        if b.get("presentation") and b["maxclass"] in ("live.text", "live.menu", "live.numbox"):
+            _, y, _, h = b["presentation_rect"]
+            assert (y + h / 2 - const["HEADER"] - 2 - const["BLOCKS"] - 4) % const["LANE"] == (const["LANE"] - 2) / 2, b.get("text")
     shown_rects = [b["presentation_rect"] for b in boxes.values() if b.get("presentation")]
     assert not any(_overlap(a, b) for i, a in enumerate(shown_rects) for b in shown_rects[i + 1:])
 
