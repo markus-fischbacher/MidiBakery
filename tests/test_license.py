@@ -8,6 +8,7 @@ import importlib.util
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import httpx2 as httpx
@@ -131,6 +132,7 @@ def test_the_machine_id_is_a_hash(bridge_env, monkeypatch):
     assert len(license.machine_id()) == 32  # the system's own id, or a stored random one
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes; %APPDATA% is the user's own")
 def test_the_stored_license_is_private(signer):
     license._store(token="x")
     assert (license.config_dir() / "license.json").stat().st_mode & 0o077 == 0
