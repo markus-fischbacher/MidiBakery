@@ -23,6 +23,17 @@ uv run midibakery install --link    # Remote Script (symlinked), devices and the
 uv run midibakery ping              # with Live running and MidiBakery selected as Control Surface
 ```
 
+### Packaged app
+
+```bash
+uv run --group package python packaging/build_app.py  # build/app/midibakery/ + MidiBakery-<version>-<os>-<arch>.zip
+python packaging/smoke.py build/app/midibakery        # runs it: install/uninstall, API, MCP server
+```
+
+PyInstaller freezes `midibakery` with its Python and the payload (Remote Script, built devices) into one
+folder; `midibakery install` from there installs into Live like from the checkout. It builds for the system it
+runs on: CI (`.github/workflows/package.yml`) builds and smoke-tests macOS (Apple silicon) and Windows.
+
 ### Chat and local API
 
 ```bash

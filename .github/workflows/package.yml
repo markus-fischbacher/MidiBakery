@@ -1,0 +1,52 @@
+name: Package
+
+# The packaged app (PyInstaller) for macOS and Windows, smoke-tested on the system it was built for.
+# Signing (D4e) and the installers (D4c, D4d) build on these artifacts.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]  # macos-latest is Apple silicon
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --locked --group package
+
+      - name: Build the app
+        run: uv run python packaging/build_app.py
+
+      # Version, install/uninstall from the app's own payload, the API and the MCP server.
+      - name: Smoke test
+        run: uv run python packaging/smoke.py build/app/midibakery
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: midibakery-${{ matrix.os }}
+          path: build/app/MidiBakery-*.zip
+          if-no-files-found: error
+          retention-days: 14

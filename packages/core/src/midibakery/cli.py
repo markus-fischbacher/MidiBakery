@@ -10,8 +10,8 @@ from pathlib import Path
 
 from midibakery import __version__
 from midibakery.catalog import manifest
+from midibakery.install import REPO_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
 SCRIPT_SOURCE = REPO_ROOT / "packages" / "remote_script" / "MidiBakery"
 MANIFEST_PATH = SCRIPT_SOURCE / "manifest.json"
 
@@ -46,8 +46,9 @@ def cmd_install(args: argparse.Namespace) -> int:
     else:
         path = install.write_launcher(args.api_provider, args.api_model, args.api_port)
         print(f"the API ({args.api_provider}) starts with Live; log in {path.with_name('api.log')}")
-    if install.frozen():
-        for old in install.prune_runtimes(Path(sys.executable).parent):
+    app = Path(sys.executable).parent
+    if install.frozen() and app.parent.name == "runtime":  # the installers' layout: runtime/<version>/
+        for old in install.prune_runtimes(app):
             print(f"removed {old}")
     print("Restart Live. First time: choose 'MidiBakery' under Settings > Link, Tempo & MIDI > Control Surface.")
     return 0
