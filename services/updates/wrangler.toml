@@ -26,6 +26,6 @@ migrations_dir = "migrations"
 
 [vars]
 # {"<key id>": "<base64 public key>"}: the license keys whose tokens may download updates
-LICENSE_PUBLIC_KEYS = "{}"
+LICENSE_PUBLIC_KEYS = '{"ml-8c3da20a0e38": "HYYxRvxb/OPb18athQy/YojPCzQiAweQbuO6OREzFng="}'
 # "1" once licenses are sold: installers only for tokens whose updates include the release
 REQUIRE_LICENSE_FOR_UPDATES = "0"
