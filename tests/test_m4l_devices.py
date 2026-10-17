@@ -213,8 +213,12 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     assert "add_warp_marker" in code and "function autoWarp(" in code
     labels = sorted(b["text"] for b in boxes.values() if b["maxclass"] == "live.text")
     assert labels == ["About", "Analyze", "Remove Locators", "Set Locators"]
-    menu = next(b for b in boxes.values() if b["maxclass"] == "live.menu")
-    assert menu["saved_attribute_attributes"]["valueof"]["parameter_enum"][0] == "Auto"
+    menus = [b for b in boxes.values() if b["maxclass"] == "live.menu"]
+    menu = next(b for b in menus if b["saved_attribute_attributes"]["valueof"]["parameter_enum"][0] == "Auto")
+    detail = next(b for b in menus if b is not menu)
+    assert detail["saved_attribute_attributes"]["valueof"]["parameter_enum"] == ["Detail: Coarse", "Detail: Normal", "Detail: Fine"]
+    assert ((next(i for i, b in boxes.items() if b is detail), 0), (by_text["prepend detail"], 0)) in lines
+    assert "function detail(" in code
     to_v8 = by_text["prepend genre"]
     assert ((next(i for i, b in boxes.items() if b is menu), 0), (to_v8, 0)) in lines
     assert all(b["presentation_rect"][0] + b["presentation_rect"][2] <= build.REFERENCE_WIDTH

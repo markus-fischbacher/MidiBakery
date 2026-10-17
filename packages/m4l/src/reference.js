@@ -5,7 +5,8 @@
  * plays at its own tempo, so its bars drift away from the Set's: after its tempo is detected the
  * device warps it onto the Set's grid (bar 1 on a bar line) and analyzes it again.
  *
- * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>, result <json>,
+ * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>, detail <menu index>,
+ *           result <json>,
  *           status <text>
  * outlet 0: to node.script (analyze / lookup / log <json>)
  * outlet 1: to the view (show <json>, status <text>)
@@ -20,6 +21,9 @@ var current = null; // the last result
 // the Genre menu's items, as plan_song names the genres
 var GENRES = ["auto", "house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"];
 var chosen = "auto";
+// the Detail menu's items: how far neighbouring sections are merged
+var DETAILS = ["coarse", "normal", "fine"];
+var chosenDetail = "normal";
 var job = null; // locator job: {queue, home, phase, ticks, task}
 var LOCATOR_TICK_MS = 60;
 var LOCATOR_TIMEOUT_TICKS = 40; // ~2.4 s per locator, then it is skipped
@@ -93,11 +97,19 @@ function referenceClip() {
     warp_markers: warpMarkers(clip),
     tempo: one(new LiveAPI("live_set"), "tempo"),
     genre: chosen,
+    detail: chosenDetail,
   };
 }
 
 function genre(index) {
   chosen = GENRES[index] || "auto";
+}
+
+/** A new Detail splits the song again: the analysis takes a second. */
+function detail(index) {
+  var was = chosenDetail;
+  chosenDetail = DETAILS[index] || "normal";
+  if (ready && current && chosenDetail !== was && !job) analyze();
 }
 
 function init() {

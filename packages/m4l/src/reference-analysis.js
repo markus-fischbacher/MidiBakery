@@ -392,6 +392,11 @@ function label(sections, names = {}) {
     const last = sections[sections.length - 1];
     if (last.energy < loudest - 3 || last.kind !== "drop") last.kind = "outro";
   }
+  return name(sections, names);
+}
+
+/** "Drop", "Drop 2", ... in the genre's words. */
+function name(sections, names = {}) {
   const seen = {};
   for (const s of sections) {
     seen[s.kind] = (seen[s.kind] || 0) + 1;
@@ -401,7 +406,35 @@ function label(sections, names = {}) {
   return sections;
 }
 
-function analyze(samples, sampleRate, beats, { beatsPerBar = 4, threshold = 4, genre = "auto", bpm = 0 } = {}) {
+// How finely the song is split: every change found (fine), neighbours of the same kind as one section
+// (normal: four breaks in a row are one long break), or the kick's big picture (coarse: a drop and the
+// groove next to it are one drop). The changes within a section stay as its phrases.
+const DETAILS = ["coarse", "normal", "fine"];
+const FULL = ["drop", "groove"];
+
+function merge(sections, bars, detail, names) {
+  if (detail === "fine") return sections;
+  const together = (a, b) => a.kind === b.kind || (detail === "coarse" && FULL.includes(a.kind) && FULL.includes(b.kind));
+  const out = [];
+  for (const s of sections) {
+    const last = out[out.length - 1];
+    const phrase = { start_bar: s.start_bar, bars: s.bars, kind: s.kind, energy: s.energy, kick: s.kick, elements: s.elements };
+    if (last && !["intro", "outro"].includes(s.kind) && together(last, s)) {
+      last.phrases.push(phrase);
+      if (s.kind === "drop") last.kind = "drop";
+    } else {
+      out.push({ kind: s.kind, phrases: [phrase] });
+    }
+  }
+  return name(out.map((m) => {
+    const first = m.phrases[0].start_bar - 1;
+    const end = first + m.phrases.reduce((n, p) => n + p.bars, 0);
+    const merged = { ...describe(bars, first, end), kind: m.kind };
+    return m.phrases.length > 1 ? { ...merged, phrases: m.phrases } : merged;
+  }), names);
+}
+
+function analyze(samples, sampleRate, beats, { beatsPerBar = 4, threshold = 4, genre = "auto", bpm = 0, detail = "normal" } = {}) {
   const genreProfile = profile(genre, bpm);
   const fr = frames(samples, sampleRate);
   const bars = perBar(perBeat(fr, beats), beatsPerBar);
@@ -409,12 +442,15 @@ function analyze(samples, sampleRate, beats, { beatsPerBar = 4, threshold = 4, g
   // a kick's tail can rise out of near silence; a bar this quiet in the lows has no kick
   bars.forEach((b, i) => (b.kick = b.low > KICK_MIN_LOW_DB ? kicks[i] ?? 0 : 0));
   const starts = boundaries(bars, threshold, genreProfile);
-  const sections = label(starts.map((s, i) => describe(bars, s, starts[i + 1] ?? bars.length)), genreProfile.names);
+  const found = label(starts.map((s, i) => describe(bars, s, starts[i + 1] ?? bars.length)), genreProfile.names);
+  if (!DETAILS.includes(detail)) detail = "normal";
+  const sections = merge(found, bars, detail, genreProfile.names);
   const k = key(chromas(samples, sampleRate));
   const round = (x) => Math.round(x * 10) / 10;
   return {
     bars: bars.length,
     genre: genreProfile.genre,
+    detail,
     key: k.name,
     sections,
     lanes: {
@@ -535,4 +571,4 @@ function markerTempo(markers) {
   return b.sample_time > a.sample_time ? Math.round(((b.beat_time - a.beat_time) / (b.sample_time - a.sample_time)) * 60 * 10) / 10 : null;
 }
 
-module.exports = { GENRES, analyze, chromas, beatGrid, estimateGrid, markerTempo, fft, key, BANDS };
+module.exports = { GENRES, DETAILS, analyze, merge, chromas, beatGrid, estimateGrid, markerTempo, fft, key, BANDS };

@@ -127,3 +127,31 @@ def test_genre_names_the_sections():
     # Drum & Bass phrases are 16 bars: no section shorter than that
     dnb = json.loads(_node(*harness, genre="drum_and_bass"))
     assert all(s["bars"] >= 16 for s in dnb["sections"]) and dnb["sections"][-1]["name"] == "Drop"
+
+
+MERGE = """
+const { merge } = require(process.argv[1]);
+// The Signal's sections as the analysis finds them (fine); bars: flat, the merge only re-describes them
+const found = [["intro", 1, 16], ["drop", 17, 8], ["groove", 25, 24], ["break", 49, 8], ["break", 57, 8], ["break", 65, 8],
+  ["break", 73, 20], ["drop", 93, 32], ["groove", 125, 24], ["outro", 149, 9]]
+  .map(([kind, start_bar, bars]) => ({ kind, start_bar, bars, energy: -3, kick: 1, elements: [] }));
+const bars = Array.from({ length: 157 }, () => ({ low: -3, bass: -3, mid: -3, high: -3, total: -3, centroid: 1000, kick: 1 }));
+const out = {};
+for (const detail of ["coarse", "normal", "fine"])
+  out[detail] = merge(found.map((s) => ({ ...s })), bars, detail, { break: "Breakdown" })
+    .map((s) => [s.name, s.start_bar, s.bars, (s.phrases || []).map((p) => p.start_bar)]);
+console.log(JSON.stringify(out));
+"""
+
+
+@needs_node
+def test_neighbours_of_the_same_kind_merge_and_keep_their_phrases():
+    out = json.loads(_node("-e", MERGE, str(ROOT / "packages/m4l/src/reference-analysis.js")))
+    # normal: the four breaks in a row are one breakdown of 44 bars; where they changed stays as phrases
+    assert out["normal"] == [["Intro", 1, 16, []], ["Drop", 17, 8, []], ["Groove", 25, 24, []],
+                             ["Breakdown", 49, 44, [49, 57, 65, 73]], ["Drop 2", 93, 32, []], ["Groove 2", 125, 24, []],
+                             ["Outro", 149, 9, []]]
+    # coarse: a drop and its groove are one drop
+    assert out["coarse"] == [["Intro", 1, 16, []], ["Drop", 17, 32, [17, 25]], ["Breakdown", 49, 44, [49, 57, 65, 73]],
+                             ["Drop 2", 93, 56, [93, 125]], ["Outro", 149, 9, []]]
+    assert [(s[1], s[2], s[3]) for s in out["fine"]][3:7] == [(49, 8, []), (57, 8, []), (65, 8, []), (73, 20, [])]  # as found

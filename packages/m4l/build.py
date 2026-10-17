@@ -453,8 +453,8 @@ REFERENCE_WIDTH, REFERENCE_HEIGHT = 700.0, 169.0
 
 
 def reference_device() -> dict[str, Any]:
-    """Layout (700 x 169): the view (sections and lanes) on the left; Analyze, the locator buttons, Genre and
-    About on the right.
+    """Layout (700 x 169): the view (sections and lanes) on the left; Analyze, the locator buttons, Genre, Detail
+    and About on the right.
     Audio passes through: the device sits on the reference song's own audio track."""
     p = Patcher()
     plugin = p.obj("plugin~", 20, 20, inlets=2, outlets=["signal", "signal"], width=60)
@@ -494,8 +494,14 @@ def reference_device() -> dict[str, Any]:
     to_v8 = p.obj("prepend genre", 600, 50, width=90)
     p.connect(genre, 0, to_v8)
     p.connect(to_v8, 0, v8)
-    p.comment("Locators land on the Arrangement's grid: zoom in to 1 bar.",
-              (300, 110, 200, 60), presentation=(606, 102, 90, 44), linecount=4, fontsize=9.0, **THEMED_TEXT)
+    # Detail: how far neighbouring sections are merged (their phrases stay in the analysis)
+    detail = _menu(p, (720, 20, 110, 15), (606, 102, 90, 18), "Detail", "Detail",
+                   ["Detail: Coarse", "Detail: Normal", "Detail: Fine"], 1)
+    detail_to_v8 = p.obj("prepend detail", 720, 50, width=90)
+    p.connect(detail, 0, detail_to_v8)
+    p.connect(detail_to_v8, 0, v8)
+    p.comment("Locators: zoom in to 1 bar.",
+              (300, 110, 200, 40), presentation=(606, 122, 90, 26), linecount=2, fontsize=9.0, **THEMED_TEXT)
     _about(p, (606, 148, 90, 18), node, 760, 20)
     return p.to_json(kind="audio_effect", title="MidiBakery Reference Analyzer", width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
 
