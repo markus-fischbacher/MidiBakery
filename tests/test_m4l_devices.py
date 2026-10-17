@@ -216,10 +216,7 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     menus = [b for b in boxes.values() if b["maxclass"] == "live.menu"]
     menu = next(b for b in menus if b["saved_attribute_attributes"]["valueof"]["parameter_enum"][0] == "Auto")
     assert len(menus) == 1
-    detail = next(b for b in boxes.values() if b["maxclass"] == "live.dial")
-    assert detail["varname"] == "Detail" and detail["saved_attribute_attributes"]["valueof"]["parameter_initial"] == [50.0]
-    assert ((next(i for i, b in boxes.items() if b is detail), 0), (by_text["prepend detail"], 0)) in lines
-    assert "function detail(" in code
+    assert not any(b["maxclass"] == "live.dial" for b in boxes.values()) and "function detail(" not in code
     to_v8 = by_text["prepend genre"]
     assert ((next(i for i, b in boxes.items() if b is menu), 0), (to_v8, 0)) in lines
     assert all(b["presentation_rect"][0] + b["presentation_rect"][2] <= build.REFERENCE_WIDTH
