@@ -38,17 +38,17 @@ def cmd_install(args: argparse.Namespace) -> int:
     if not install.frozen():
         MANIFEST_PATH.write_text(manifest_json())  # the Remote Script validates against it
     library = Path(args.library) if args.library else install.user_library()
-    record = install.install(library, install.payload(), link=args.link)
+    api = None if args.no_api else install.api_settings(args.api_provider, args.api_model, args.api_port)
+    record = install.install(library, install.payload(), link=args.link, api=api is not None)
     print(f"installed MidiBakery {record['version']} into {library} ({len(record['paths'])} paths)")
-    if args.no_api:
+    if api is None:
         install.remove_launcher()
         print("the API will not start with Live")
     else:
-        path = install.write_launcher(args.api_provider, args.api_model, args.api_port)
-        print(f"the API ({args.api_provider}) starts with Live; log in {path.with_name('api.log')}")
-    app = Path(sys.executable).parent
-    if install.frozen() and app.parent.name == "runtime":  # the installers' layout: runtime/<version>/
-        for old in install.prune_runtimes(app):
+        path = install.write_launcher(api["provider"], api["model"], api["port"])
+        print(f"the API ({api['provider']}) starts with Live; log in {path.with_name('api.log')}")
+    if install.app_runtime() is not None:  # the installers' layout: runtime/<version>/
+        for old in install.prune_runtimes(Path(sys.executable).parent):
             print(f"removed {old}")
     print("Restart Live. First time: choose 'MidiBakery' under Settings > Link, Tempo & MIDI > Control Surface.")
     return 0
@@ -57,7 +57,10 @@ def cmd_install(args: argparse.Namespace) -> int:
 def cmd_uninstall(args: argparse.Namespace) -> int:
     from midibakery import install
 
-    removed = install.uninstall(purge=args.purge)
+    runtime = install.app_runtime()
+    removed = install.uninstall(purge=args.purge, runtime=runtime)
+    if runtime is not None:
+        install.forget_pkg_receipt()
     print(f"removed {len(removed)} paths" + (", the settings and the stored API key" if args.purge else ""))
     print("Restart Live to unload the Remote Script.")
     return 0
@@ -219,9 +222,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("install", help="install (or update) the Remote Script and the devices into Live's User Library")
     p.add_argument("--link", action="store_true", help="symlink the Remote Script instead of copying it (development)")
     p.add_argument("--library", help="User Library folder (default: the one Live uses)")
-    p.add_argument("--api-provider", choices=["anthropic", "ollama", "lmstudio"], default="anthropic", help="provider of the API that starts with Live")
+    # Unset: what the last install chose (an update keeps it), else anthropic on 8766.
+    p.add_argument("--api-provider", choices=["anthropic", "ollama", "lmstudio"], help="provider of the API that starts with Live")
     p.add_argument("--api-model", help="model of the API that starts with Live")
-    p.add_argument("--api-port", type=int, default=8766)
+    p.add_argument("--api-port", type=int)
     p.add_argument("--no-api", action="store_true", help="do not start the API with Live")
     p.set_defaults(func=cmd_install)
 

@@ -31,6 +31,7 @@ INSTALL_LIST = "install.json"  # the devices' list, written by packages/m4l/buil
 RECORD = "installed.json"
 FOLDER_INFO = "Ableton Folder Info"  # Live's metadata in a browser folder, not the user's work
 VERSION_DIR = re.compile(r"^\d+\.\d+\.\d+$")
+PKG_IDENTIFIER = "com.klirrwerk.midibakery"  # the macOS installer's package (packaging/macos/build_pkg.py)
 
 
 @dataclass(frozen=True)
@@ -130,11 +131,50 @@ def launcher_command(provider: str, model: str | None, port: int) -> list[str]:
     return command + ["--model", model] if model else command
 
 
+DEFAULT_API = {"provider": "anthropic", "model": None, "port": 8766}
+
+
+def api_settings(provider: str | None = None, model: str | None = None, port: int | None = None) -> dict | None:
+    """The API's launch settings for this install: what is given, else what the last install chose (an
+    update keeps the user's provider, model and port, or that the API does not start with Live), else
+    the defaults. None: the API does not start with Live."""
+    given = {"provider": provider, "model": model, "port": port}
+    if provider is None and model is None and port is None:
+        record = read_record()
+        if record is not None and record.get("api") is False:
+            return None
+    previous = launcher_settings() or {}
+    # a new provider takes no model from another one
+    keep = previous if provider is None or provider == previous.get("provider") else {"port": previous.get("port")}
+    return {key: given[key] if given[key] is not None else keep.get(key) if keep.get(key) is not None else DEFAULT_API[key]
+            for key in DEFAULT_API}
+
+
+def launcher_settings() -> dict | None:
+    """Provider, model and port of the current launcher.json (older ones: read from its command)."""
+    try:
+        config = json.loads((config_dir() / "launcher.json").read_text())
+    except (OSError, ValueError):
+        return None
+    command = config.get("command", [])
+
+    def option(name: str) -> str | None:
+        return command[command.index(name) + 1] if name in command[:-1] else None
+
+    port = config.get("port") or option("--port")
+    return {
+        "provider": config.get("provider") or option("--provider"),
+        "model": config.get("model", option("--model")),
+        "port": int(port) if port else None,
+    }
+
+
 def write_launcher(provider: str, model: str | None, port: int) -> Path:
     """launcher.json tells the Remote Script how to start the API with Live."""
     path = config_dir() / "launcher.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    config = {"command": launcher_command(provider, model, port), "port": port, "version": __version__}
+    config = {"command": launcher_command(provider, model, port), "port": port, "provider": provider, "model": model,
+              "version": __version__}
     if not frozen():
         config["cwd"] = str(REPO_ROOT)
     path.write_text(json.dumps(config, indent=2) + "\n")
@@ -176,8 +216,9 @@ def _prune_empty(folder: Path, library: Path) -> None:
         folder = folder.parent
 
 
-def install(library: Path, source: Payload, *, link: bool = False) -> dict:
-    """Copies the Remote Script and the devices into `library` and records what it wrote."""
+def install(library: Path, source: Payload, *, link: bool = False, api: bool = True) -> dict:
+    """Copies the Remote Script and the devices into `library` and records what it wrote (and whether
+    the API starts with Live, which the next install keeps)."""
     devices = json.loads((source.devices / INSTALL_LIST).read_text(encoding="utf-8"))
     script_target = Path(REMOTE_SCRIPTS) / SCRIPT_NAME
     script = library / script_target
@@ -206,15 +247,29 @@ def install(library: Path, source: Payload, *, link: bool = False) -> dict:
             _remove(gone)
             _prune_empty(gone.parent, old_library)
 
-    record = {"version": __version__, "library": str(library), "paths": written}
+    record = {"version": __version__, "library": str(library), "paths": written, "api": api}
     _record_path().parent.mkdir(parents=True, exist_ok=True)
     _record_path().write_text(json.dumps(record, indent=1) + "\n")
     return record
 
 
-def uninstall(*, purge: bool = False) -> list[Path]:
-    """Removes what installed.json lists and launcher.json; `purge` also the config folder (stored
-    analyses, logs) and the stored Claude API key."""
+def app_runtime() -> Path | None:
+    """The packaged app's runtime folder (runtime/ holding <version>/ folders) when it runs from one."""
+    app = Path(sys.executable).parent
+    return app.parent if frozen() and app.parent.name == "runtime" else None
+
+
+def forget_pkg_receipt() -> None:
+    """macOS keeps a receipt of the installer's package in ~/Library/Receipts; gone with the app."""
+    if sys.platform == "darwin":
+        import subprocess
+
+        subprocess.run(["pkgutil", "--volume", str(Path.home()), "--forget", PKG_IDENTIFIER], capture_output=True)
+
+
+def uninstall(*, purge: bool = False, runtime: Path | None = None) -> list[Path]:
+    """Removes what installed.json lists and launcher.json, and `runtime` (the packaged app's folder, when
+    it uninstalls itself); `purge` also the config folder (stored analyses, logs) and the stored Claude API key."""
     removed = []
     record = read_record()
     if record:
@@ -227,6 +282,9 @@ def uninstall(*, purge: bool = False) -> list[Path]:
             _prune_empty(path.parent, library)
     _record_path().unlink(missing_ok=True)
     remove_launcher()
+    if runtime is not None and runtime.exists():
+        shutil.rmtree(runtime, ignore_errors=True)  # Windows keeps a running program's files: its uninstaller does that
+        removed.append(runtime)
     if purge:
         from midibakery import credentials
 

@@ -34,6 +34,15 @@ PyInstaller freezes `midibakery` with its Python and the payload (Remote Script,
 folder; `midibakery install` from there installs into Live like from the checkout. It builds for the system it
 runs on: CI (`.github/workflows/package.yml`) builds and smoke-tests macOS (Apple silicon) and Windows.
 
+```bash
+python packaging/macos/build_pkg.py   # build/app/MidiBakery-<version>-macos-arm64.pkg (not signed yet)
+```
+
+The macOS installer installs for the current user, no administrator: the app into
+`~/Library/Application Support/MidiBakery/runtime/<version>/`, then its postinstall runs `midibakery install`.
+Installing a newer package updates and keeps the API's settings; `.../runtime/<version>/midibakery uninstall`
+removes the app, the Remote Script, the devices and the package receipt. CI installs and uninstalls it on macOS.
+
 ### Chat and local API
 
 ```bash
