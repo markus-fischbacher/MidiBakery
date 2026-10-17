@@ -48,6 +48,7 @@ async function versions() {
       api: data.version || null,
       script: (data.live && data.live.bridge) || null,
       update: (data.update && data.update.version) || null,
+      license: data.license || null,
     };
   } catch (_) {
     return { api: null, script: null, update: null };
@@ -58,7 +59,10 @@ async function versions() {
 
 /** One line for the device's status, e.g. "MidiBakery 0.2.0 (device, API, Remote Script)". */
 function aboutText(device, found) {
-  const line = versionText(device, found);
+  let line = versionText(device, found);
+  const license = found.license && found.license.state;
+  if (license === "trial") line += ` · ${found.license.message}`;
+  else if (["none", "expired", "invalid"].includes(license)) line += " · License needed: see the Chat device";
   return found.update ? `${line} · Update ${found.update} available: Install in the Chat device` : line;
 }
 

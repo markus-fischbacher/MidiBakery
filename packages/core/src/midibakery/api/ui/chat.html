@@ -64,6 +64,15 @@
   #update[hidden] { display: none; }
   #update .text { flex: 1; }
   #update .text.err { color: var(--err); }
+  /* Trial and license (GET /license): shown while it matters - no license yet, a trial, an ended one. */
+  #licensePanel { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 3px 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #licensePanel[hidden] { display: none; }
+  #licensePanel .text { flex: 1; }
+  #licensePanel .text.err { color: var(--err); }
+  #licenseEntry { display: flex; gap: 6px; flex: 1 1 100%; align-items: center; }
+  #licenseEntry[hidden] { display: none; }
+  body:not(.device) .device-only { display: none; }
+  #licenseInput { flex: 1; min-width: 160px; padding: 2px 6px; text-transform: uppercase; }
   #keyPanel { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
   #keyPanel[hidden] { display: none; }
   #keyPanel .text { flex: 1 1 100%; }
@@ -121,6 +130,17 @@
   <button id="updateInstall" class="primary" type="button">Install</button>
   <button id="updateLater" type="button">Later</button>
 </div>
+<div id="licensePanel" hidden>
+  <span id="licenseText" class="text"></span>
+  <button id="licenseTrial" class="primary" type="button" hidden>Start trial</button>
+  <button id="licenseEnter" type="button">Enter key</button>
+  <button id="licenseLater" type="button" hidden>Later</button>
+  <div id="licenseEntry" hidden>
+    <span class="note device-only">Type the key into the message field on the right and press Enter.</span>
+    <input id="licenseInput" autocomplete="off" placeholder="MB-XXXX-XXXX-XXXX-XXXX">
+    <button id="licenseSave" class="primary" type="button">Activate</button>
+  </div>
+</div>
 <div id="keyPanel" hidden>
   <span id="keyText" class="text"></span>
   <span id="keyTypeHint" class="note">Paste the key into the message field on the right and press Enter. It is not sent to any model.</span>
@@ -151,6 +171,7 @@ let current = null;      // assistant message element being streamed
 let thinking = null;     // thinking element being streamed
 let retry = 0;
 let keyMode = false;     // device: the next line from the Max text field is the API key
+let licenseMode = false; // device: the next line from the Max text field is the license key
 const plans = new Map();  // plan_id -> plan card, to mark it applied
 const calls = new Map();  // tool call id -> { name, input, result } for the plan card and Apply
 
@@ -328,6 +349,7 @@ function handle(ev) {
     case "error":
       hidePending();
       current = null; thinking = null;
+      if (ev.code === "LICENSE_REQUIRED") { setBusy(false); checkLicense(true); break; }
       if (ev.code === "NO_API_KEY") { showKeyButton("anthropic"); openKeyPanel("Claude needs an API key. It is stored in your system's credential store (Keychain on macOS), not in MidiBakery's files."); break; }
       add("error", ev.message);
       setBusy(false);
@@ -655,6 +677,7 @@ $("keyRemove").onclick = async () => {
 
 function sendText(raw) {
   if (keyMode) { keyMode = false; saveKey(raw); return true; }  // never shown, never sent to a model
+  if (licenseMode) { licenseMode = false; activateLicense(raw); return true; }
   const text = String(raw || "").trim();
   if (!text) return false;
   if (busy) { add("note", "Still answering - press Stop first."); return false; }
@@ -723,7 +746,11 @@ async function checkUpdate() {
   try {
     const response = await fetch("/update", { headers: { Authorization: `Bearer ${token}` } });
     const data = await response.json();
-    if (data.update) showUpdate(`MidiBakery ${data.update.version} is available (you have ${data.current}).`, { install: true });
+    if (data.update && data.update.included === false) {
+      showUpdate(`MidiBakery ${data.update.version} is available; your license's updates have ended - renew to get it.`);
+    } else if (data.update) {
+      showUpdate(`MidiBakery ${data.update.version} is available (you have ${data.current}).`, { install: true });
+    }
   } catch (_) {
     // the API is not reachable: the status line says so already
   }
@@ -745,9 +772,81 @@ $("updateInstall").addEventListener("click", async () => {
 });
 $("updateLater").addEventListener("click", () => { updateDismissed = true; $("update").hidden = true; });
 
+// ---- trial and license
+let licenseDismissed = false;
+
+async function licenseRequest(path, body) {
+  const response = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
+  return data;
+}
+
+function showLicense(state, message, isError = false) {
+  const relevant = ["none", "trial", "expired", "invalid"].includes(state.state);
+  // a running trial can be put away; the other states stay until there is a license
+  if (!relevant || (state.state === "trial" && licenseDismissed && !message)) { $("licensePanel").hidden = true; return; }
+  $("licensePanel").hidden = false;
+  const buy = state.allowed ? "" : ` Buy a license: ${state.purchase_url}`;
+  $("licenseText").textContent = message || (state.message + buy);
+  $("licenseText").classList.toggle("err", isError);
+  $("licenseTrial").hidden = state.state !== "none";
+  $("licenseLater").hidden = state.state !== "trial";
+}
+
+async function checkLicense(asked = false) {
+  if (!token) return;
+  try {
+    const state = await licenseRequest("/license");
+    if (asked) licenseDismissed = false;
+    showLicense(state);
+  } catch (_) {
+    // the API is not reachable: the status line says so
+  }
+}
+
+function openLicenseEntry() {
+  $("licenseEntry").hidden = false;
+  licenseMode = inDevice;
+  $("licenseInput").hidden = inDevice;
+  $("licenseSave").hidden = inDevice;
+  if (!inDevice) $("licenseInput").focus();
+}
+
+async function activateLicense(raw) {
+  const key = String(raw || "").trim();
+  if (!key) return;
+  $("licenseText").textContent = "Activating…";
+  try {
+    const state = await licenseRequest("/license/activate", { key });
+    $("licenseEntry").hidden = true;
+    $("licenseInput").value = "";
+    showLicense(state);
+    add("note", state.message + ".");
+  } catch (error) {
+    licenseMode = inDevice;  // let the user try again
+    $("licenseText").textContent = error.message;
+    $("licenseText").classList.add("err");
+  }
+}
+
+$("licenseTrial").onclick = async () => {
+  $("licenseText").textContent = "Starting the trial…";
+  try { showLicense(await licenseRequest("/license/trial", {})); } catch (error) { showLicense({ state: "none" }, error.message, true); }
+};
+$("licenseEnter").onclick = openLicenseEntry;
+$("licenseSave").onclick = () => activateLicense($("licenseInput").value);
+$("licenseInput").onkeydown = (event) => { if (event.key === "Enter") activateLicense($("licenseInput").value); };
+$("licenseLater").onclick = () => { licenseDismissed = true; $("licensePanel").hidden = true; };
+
 connect();
 loadModels();
 checkUpdate();
+checkLicense();
 setInterval(checkUpdate, UPDATE_POLL_MS);
 </script>
 </body>

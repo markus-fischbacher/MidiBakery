@@ -129,15 +129,6 @@ def test_the_check_can_be_switched_off(tmp_path, key, monkeypatch):
     assert not updates.enabled()  # nothing to trust a manifest by
 
 
-def test_a_license_key_is_sent_when_there_is_one(tmp_path, key):
-    updates.set_enabled(True)
-    settings = json.loads((updates.config_dir() / "settings.json").read_text())
-    (updates.config_dir() / "settings.json").write_text(json.dumps(dict(settings, license_key="L-123")))
-    seen: list = []
-    asyncio.run(updates.check(force=True, client=service(release(tmp_path, key), seen=seen)))
-    assert seen[0].headers["authorization"] == "License L-123"
-
-
 def test_download_keeps_only_an_installer_matching_the_manifest(tmp_path, key):
     envelope = release(tmp_path, key)
     update = asyncio.run(updates.check(client=service(envelope)))
@@ -174,7 +165,7 @@ def test_api_reports_and_installs_an_update(bridge_env, monkeypatch, tmp_path):
     with TestClient(build_app(BridgeClient(), lambda options: None, "t")) as client:
         assert client.get("/update").status_code == 401
         status = client.get("/update?force=1", headers=auth).json()
-        assert status["current"] == __version__ and status["update"] == {"version": NEWER, "notes": "n", "size": 3}
+        assert status["current"] == __version__ and status["update"] == {"version": NEWER, "notes": "n", "size": 3, "included": True}
         assert client.get("/health", headers=auth).json()["update"]["version"] == NEWER
         result = client.post("/update/install", headers=auth).json()
         assert result == {"ok": True, "version": NEWER, "installer": "MidiBakery.pkg"}
@@ -190,5 +181,5 @@ def test_api_without_an_update_installs_nothing(bridge_env):
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="no Node.js available")
 def test_update_service_worker():
-    result = subprocess.run(["node", "--test", "test/worker.test.js"], cwd=ROOT / "services/updates", capture_output=True, text=True, timeout=60)
+    result = subprocess.run(["node", "--test", "test/worker.test.js", "test/licenses.test.js"], cwd=ROOT / "services/updates", capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
