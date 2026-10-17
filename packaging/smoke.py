@@ -43,7 +43,8 @@ def main(app_dir: str) -> int:
     exe = app / ("midibakery.exe" if sys.platform == "win32" else "midibakery")
     version = expected_version()
     home = Path(tempfile.mkdtemp(prefix="midibakery-smoke-"))
-    env = {**os.environ, "MIDIBAKERY_HOME": str(home / "config"), "MIDIBAKERY_PORT": "0"}
+    # no update check: CI must not ask the real update service
+    env = {**os.environ, "MIDIBAKERY_HOME": str(home / "config"), "MIDIBAKERY_PORT": "0", "MIDIBAKERY_NO_UPDATE_CHECK": "1"}
 
     def run(*args: str) -> subprocess.CompletedProcess:
         result = subprocess.run([str(exe), *args], env=env, capture_output=True, text=True, timeout=120)
