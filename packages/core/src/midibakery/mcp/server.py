@@ -474,7 +474,8 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
 
 class ReferenceQuery(BaseModel):
     """Without name: every analyzed reference, newest first. With name: the best match, with lanes
-    (per bar: kick 0-1; low, bass, mid, high, energy in dB below the song's peak)."""
+    (per bar: kick 0-1; low, bass, mid, high, energy in dB below the song's peak). A section the device
+    merged from neighbours of the same kind lists its phrases (where the sound changes within it)."""
 
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(None, description="Part of the song, file or track name")
@@ -488,10 +489,16 @@ def read_references(name: str | None = None) -> dict[str, Any]:
             raise ToolError(f"No analyzed reference matches '{name}'")
         return found
     found = load_references()
-    brief = ("name", "track", "tempo", "key", "first_bar", "bars")
-    return {"references": [{**{k: r.get(k) for k in brief}, "sections": [
-        {k: s.get(k) for k in ("name", "start_bar", "bars", "kick", "elements")} for s in r.get("sections", [])
-    ]} for r in found]}
+    brief = ("name", "track", "tempo", "warped", "key", "first_bar", "bars")
+
+    def section(s: dict[str, Any]) -> dict[str, Any]:
+        out = {k: s.get(k) for k in ("name", "start_bar", "bars", "kick", "elements")}
+        if s.get("phrases"):  # a merged section: where its phrases start
+            out["phrases"] = [p.get("start_bar") for p in s["phrases"]]
+        return out
+
+    return {"references": [{**{k: r.get(k) for k in brief}, "sections": [section(s) for s in r.get("sections", [])]}
+                           for r in found]}
 
 
 def _item_op(item: Any) -> str:

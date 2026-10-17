@@ -146,6 +146,12 @@ function paint() {
     var label = shortName(s.name, x1 - x0 - 6, 9);
     if (label) text(x0 + 3, top + 12, label, [1, 1, 1, 0.95], 9);
     if (measure(String(s.start_bar), 8) <= x1 - x0 - 6) text(x0 + 3, top + 24, String(s.start_bar), [1, 1, 1, 0.7], 8);
+    // phrases within a merged section: a short tick at the bottom of the block
+    for (var p = 1; s.phrases && p < s.phrases.length; p++) {
+      mgraphics.set_source_rgba(1, 1, 1, 0.45);
+      mgraphics.rectangle(x(s.phrases[p].start_bar - data.first_bar), top + BLOCKS - 8, 1, 8);
+      mgraphics.fill();
+    }
   }
 
   // lanes: one column per bar, height by value
