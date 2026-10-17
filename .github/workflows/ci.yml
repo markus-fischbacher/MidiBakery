@@ -42,7 +42,7 @@ jobs:
 
       # Pinned: a new ruff release must not turn CI red on its own.
       - name: Lint (errors only)
-        run: uvx ruff@0.17.1 check --select F,E9 packages tests
+        run: uvx ruff@0.17.1 check --select F,E9 packages packaging tests
 
       - name: Tests
         env:

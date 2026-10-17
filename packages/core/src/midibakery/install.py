@@ -22,7 +22,9 @@ from pathlib import Path
 from midibakery import __version__
 from midibakery.bridge.client import config_dir
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+# The checkout this module runs from (packages/core/src/midibakery/install.py); meaningless in the packaged app,
+# where the path can be too short for that, so it falls back to the top.
+REPO_ROOT = Path(__file__).resolve().parents[min(4, len(Path(__file__).resolve().parents) - 1)]
 SCRIPT_NAME = "MidiBakery"
 REMOTE_SCRIPTS = "Remote Scripts"
 INSTALL_LIST = "install.json"  # the devices' list, written by packages/m4l/build.py
