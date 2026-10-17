@@ -451,6 +451,9 @@ def transform_device() -> dict[str, Any]:
 
 REFERENCE_WIDTH, REFERENCE_HEIGHT = 800.0, 169.0
 SENSITIVITY_BANDS = (("Kick", "kick"), ("Lows", "low"), ("Mids", "mid"), ("Hats", "high"))  # the view's lanes
+# Where reference-view.js draws its lanes (HEADER + 2 + BLOCKS + 4, then LANE each, LANE - 2 high): each
+# Sensitivity field sits level with its lane.
+LANES_TOP, LANE_HEIGHT = 16 + 2 + 32 + 4, 22
 
 
 def reference_device() -> dict[str, Any]:
@@ -497,14 +500,15 @@ def reference_device() -> dict[str, Any]:
     p.connect(to_v8, 0, v8)
     # Sensitivity: the fields' mean sets how finely the song is split (100: every change; lower merges more,
     # the phrases stay in the analysis), their ratio how much each band's changes count; Lock moves them together
-    p.comment("Sensitivity", (860, 100, 80, 14), presentation=(604, 4, 92, 14), fontsize=9.0, **THEMED_TEXT)
+    p.comment("Sensitivity", (860, 100, 80, 14), presentation=(604, LANES_TOP - 16, 92, 14), fontsize=9.0, **THEMED_TEXT)
     route = p.obj("route " + " ".join(key for _, key in SENSITIVITY_BANDS), 860, 400,
                   outlets=[""] * (len(SENSITIVITY_BANDS) + 1), width=200)
     p.connect(v8, 2, route)
     for i, (label, key) in enumerate(SENSITIVITY_BANDS):
         x, y = 860 + 70 * i, 140
-        p.comment(label, (x, y, 40, 14), presentation=(604, 22 + 22 * i, 40, 14), fontsize=9.0, **THEMED_TEXT)
-        field = p.parameter("live.numbox", (x, y + 20, 44, 15), (648, 21 + 22 * i, 48, 16), name=f"Sensitivity {label}",
+        lane_y = LANES_TOP + LANE_HEIGHT * i  # the lane is LANE_HEIGHT - 2 high: the 16 px field centred on it
+        p.comment(label, (x, y, 40, 14), presentation=(604, lane_y + 3, 40, 14), fontsize=9.0, **THEMED_TEXT)
+        field = p.parameter("live.numbox", (x, y + 20, 44, 15), (648, lane_y + 2, 48, 16), name=f"Sensitivity {label}",
                             short=label, ptype=FLOAT, inlets=1, outlets=["", "float"], parameter_mmin=0.0,
                             parameter_mmax=100.0, parameter_initial=[50.0], parameter_initial_enable=1,
                             parameter_unitstyle=UNIT_INT)
@@ -514,7 +518,7 @@ def reference_device() -> dict[str, Any]:
         shown = p.obj("prepend set", x, 430, width=70)
         p.connect(route, i, shown)
         p.connect(shown, 0, field)
-    lock = p.parameter("live.text", (860, 220, 50, 15), (604, 112, 92, 18), name="Sensitivity Lock", short="Lock",
+    lock = p.parameter("live.text", (860, 220, 50, 15), (604, LANES_TOP + LANE_HEIGHT * len(SENSITIVITY_BANDS) + 2, 92, 18), name="Sensitivity Lock", short="Lock",
                        ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 1, "text": "Lock", "texton": "Locked"})
     lock_to_v8 = p.obj("prepend lock", 860, 250, width=80)
