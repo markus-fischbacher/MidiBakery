@@ -491,6 +491,23 @@ def _under_reference(reference: dict[str, Any], bpb: float) -> float:
     return max(0.0, round(float(beat) / bpb) * bpb)
 
 
+def _check_unwarped(reference: dict[str, Any], tempo: float) -> None:
+    """An unwarped reference plays in real time at its own tempo: its bars line up with the song's only
+    when the song plays at that tempo too; otherwise the sections drift apart bar by bar."""
+    own = reference.get("tempo")
+    if reference.get("bar_grid") != "song" or not own or abs(float(own) - tempo) < 0.05:
+        return
+    beats = (int(reference.get("bars") or 0)) * 4
+    drift = abs(beats * 60 / tempo - beats * 60 / float(own))
+    raise BridgeError(
+        "INVALID_PARAMS",
+        f"The reference '{reference.get('name')}' is not warped: it plays at its own {float(own):g} BPM while the song "
+        f"would play at {tempo:g} BPM, so the sections drift apart (by {drift:.0f} s at its end). Press Analyze in the "
+        "MidiBakery Reference Analyzer device: it warps the clip onto the Set's grid. Or plan with set_tempo=true.",
+        {"reference_tempo": float(own), "tempo": tempo},
+    )
+
+
 def _from(harmony: Harmony, start: float, length: float) -> Harmony:
     """The part of a harmony from `start` for `length` beats, shifted to begin at 0."""
     segments = []
@@ -548,6 +565,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     if new_tempo is not None:
         tempo = new_tempo
     if reference is not None:
+        _check_unwarped(reference, tempo)
         sections = from_reference(template, reference["sections"])
     else:
         sections = sized(template, request.length, request.minutes, bpb, tempo)
@@ -556,6 +574,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     roles, warnings = _assign_roles(session, request)
     if reference is not None and request.minutes is not None:
         warnings.append("minutes ignored: the reference sets the song's length")
+    if reference is not None and reference.get("bar_grid") == "song":
+        warnings.append("The reference is not warped: it lines up only at its own tempo. Press Analyze in the Reference "
+                        "Analyzer device to warp it; then the tempo can change and its locators stay in place")
     returns = _plan_returns(mixer["returns"]) if request.mix else {}
     throws = _throw_levels(roles, style, returns, mixer)
     for role in throws:

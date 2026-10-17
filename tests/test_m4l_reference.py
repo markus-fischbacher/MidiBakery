@@ -85,6 +85,37 @@ def test_unwarped_clip_gets_its_own_tempo_and_real_time_locators(tmp_path):
     assert result["tempo"] == 128 and not result["warped"] and result["bar_grid"] == "song" and result["bars"] in (63, 64)
     sections = [(s["name"], s["start_bar"], round(s["beat"], 1)) for s in result["sections"]]
     assert sections == [("Intro", 1, 32.0), ("Break", 17, 92.0), ("Drop", 33, 152.0)], sections
+    # what the device warps the clip with: the detected tempo, bar 1 at the file's start
+    assert result["warp"]["bpm"] == 128 and result["warp"]["first"] < 0.05 and result["warp"]["offset"] == 0
+    assert abs(result["warp"]["length"] - seconds) < 0.01
+
+
+WARP_PLAN = """
+const vm = require("vm"), fs = require("fs");
+const ctx = { outlet() {}, post() {}, LiveAPI: function () {}, Task: function () {}, Dict: function () {} };
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), ctx);
+const [warp, start] = JSON.parse(process.argv[2]);
+const plan = ctx.warpPlan(warp, start);
+// Live's markers once warped as planned: one at the file's start, the end marker, the hidden last one
+const spb = 60 / warp.bpm;
+const markers = [{ beat_time: plan.beatAt(0), sample_time: 0 }, plan.end, { beat_time: plan.end.beat_time + 4, sample_time: plan.end.sample_time + 4 * spb }];
+const off = [{ beat_time: plan.beatAt(0), sample_time: 0 }, { beat_time: plan.end.beat_time, sample_time: plan.end.sample_time + 0.05 }];
+console.log(JSON.stringify({ down: plan.down, start: plan.start, end: plan.end, ok: ctx.warpedOk(markers, plan), off: ctx.warpedOk(off, plan),
+  bar17: ctx.secondsAt(markers, plan.down + 64) }));
+"""
+
+
+@needs_node
+def test_auto_warp_puts_bar_1_on_a_bar_line():
+    script = str(ROOT / "packages/m4l/src/reference.js")
+    # The Signal: 124 BPM from its first sample, the clip at the Arrangement's start
+    plan = json.loads(_node("-e", WARP_PLAN, script, json.dumps([{"bpm": 124, "first": 0.006, "length": 305.85, "offset": 0}, 0])))
+    assert plan["down"] == 0 and plan["start"] == 0 and plan["ok"] and not plan["off"]
+    assert plan["end"]["beat_time"] == 628 and abs(plan["bar17"] - (0.006 + 64 * 60 / 124)) < 1e-6
+    # 3 s of pad before the first kick, the clip at beat 6: bar 1 lands on clip beat 8, the start marker
+    # keeps the pad and puts the downbeat on arrangement beat 6 + 8 - 2 = 12
+    plan = json.loads(_node("-e", WARP_PLAN, script, json.dumps([{"bpm": 124, "first": 3, "length": 300, "offset": 0}, 6])))
+    assert plan["down"] == 8 and plan["start"] == 2 and plan["ok"]
 
 
 @needs_node
