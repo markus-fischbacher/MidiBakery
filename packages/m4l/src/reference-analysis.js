@@ -304,26 +304,42 @@ function perBar(beats, beatsPerBar) {
 
 const FEATURES = ["low", "bass", "mid", "high", "total"];
 
-function vector(bars) {
+// The device's Sensitivity fields, 0..100 each: how much a change in that band counts when the analysis
+// looks for sections and when it merges them. The total level counts as their mean.
+const SENSITIVITY = ["kick", "low", "bass", "mid", "high"];
+const FULL_SENSITIVITY = [1, 1, 1, 1, 1, 1];
+
+/** The weights in vector()'s order (low, bass, mid, high, total, kick) from {kick, low, ...: 0..100}. */
+function weights(sensitivity = {}) {
+  const w = {};
+  for (const band of SENSITIVITY) {
+    const value = Number(sensitivity[band]);
+    w[band] = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) / 100 : 1;
+  }
+  const total = mean(SENSITIVITY.map((band) => w[band]));
+  return [w.low, w.bass, w.mid, w.high, total, w.kick];
+}
+
+function vector(bars, w = FULL_SENSITIVITY) {
   const v = FEATURES.map((band) => mean(bars.map((b) => Math.max(-40, b[band]))));
   v.push(mean(bars.map((b) => b.kick)) * 12); // a kick that comes or goes counts like 12 dB
-  return v;
+  return v.map((x, i) => x * w[i]);
 }
 
 const distance = (a, b) => Math.sqrt(a.reduce((s, x, i) => s + (x - b[i]) ** 2, 0) / a.length);
 
 /** How much the phrase after `b` differs from the one before: the largest change of one feature, so
  * a single element coming in or out (hats, a pad) counts as much as everything changing a little. */
-function novelty(bars, b, phrase) {
-  const before = vector(bars.slice(Math.max(0, b - phrase), b));
-  const after = vector(bars.slice(b, b + phrase));
+function novelty(bars, b, phrase, w) {
+  const before = vector(bars.slice(Math.max(0, b - phrase), b), w);
+  const after = vector(bars.slice(b, b + phrase), w);
   return Math.max(...before.map((x, i) => Math.abs(after[i] - x)));
 }
 
 /** Section starts on the genre's bar grid: the strongest changes, each at least a phrase from the next. */
-function boundaries(bars, threshold, { step, phrase }) {
+function boundaries(bars, threshold, { step, phrase }, w = FULL_SENSITIVITY) {
   const candidates = [];
-  for (let b = step; b <= bars.length - step; b += step) candidates.push({ b, n: novelty(bars, b, phrase) });
+  for (let b = step; b <= bars.length - step; b += step) candidates.push({ b, n: novelty(bars, b, phrase, w) });
   const strength = (b) => (candidates.find((c) => c.b === b) || { n: 0 }).n;
   const peaks = candidates.filter((c) => c.n >= threshold && c.n >= strength(c.b - step) && c.n >= strength(c.b + step));
   // strongest first; on a tie the 8 bar phrase wins
@@ -416,23 +432,23 @@ const MAX_COST = 24; // the limit at detail 0: phrases of one kind differ by up 
 const DROP_GROOVE = 12;
 const FULL = ["drop", "groove"];
 
-function cost(bars, a, b) {
+function cost(bars, a, b, w) {
   if (["intro", "outro"].includes(a.kind) || ["intro", "outro"].includes(b.kind)) return Infinity;
   const apart = (s) => bars.slice(s.start_bar - 1, s.start_bar - 1 + s.bars);
-  const sound = distance(vector(apart(a)), vector(apart(b)));
+  const sound = distance(vector(apart(a), w), vector(apart(b), w));
   if (a.kind === b.kind) return sound;
   if (FULL.includes(a.kind) && FULL.includes(b.kind)) return DROP_GROOVE + sound / 2;
   return Infinity;
 }
 
-function merge(sections, bars, detail = DETAIL, names = {}) {
+function merge(sections, bars, detail = DETAIL, names = {}, w = FULL_SENSITIVITY) {
   const limit = (1 - Math.max(0, Math.min(100, detail)) / 100) * MAX_COST;
   const out = sections.map((s) => ({ ...s, phrases: [{ start_bar: s.start_bar, bars: s.bars, kind: s.kind, energy: s.energy, kick: s.kick, elements: s.elements }] }));
   for (;;) {
     let best = -1;
     let lowest = limit;
     for (let i = 0; i + 1 < out.length; i++) {
-      const c = cost(bars, out[i], out[i + 1]);
+      const c = cost(bars, out[i], out[i + 1], w);
       if (c < lowest) [best, lowest] = [i, c];
     }
     if (best < 0) break;
@@ -445,23 +461,25 @@ function merge(sections, bars, detail = DETAIL, names = {}) {
   return name(out.map(({ phrases, ...s }) => (phrases.length > 1 ? { ...s, phrases } : s)), names);
 }
 
-function analyze(samples, sampleRate, beats, { beatsPerBar = 4, threshold = 4, genre = "auto", bpm = 0, detail = DETAIL } = {}) {
+function analyze(samples, sampleRate, beats, { beatsPerBar = 4, threshold = 4, genre = "auto", bpm = 0, detail = DETAIL, sensitivity = {} } = {}) {
   const genreProfile = profile(genre, bpm);
   const fr = frames(samples, sampleRate);
   const bars = perBar(perBeat(fr, beats), beatsPerBar);
   const kicks = kickPresence(lowOnsets(fr, beats, beatsPerBar), bars.map((b) => b.low > -12));
   // a kick's tail can rise out of near silence; a bar this quiet in the lows has no kick
   bars.forEach((b, i) => (b.kick = b.low > KICK_MIN_LOW_DB ? kicks[i] ?? 0 : 0));
-  const starts = boundaries(bars, threshold, genreProfile);
+  const w = weights(sensitivity);
+  const starts = boundaries(bars, threshold, genreProfile, w);
   const found = label(starts.map((s, i) => describe(bars, s, starts[i + 1] ?? bars.length)), genreProfile.names);
   detail = Number.isFinite(Number(detail)) ? Math.max(0, Math.min(100, Math.round(Number(detail)))) : DETAIL;
-  const sections = merge(found, bars, detail, genreProfile.names);
+  const sections = merge(found, bars, detail, genreProfile.names, w);
   const k = key(chromas(samples, sampleRate));
   const round = (x) => Math.round(x * 10) / 10;
   return {
     bars: bars.length,
     genre: genreProfile.genre,
     detail,
+    sensitivity: Object.fromEntries(SENSITIVITY.map((band, i) => [band, Math.round(w[[5, 0, 1, 2, 3][i]] * 100)])),
     key: k.name,
     sections,
     lanes: {
@@ -582,4 +600,4 @@ function markerTempo(markers) {
   return b.sample_time > a.sample_time ? Math.round(((b.beat_time - a.beat_time) / (b.sample_time - a.sample_time)) * 60 * 10) / 10 : null;
 }
 
-module.exports = { GENRES, DETAIL, analyze, merge, chromas, beatGrid, estimateGrid, markerTempo, fft, key, BANDS };
+module.exports = { GENRES, DETAIL, SENSITIVITY, weights, analyze, merge, chromas, beatGrid, estimateGrid, markerTempo, fft, key, BANDS };

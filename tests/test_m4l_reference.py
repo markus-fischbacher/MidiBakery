@@ -18,8 +18,9 @@ NODE = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="no Node.js available")
 
 
-def _node(*args: str, genre: str = "auto") -> str:
-    return subprocess.run([NODE, *args], capture_output=True, text=True, check=True, env={**os.environ, "GENRE": genre}).stdout
+def _node(*args: str, genre: str = "auto", sensitivity: dict | None = None) -> str:
+    env = {**os.environ, "GENRE": genre, "SENSITIVITY": json.dumps(sensitivity or {})}
+    return subprocess.run([NODE, *args], capture_output=True, text=True, check=True, env=env).stdout
 
 
 @needs_node
@@ -33,6 +34,43 @@ def test_sections_kick_and_key_of_a_synthetic_song():
     assert min(kick[:16]) >= 0.5 and max(kick[16:32]) < 0.5 and min(kick[32:]) >= 0.5
     assert result["sections"][2]["elements"] == ["kick", "bass", "mids", "hats"]
     assert result["key"].startswith("A minor")
+
+
+@needs_node
+def test_band_sensitivity_weights_what_counts_as_a_change():
+    harness = (str(ROOT / "tests/reference_harness.js"), str(ROOT / "packages/m4l/src/reference-analysis.js"))
+    full = json.loads(_node(*harness))
+    assert full["sensitivity"] == {"kick": 100, "low": 100, "bass": 100, "mid": 100, "high": 100}
+    # deaf to every band: no change is big enough, the song is one section
+    deaf = json.loads(_node(*harness, sensitivity=dict.fromkeys(["kick", "low", "bass", "mid", "high"], 0)))
+    assert [s["start_bar"] for s in deaf["sections"]] == [1]
+    # the kick alone still hears where it stops (bar 17) and comes back (bar 33)
+    kick = json.loads(_node(*harness, sensitivity={"kick": 100, "low": 0, "bass": 0, "mid": 0, "high": 0}))
+    assert [s["start_bar"] for s in kick["sections"]] == [1, 17, 33] and kick["sensitivity"]["mid"] == 0
+
+
+LOCK = """
+const vm = require("vm"), fs = require("fs");
+const sent = [];
+const ctx = { outlet(n, ...a) { if (n === 2) sent.push(a); }, post() {}, LiveAPI: function () {}, Task: function () {}, Dict: function () {} };
+vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), ctx);
+ctx.band("high", 60);           // unlocked: only High moves
+ctx.lock(1);
+ctx.band("kick", 80);           // locked: the others follow by -20, kept within 0..100
+ctx.band("high", 10);           // -30 more: Low, Bass, Mid to 50, Kick to 50, High stays 10
+ctx.lock(0);
+ctx.band("mid", 90);
+console.log(JSON.stringify({ sensitivity: ctx.sensitivity, sent }));
+"""
+
+
+@needs_node
+def test_lock_moves_every_band_by_as_much():
+    out = json.loads(_node("-e", LOCK, str(ROOT / "packages/m4l/src/reference.js")))
+    assert out["sensitivity"] == {"kick": 50, "low": 50, "bass": 50, "mid": 90, "high": 10}
+    # the fields that followed are shown (outlet 2), the one turned by hand is not sent back
+    assert out["sent"][:4] == [["low", 80], ["bass", 80], ["mid", 80], ["high", 40]]
+    assert ["kick", 50] in out["sent"] and ["high", 10] not in out["sent"] and len(out["sent"]) == 8
 
 
 RUN = """

@@ -212,7 +212,7 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     assert "set_or_delete_cue" in code and "warp_markers" in code and "function unlocators()" in code
     assert "add_warp_marker" in code and "function autoWarp(" in code
     labels = sorted(b["text"] for b in boxes.values() if b["maxclass"] == "live.text")
-    assert labels == ["About", "Analyze", "Remove Locators", "Set Locators"]
+    assert labels == ["About", "Analyze", "Lock", "Remove Locators", "Set Locators"]
     menus = [b for b in boxes.values() if b["maxclass"] == "live.menu"]
     menu = next(b for b in menus if b["saved_attribute_attributes"]["valueof"]["parameter_enum"][0] == "Auto")
     assert len(menus) == 1
@@ -224,6 +224,20 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     assert ((next(i for i, b in boxes.items() if b is menu), 0), (to_v8, 0)) in lines
     assert all(b["presentation_rect"][0] + b["presentation_rect"][2] <= build.REFERENCE_WIDTH
                for b in boxes.values() if b.get("presentation"))
+    # Sensitivity: a field per band to "band <key>", shown back through route -> prepend set; Lock to "lock"
+    fields = {b["varname"]: i for i, b in boxes.items() if b["maxclass"] == "live.numbox"}
+    assert sorted(fields) == sorted(f"Sensitivity {label}" for label, _ in build.SENSITIVITY_BANDS)
+    route = by_text["route kick low bass mid high"]
+    for n, (label, key) in enumerate(build.SENSITIVITY_BANDS):
+        assert ((fields[f"Sensitivity {label}"], 0), (by_text[f"prepend band {key}"], 0)) in lines
+        shown = next(dst for (src, dst) in lines if src == (route, n))[0]
+        assert boxes[shown]["text"] == "prepend set" and ((shown, 0), (fields[f"Sensitivity {label}"], 0)) in lines
+    lock = next(i for i, b in boxes.items() if b.get("varname") == "Sensitivity Lock")
+    assert boxes[lock]["mode"] == 1 and ((lock, 0), (by_text["prepend lock"], 0)) in lines
+    v8_id = next(i for i, b in boxes.items() if b["maxclass"] == "v8.codebox")
+    assert ((v8_id, 2), (route, 0)) in lines and "function band(" in code and "function lock(" in code
+    shown_rects = [b["presentation_rect"] for b in boxes.values() if b.get("presentation")]
+    assert not any(_overlap(a, b) for i, a in enumerate(shown_rects) for b in shown_rects[i + 1:])
 
 
 def _overlap(a, b):

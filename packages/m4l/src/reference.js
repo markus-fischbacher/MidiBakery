@@ -6,15 +6,17 @@
  * device warps it onto the Set's grid (bar 1 on a bar line) and analyzes it again.
  *
  * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>, detail <0..100>,
+ *           band <kick|low|bass|mid|high> <0..100>, lock <0|1>,
  *           result <json>,
  *           status <text>
  * outlet 0: to node.script (analyze / lookup / log <json>)
  * outlet 1: to the view (show <json>, status <text>)
+ * outlet 2: to the Sensitivity fields (<band> <value>: shown without being sent back here)
  */
 
 autowatch = 0;
 inlets = 1;
-outlets = 2;
+outlets = 3;
 
 var ready = false;
 var current = null; // the last result
@@ -25,6 +27,10 @@ var chosen = "auto";
 var chosenDetail = 50;
 var detailTask = null;
 var DETAIL_SETTLE_MS = 400; // the dial turns through many values: analyze once it rests
+// the Sensitivity fields, 0..100 per band; with Lock on, changing one moves the others by as much
+var BANDS = ["kick", "low", "bass", "mid", "high"];
+var sensitivity = { kick: 100, low: 100, bass: 100, mid: 100, high: 100 };
+var locked = false;
 var job = null; // locator job: {queue, home, phase, ticks, task}
 var LOCATOR_TICK_MS = 60;
 var LOCATOR_TIMEOUT_TICKS = 40; // ~2.4 s per locator, then it is skipped
@@ -99,6 +105,7 @@ function referenceClip() {
     tempo: one(new LiveAPI("live_set"), "tempo"),
     genre: chosen,
     detail: chosenDetail,
+    sensitivity: sensitivity,
   };
 }
 
@@ -110,10 +117,35 @@ function genre(index) {
 function detail(value) {
   var was = chosenDetail;
   chosenDetail = Math.max(0, Math.min(100, Math.round(Number(value))));
-  if (!ready || !current || chosenDetail === was) return;
+  if (chosenDetail !== was) reanalyzeLater();
+}
+
+function reanalyzeLater() {
+  if (!ready || !current) return;
   if (!detailTask) detailTask = new Task(settled, this);
   detailTask.cancel();
   detailTask.schedule(DETAIL_SETTLE_MS);
+}
+
+/** One band's sensitivity; with Lock on the others follow by the same amount (kept within 0..100). */
+function band(name, value) {
+  if (!sensitivity.hasOwnProperty(name)) return;
+  value = Math.max(0, Math.min(100, Math.round(Number(value))));
+  var delta = value - sensitivity[name];
+  if (delta === 0) return;
+  sensitivity[name] = value;
+  if (locked) {
+    for (var i = 0; i < BANDS.length; i++) {
+      if (BANDS[i] === name) continue;
+      sensitivity[BANDS[i]] = Math.max(0, Math.min(100, sensitivity[BANDS[i]] + delta));
+      outlet(2, BANDS[i], sensitivity[BANDS[i]]);
+    }
+  }
+  reanalyzeLater();
+}
+
+function lock(on) {
+  locked = Number(on) > 0;
 }
 
 function settled() {
