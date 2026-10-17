@@ -120,7 +120,7 @@ function paint() {
   mgraphics.show_text(big);
   var right = w - 4;
   if (message) {
-    var status = fit(message, w / 3, 9);
+    var status = fit(message, w / 2, 9);
     right -= measure(status, 9) + 12;
     text(w - measure(status, 9) - 4, 12, status, DIM, 9);
   }

@@ -21,6 +21,7 @@ const os = require("os");
 const path = require("path");
 const { execFile } = require("child_process");
 const Max = require("max-api");
+const { about } = require("./midibakery-about.js");
 
 const MODE = process.env.MIDIBAKERY_DEVICE === "chat" ? "chat" : "miditool";
 const POLL_MS = 2000;
@@ -189,6 +190,11 @@ Max.addHandler("popout", () => {
   if (process.platform === "darwin") execFile("open", [url]);
   else if (process.platform === "win32") execFile("cmd", ["/c", "start", "", url]);
   else execFile("xdg-open", [url]);
+});
+
+// About button: about <device version> -> the versions in the status line.
+Max.addHandler("about", async (version) => {
+  await Max.outlet("status", await about(version));
 });
 
 Max.addHandler("refresh", () => {

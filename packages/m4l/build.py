@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import re
 import shutil
 import struct
 import sys
@@ -34,7 +35,10 @@ NODE_SCRIPT = "midibakery-node.js"
 # node.script entry files per device kind; each sets its mode and loads NODE_SCRIPT.
 NODE_ENTRIES = ("midibakery-chat.js", "midibakery-miditool.js")
 REFERENCE_FILES = ("midibakery-reference.js", "reference-analysis.js")  # the Reference device's node.script
-NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES)
+ABOUT_SCRIPT = "midibakery-about.js"  # the About button's version line, for both node.scripts
+NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES, ABOUT_SCRIPT)
+# MidiBakery's one version (midibakery.__version__), read as text: building needs no installed package.
+VERSION = re.search(r'^__version__ = "([^"]+)"', (HERE.parent / "core/src/midibakery/__init__.py").read_text(encoding="utf-8"), re.M)[1]
 
 # Four-character device type codes, as found in Live's own device templates.
 DEVICE_TYPES = {"midi_effect": b"mmmm", "audio_effect": b"aaaa", "generator": b"nagg", "transformation": b"natt"}
@@ -49,6 +53,9 @@ INSTALL_DIRS = {
 # Max parameter types. INT is "Int (0-255)": anything wider must be FLOAT with an integer unit style.
 FLOAT, INT, ENUM = 0, 1, 2
 UNIT_INT, UNIT_PERCENT = 0, 5
+# Text in Live's control colour, as Ableton's own devices colour their comments: readable in every Live theme,
+# where a fixed grey disappears on a light device background.
+THEMED_TEXT: dict[str, Any] = {"saved_attribute_attributes": {"textcolor": {"expression": "themecolor.live_control_fg"}}}
 
 
 class Patcher:
@@ -134,7 +141,7 @@ class Patcher:
             "enablehscroll": 1,
             "enablevscroll": 1,
             "devicewidth": width,
-            "description": "MidiBakery by Klirrwerk - AI composition for Ableton Live",
+            "description": f"MidiBakery {VERSION} by Klirrwerk - AI composition for Ableton Live",
             "digest": "",
             "tags": "",
             "style": "",
@@ -214,6 +221,15 @@ def _on_press(p: Patcher, button: str, message: str, target: str, x: float, y: f
     p.connect(msg, 0, target, inlet)
 
 
+def _about(p: Patcher, presentation, node: str, x: float, y: float) -> None:
+    """The About button: "about <version>" to the device's node.script, which answers with a status line
+    comparing this device's version with the API's and the Remote Script's (midibakery-about.js).
+    Not a Live parameter: nothing to automate or store."""
+    button = p.box("live.text", (x, y, 50, 15), inlets=1, outlets=["", ""], presentation=presentation,
+                   parameter_enable=0, mode=0, text="About", texton="About", varname="about")
+    _on_press(p, button, f"about {VERSION}", node, x, y + 30)
+
+
 def chat_device() -> dict[str, Any]:
     p = Patcher()
     # Layout: chat (jweb) on the left, a column with Pop out, the text field and the status on the right.
@@ -268,10 +284,11 @@ def chat_device() -> dict[str, Any]:
     other = p.obj("prepend jweb", 220, 440, width=90)
     p.connect(other, 0, node)
     set_status = p.obj("prepend set", 260, 100)
-    p.comment("Enter sends", (700, 300, 100, 14), presentation=(column_x, 124, column_w, 14), fontsize=9.0,
-              textcolor=[0.5, 0.5, 0.5, 1.0])
+    p.comment("Enter sends", (700, 300, 100, 14), presentation=(column_x, 124, 110, 14), fontsize=9.0,
+              **THEMED_TEXT)
+    _about(p, (column_x + 114, 124, column_w - 114, 14), node, 440, 160)
     status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 138, column_w, 30),
-                       linecount=2, fontsize=9.0, textcolor=[0.6, 0.6, 0.6, 1.0])
+                       linecount=2, fontsize=9.0, **THEMED_TEXT)
     p.connect(route, 1, set_status)
     p.connect(set_status, 0, status)
 
@@ -325,7 +342,7 @@ def _miditool_core(p: Patcher, mode: str) -> tuple[str, str]:
 
 def _status_and_feedback(p: Patcher, v8: str, presentation) -> dict[str, str]:
     status = p.comment("Connecting...", (460, 120, 250, 36), presentation=presentation, linecount=3,
-                       fontsize=9.0, textcolor=[0.6, 0.6, 0.6, 1.0])
+                       fontsize=9.0, **THEMED_TEXT)
     p.connect(v8, 3, status)
     feedback = p.obj("route seed", 460, 180, outlets=["", ""], width=70)
     thispatcher = p.obj("thispatcher", 560, 220, outlets=["", ""], width=80)
@@ -367,15 +384,16 @@ def _dial(p: Patcher, rect, presentation, name: str, short: str, initial: float)
 
 # Live's clip-view MIDI Tool panel (Live 12.4): the size of its own Max MIDI Tool templates.
 TOOL_WIDTH, TOOL_HEIGHT = 152.0, 147.0
-STATUS_RECT = (2, 98, 148, 46)
-GENERATOR_STATUS_RECT = (2, 116, 148, 30)  # below the Replace toggle
+ABOUT_RECT = (102, 96, 48, 16)  # beside the Generator's Replace toggle
+TOOL_STATUS_RECT = (2, 116, 148, 30)  # below Replace and About
 
 
 def generator_device() -> dict[str, Any]:
-    """Layout (152 x 147): Part | Style menus; Density, Swing, Chance (drums only) dials; Seed row; status."""
+    """Layout (152 x 147): Part | Style menus; Density, Swing, Chance (drums only) dials; Seed row; Replace | About; status."""
     p = Patcher()
-    v8, _ = _miditool_core(p, "generate")
-    ui = _status_and_feedback(p, v8, GENERATOR_STATUS_RECT)
+    v8, node = _miditool_core(p, "generate")
+    ui = _status_and_feedback(p, v8, TOOL_STATUS_RECT)
+    _about(p, ABOUT_RECT, node, 1020, 300)
 
     kind = _menu(p, (760, 20, 80, 15), (2, 2, 72, 16), "Part", "Part", ["Drums", "Bass", "Chords", "Melody"], 0)
     _param_to_v8(p, kind, "kind", v8, 760, 44)
@@ -408,10 +426,11 @@ def generator_device() -> dict[str, Any]:
 
 
 def transform_device() -> dict[str, Any]:
-    """Layout (152 x 147): Operation menu, Amount dial with Semis and Arp rate beside it, Seed row, status."""
+    """Layout (152 x 147): Operation menu, Amount dial with Semis and Arp rate beside it, Seed row, About, status."""
     p = Patcher()
-    v8, _ = _miditool_core(p, "transform")
-    ui = _status_and_feedback(p, v8, STATUS_RECT)
+    v8, node = _miditool_core(p, "transform")
+    ui = _status_and_feedback(p, v8, TOOL_STATUS_RECT)
+    _about(p, ABOUT_RECT, node, 1020, 300)
 
     operation = _menu(p, (760, 20, 110, 15), (2, 2, 148, 16), "Operation", "Operation",
                       ["Humanize", "Quantize", "Invert", "Arpeggiate", "Variation", "Transpose"], 0)
@@ -435,7 +454,8 @@ REFERENCE_WIDTH, REFERENCE_HEIGHT = 700.0, 169.0
 
 
 def reference_device() -> dict[str, Any]:
-    """Layout (700 x 169): the view (sections and lanes) on the left, Analyze and Locators on the right.
+    """Layout (700 x 169): the view (sections and lanes) on the left; Analyze, the locator buttons, Genre and
+    About on the right.
     Audio passes through: the device sits on the reference song's own audio track."""
     p = Patcher()
     plugin = p.obj("plugin~", 20, 20, inlets=2, outlets=["signal", "signal"], width=60)
@@ -476,7 +496,8 @@ def reference_device() -> dict[str, Any]:
     p.connect(genre, 0, to_v8)
     p.connect(to_v8, 0, v8)
     p.comment("Locators land on the Arrangement's grid: zoom in to 1 bar.",
-              (300, 110, 200, 60), presentation=(606, 104, 90, 64), linecount=5, fontsize=9.0, textcolor=[0.55, 0.55, 0.55, 1.0])
+              (300, 110, 200, 60), presentation=(606, 102, 90, 44), linecount=4, fontsize=9.0, **THEMED_TEXT)
+    _about(p, (606, 148, 90, 18), node, 760, 20)
     return p.to_json(kind="audio_effect", title="MidiBakery Reference Analyzer", width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
 
 
@@ -489,6 +510,9 @@ DEVICES = {
 
 
 def build(out: Path = DIST) -> list[Path]:
+    # From scratch: a renamed device must not linger in dist (and from there in an install).
+    for kind in INSTALL_DIRS:
+        shutil.rmtree(out / kind, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
     paths = []
     for name, (kind, factory) in DEVICES.items():
@@ -530,7 +554,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     paths = build()
     for path in paths:
-        print(f"built {path.relative_to(HERE)}")
+        print(f"built {path.relative_to(HERE)} ({VERSION})")
     if args.install:
         for path in install(paths, args.library or user_library()):
             print(f"installed {path}")

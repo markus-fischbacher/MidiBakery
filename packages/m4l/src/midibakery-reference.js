@@ -5,6 +5,7 @@
  *   analyze <json>   the clip as the device's v8 code found it (file, arrangement start/end,
  *                    start marker, warping, warp markers, Set tempo) -> "result <json>"
  *   lookup <json>    the same clip: a stored result for it, if any -> "result <json>"
+ *   about <version>  the About button: the versions of the device, API and Remote Script -> "status <text>"
  *
  * Results land in <MidiBakery folder>/references/<hash>.json, one per file and placement, where
  * MidiBakery's MCP server reads them. Decoding uses macOS's afconvert (MP3, AAC, AIFF, WAV, FLAC
@@ -19,6 +20,7 @@ const os = require("os");
 const path = require("path");
 const { execFile } = require("child_process");
 const { analyze, beatGrid, estimateGrid, markerTempo } = require("./reference-analysis.js");
+const { about } = require("./midibakery-about.js");
 
 const SAMPLE_RATE = 22050;
 const BEATS_PER_BAR = 4;
@@ -214,6 +216,7 @@ if (Max) {
   Max.addHandler("analyze", (...atoms) => onAnalyze(Max, atoms.join(" ")));
   Max.addHandler("lookup", (...atoms) => onLookup(Max, atoms.join(" ")));
   Max.addHandler("log", (...atoms) => log("device", atoms.join(" ")));
+  Max.addHandler("about", async (version) => Max.outlet("status", await about(version)));
   log("started", process.version);
 }
 

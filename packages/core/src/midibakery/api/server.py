@@ -47,11 +47,12 @@ from midibakery.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
 from midibakery.compose.standalone import GenerateRequest, TransformRequest, generate, transform
+from midibakery import __version__
 from midibakery.api.live_state import LiveState
 from midibakery.api.models import list_models
 from midibakery.mcp import build_server
 
-VERSION = "0.1.0"
+VERSION = __version__
 UI_PAGE = Path(__file__).with_name("ui") / "chat.html"
 ProviderFactory = Callable[[dict[str, str]], Provider]
 

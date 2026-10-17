@@ -1,6 +1,7 @@
 """The generated Max for Live devices: file format, wiring and JavaScript syntax."""
 
 import importlib.util
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -203,10 +204,92 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     code = next(b for b in boxes.values() if b["maxclass"] == "v8.codebox")["code"]
     assert "set_or_delete_cue" in code and "warp_markers" in code and "function unlocators()" in code
     labels = sorted(b["text"] for b in boxes.values() if b["maxclass"] == "live.text")
-    assert labels == ["Analyze", "Remove Locators", "Set Locators"]
+    assert labels == ["About", "Analyze", "Remove Locators", "Set Locators"]
     menu = next(b for b in boxes.values() if b["maxclass"] == "live.menu")
     assert menu["saved_attribute_attributes"]["valueof"]["parameter_enum"][0] == "Auto"
     to_v8 = by_text["prepend genre"]
     assert ((next(i for i, b in boxes.items() if b is menu), 0), (to_v8, 0)) in lines
     assert all(b["presentation_rect"][0] + b["presentation_rect"][2] <= build.REFERENCE_WIDTH
                for b in boxes.values() if b.get("presentation"))
+
+
+def _overlap(a, b):
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
+
+
+def test_every_device_has_an_about_button_that_asks_its_node_script(devices):
+    """About sends "about <version>" to the device's node.script, which answers with the versions line."""
+    for name, path in devices.items():
+        _, patcher = build.read_amxd(path)
+        assert patcher["patcher"]["description"].startswith(f"MidiBakery {build.VERSION} ")
+        boxes = _boxes(patcher)
+        about = next(i for i, b in boxes.items() if b.get("varname") == "about")
+        assert boxes[about]["maxclass"] == "live.text" and boxes[about]["parameter_enable"] == 0  # no automatable parameter
+        assert about not in patcher["patcher"]["parameters"]
+        node = next(i for i, b in boxes.items() if b.get("text", "").startswith("node.script"))
+        message = next(i for i, b in boxes.items() if b.get("text") == f"about {build.VERSION}")
+        lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0]) for l in patcher["patcher"]["lines"]}
+        assert (message, node) in lines, name
+        rect = boxes[about]["presentation_rect"]
+        assert rect[0] + rect[2] <= patcher["patcher"]["devicewidth"], name
+        others = [b["presentation_rect"] for i, b in boxes.items() if b.get("presentation") and i != about]
+        assert not [r for r in others if _overlap(rect, r)], name
+
+
+def test_a_rebuild_leaves_no_renamed_device_behind(tmp_path):
+    stale = tmp_path / "audio_effect" / "MidiBakery Reference.amxd"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"old")
+    build.build(tmp_path)
+    assert not stale.exists()
+
+
+@pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
+def test_about_line_compares_the_versions(tmp_path):
+    """midibakery-about.js against a stand-in API: same versions, a difference, no Live, no API."""
+    node = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
+    script = tmp_path / "about-test.js"
+    script.write_text(f"""
+const http = require("http");
+const fs = require("fs");
+const {{ about, aboutText }} = require({str(build.SRC / "midibakery-about.js")!r});
+const out = [];
+out.push(aboutText("0.2.0", {{ api: "0.2.0", script: "0.2.0" }}));
+out.push(aboutText("0.2.0", {{ api: "0.3.0", script: "0.2.0" }}));
+out.push(aboutText("0.2.0", {{ api: "0.2.0", script: null }}));
+const server = http.createServer((req, res) => {{
+  const ok = req.url === "/health" && req.headers.authorization === "Bearer secret";
+  res.writeHead(ok ? 200 : 401, {{ "content-type": "application/json" }});
+  res.end(JSON.stringify(ok ? {{ ok: true, version: "0.2.0", live: {{ bridge: "0.1.9" }} }} : {{ error: "UNAUTHORIZED" }}));
+}});
+server.listen(0, "127.0.0.1", async () => {{
+  out.push(await about("0.2.0"));  // no api.json yet
+  fs.writeFileSync(process.env.MIDIBAKERY_HOME + "/api.json", JSON.stringify({{ port: server.address().port, token: "secret" }}));
+  out.push(await about("0.2.0"));
+  server.close();
+  console.log(JSON.stringify(out));
+}});
+""")
+    env = {"MIDIBAKERY_HOME": str(tmp_path), "PATH": "/usr/bin:/bin"}
+    result = subprocess.run([node, str(script)], capture_output=True, text=True, env=env, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [
+        "MidiBakery 0.2.0 (device, API, Remote Script)",
+        "Versions differ: device 0.2.0, API 0.3.0, Remote Script 0.2.0 - reinstall MidiBakery",
+        "MidiBakery 0.2.0 (device, API) · Remote Script not connected",
+        "MidiBakery 0.2.0 · API not running",
+        "Versions differ: device 0.2.0, API 0.2.0, Remote Script 0.1.9 - reinstall MidiBakery",
+    ]
+
+
+def test_shown_texts_follow_lives_theme(devices):
+    """A fixed grey was unreadable on a light device background; Live's control colour fits every theme."""
+    for name, path in devices.items():
+        _, patcher = build.read_amxd(path)
+        for box in _boxes(patcher).values():
+            if box["maxclass"] == "comment" and box.get("presentation"):
+                assert "textcolor" not in box, (name, box["text"])
+                expression = box.get("saved_attribute_attributes", {}).get("textcolor", {}).get("expression")
+                assert expression in (None, "themecolor.live_control_fg"), (name, box["text"])

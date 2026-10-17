@@ -11,7 +11,7 @@ import time
 import traceback
 
 from . import ops  # noqa: F401  (registers handlers)
-from .protocol import ErrorCode, OpError, load_manifest, validate
+from .protocol import BRIDGE_VERSION, ErrorCode, OpError, load_manifest, validate
 from .launcher import ApiLauncher
 from .registry import HANDLERS, Context
 from .server import BridgeServer
@@ -49,7 +49,8 @@ class MidiBakerySurface(object):
         self._server = BridgeServer(self._live_version, self.log)
         try:
             self._server.start()
-            self.show_message("MidiBakery ready on port %d" % self._server.port)
+            self.log("version %s, bridge on port %d" % (BRIDGE_VERSION, self._server.port))
+            self.show_message("MidiBakery %s ready on port %d" % (BRIDGE_VERSION, self._server.port))
         except Exception as exc:
             self.log("could not start bridge: %s" % exc)
             self.show_message("MidiBakery: bridge failed to start (%s)" % exc)

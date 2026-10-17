@@ -9,6 +9,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from midibakery import __version__
 from midibakery.catalog import manifest
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -208,6 +209,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="midibakery")
+    parser.add_argument("--version", action="version", version=f"MidiBakery {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("mcp", help="run the MCP server (stdio by default)")
