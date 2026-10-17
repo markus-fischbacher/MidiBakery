@@ -34,7 +34,9 @@ DOWNLOAD_TIMEOUT = 300.0
 # Public keys that sign the update manifests, by key id: base64 of the raw 32-byte Ed25519 key.
 # packaging/release/keygen.py makes a key pair; its public half goes here, the private half only into
 # the CI secret MIDIBAKERY_SIGNING_KEY. Without a key here the check stays off.
-UPDATE_KEYS: dict[str, str] = {}
+UPDATE_KEYS: dict[str, str] = {
+    "mb-4977c1a77ff7": "s98KLeZmV3//hmsGgTDLNFjkitC5dPUWCZUS3vS3fnA=",
+}
 
 
 class UpdateError(Exception):
