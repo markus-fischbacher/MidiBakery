@@ -162,7 +162,7 @@
       el("rect", { width: 2, height: 4, fill: color }, pat);
       return `url(#${id})`;
     };
-    const uid = `c${clip.track}_${clip.slot}`;
+    const uid = clip.arrangement_clip != null ? `c${clip.track}_a${clip.arrangement_clip}` : `c${clip.track}_${clip.slot}`;
     const striped = { add: pattern("var(--add)", uid + "a"), mod: pattern("var(--mod)", uid + "m"), keep: pattern("var(--keep)", uid + "k") };
 
     const drawNote = (n, kind) => {
@@ -210,7 +210,7 @@
       const box = document.createElement("section");
       box.className = "clip";
       const h = document.createElement("h2");
-      h.textContent = `Track ${clip.track + 1} · Slot ${clip.slot + 1} · ${clip.kind}`;
+      h.textContent = `Track ${clip.track + 1} · ${clip.arrangement_clip != null ? `Arrangement clip ${clip.arrangement_clip + 1}` : `Slot ${clip.slot + 1}`} · ${clip.kind}`;
       const detail = document.createElement("span");
       const bits = [change.action, `+${clip.add.length}`, `~${clip.modify.length}`, `−${clip.remove.length}`];
       if (change.chords) bits.push(change.chords.join(" – "));

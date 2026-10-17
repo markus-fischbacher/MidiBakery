@@ -547,3 +547,20 @@ async def test_full_tool_set_stays_within_the_local_budget(client):
     payload = json.dumps([{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in provider.tools])
     assert {"get_mixer", "update_mixer", "create_return_track"} <= {t.name for t in provider.tools}
     assert len(payload) + len(SYSTEM_PROMPT) < 36000
+
+
+async def test_a_model_repeating_a_failing_call_is_stopped(client, live):
+    # A local model that keeps sending the same wrong call: stopped after 3, not after 24 rounds
+    bad = ("compose", {"kind": "bass", "track": 1, "arrangement_clip": 7})
+    provider = ScriptedProvider([tool_turn(bad)] * 30)
+    events = await run(build_server(client), provider, "more bass variation in the groove")
+    assert len(provider.results) == 3
+    assert events[-1]["type"] == "error" and events[-1]["code"] == "STUCK"
+    assert "compose failed 3 times with the same arguments" in events[-1]["message"]
+    assert "No arrangement clip index 7" in events[-1]["message"]
+
+
+async def test_a_model_failing_in_every_round_is_stopped(client, live):
+    provider = ScriptedProvider([tool_turn(("compose", {"kind": "bass", "track": 1, "arrangement_clip": i})) for i in range(30)])
+    events = await run(build_server(client), provider, "vary the bass")
+    assert len(provider.results) == 6 and events[-1]["code"] == "STUCK" and "6 rounds in a row" in events[-1]["message"]

@@ -132,3 +132,13 @@ async def test_piano_roll_app(client, live):
         assert clip["length"] == 4 and len(clip["existing"]) == 2
         assert clip["modify"] == [{"note_id": clip["existing"][0][0], "start_time": 0.0}]
         assert json.loads(result.content[0].text)["changes"][0]["modify"] == 1
+
+
+async def test_replacing_an_arrangement_clip_asks_with_its_name(client, live):
+    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 16}]})
+    await client.call("notes.apply", {"track": 1, "arrangement_clip": 0, "add": [{"pitch": 33, "start_time": 0.0, "duration": 1}]})
+    answer = Answer(confirm=False)
+    async with Client(build_server(client), elicitation_callback=answer) as mcp:
+        result = await mcp.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": 0})
+    assert result.is_error and "CANCELLED" in result.content[0].text
+    assert answer.messages == ["Replace 1 existing note(s) in track 2 arrangement clip 1?"]

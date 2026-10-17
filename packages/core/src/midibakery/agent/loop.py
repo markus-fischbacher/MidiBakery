@@ -34,6 +34,8 @@ SMALL_SYSTEM_PROMPT = (
     "- compose (kind drums/bass/chords/melody) writes a new clip into a free slot (omit slot for the first free one). "
     "Give bass and melody chords_from = the chord clip (never a drums track), the bass follow_kick = the drum clip. "
     "Never overwrite a clip unless the user asks for it.\n"
+    "- A song in the Arrangement: get_arrangement lists each track's clips (arrangement_clip index, start beat, name). "
+    "To change one part of it, give compose or transform_notes arrangement_clip instead of slot.\n"
     "- edit_notes and transform_notes change existing notes by note_id from get_clip. "
     "Transpose by half steps/semitones/octaves with semitones (12 = octave); steps means scale steps.\n"
     "- To play a clip, launch it with launch_clip; transport only starts or stops the whole song.\n"
@@ -42,6 +44,9 @@ SMALL_SYSTEM_PROMPT = (
 )
 
 MAX_STEPS = 24
+# A model that keeps failing gets stopped early instead of burning all MAX_STEPS rounds:
+SAME_FAILURE_LIMIT = 3  # the same call (tool and arguments) failed this often
+FAILED_ROUNDS_LIMIT = 6  # this many rounds in a row in which every call failed
 # Tools the chat page runs itself (Apply on a plan preview, the Undo button).
 UI_TOOLS = frozenset({"apply_plan", "undo"})
 
@@ -99,6 +104,8 @@ class Agent:
                 text = "\n".join(self._notes) + "\n\n" + text
                 self._notes.clear()
             self.provider.add_user(text)
+            failures: dict[str, int] = {}
+            failed_rounds = 0
             for _ in range(self.max_steps):
                 try:
                     turn = await self.provider.stream_turn(emit)
@@ -112,6 +119,7 @@ class Agent:
                     await emit({"type": "done", "stop_reason": turn.stop_reason, "usage": turn.usage})
                     return
                 results = []
+                stuck = None
                 # Sequential on purpose: Live ops depend on each other's order (create, then fill).
                 for call in turn.tool_calls:
                     outcome = await self._call(call, emit)
@@ -119,8 +127,28 @@ class Agent:
                     if self.compact and not outcome.is_error and outcome.structured and call.name in COMPACT_RESULTS:
                         text = COMPACT_RESULTS[call.name](outcome.structured)
                     results.append(ToolResult(call.id, call.name, text, outcome.is_error))
+                    if outcome.is_error:
+                        key = call.name + json.dumps(call.input, sort_keys=True, default=str)
+                        failures[key] = failures.get(key, 0) + 1
+                        if failures[key] >= SAME_FAILURE_LIMIT:
+                            stuck = f"{call.name} failed {failures[key]} times with the same arguments"
                 self.provider.add_tool_results(results)
+                failed_rounds = failed_rounds + 1 if all(r.is_error for r in results) else 0
+                if stuck is None and failed_rounds >= FAILED_ROUNDS_LIMIT:
+                    stuck = f"every tool call failed {failed_rounds} rounds in a row"
+                if stuck is not None:
+                    last = next(r.content for r in reversed(results) if r.is_error)
+                    await emit({"type": "error", "code": "STUCK", "message": (
+                        f"Stopped: {stuck}. Last error: {_first_line(last)} "
+                        "Nothing more was changed. Rephrase the request (name the track and section), or try a larger model."
+                    )})
+                    return
             await emit({"type": "error", "message": f"Stopped after {self.max_steps} tool rounds without an answer."})
+
+
+def _first_line(text: str, limit: int = 300) -> str:
+    line = " ".join(text.strip().split("\n", 1)[0].split())
+    return line if len(line) <= limit else line[: limit - 1] + "…"
 
 
 def describe_input(value: Any, limit: int = 160) -> str:

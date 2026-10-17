@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -13,6 +13,11 @@ from midibakery.compose.transform import ArpDirection, Operation
 
 TrackIndex = Annotated[int, Field(ge=0, description="Zero-based track index")]
 SlotIndex = Annotated[int, Field(ge=0, description="Zero-based clip slot (= scene) index")]
+ArrangementClip = Annotated[
+    int | None,
+    Field(ge=0, description="Zero-based arrangement clip index on the track (get_arrangement), instead of slot: "
+          "a clip in the Arrangement, e.g. one section of a song"),
+]
 Pitch = Annotated[int, Field(ge=0, le=127)]
 Seed = Annotated[
     int | None,
@@ -28,9 +33,22 @@ class Spec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _one_place(spec: Any, required: bool) -> None:
+    if spec.slot is not None and spec.arrangement_clip is not None:
+        raise ValueError("give either slot (Session View) or arrangement_clip (Arrangement), not both")
+    if required and spec.slot is None and spec.arrangement_clip is None:
+        raise ValueError("give slot (Session View) or arrangement_clip (Arrangement, from get_arrangement)")
+
+
 class ClipLocation(Spec):
     track: TrackIndex
-    slot: SlotIndex
+    slot: SlotIndex | None = None
+    arrangement_clip: ArrangementClip = None
+
+    @model_validator(mode="after")
+    def _place(self) -> ClipLocation:
+        _one_place(self, required=True)
+        return self
 
 
 class Generate(Spec):
@@ -38,13 +56,23 @@ class Generate(Spec):
     slot: Annotated[
         int | None, Field(ge=0, description="Zero-based clip slot (= scene) index. Default: the track's first free slot")
     ] = None
-    bars: Annotated[int, Field(ge=1, le=64, description="Length in bars of the song's time signature")] = 4
+    arrangement_clip: ArrangementClip = None
+    bars: Annotated[
+        int | None,
+        Field(ge=1, le=64, description="Length in bars of the song's time signature; default 4, or the arrangement clip's length"),
+    ] = None
     seed: Seed = None
-    if_exists: Literal["error", "replace", "merge"] = Field(
-        "error",
-        description="If the slot already holds a clip: 'error', 'replace' its notes, or 'merge' (add on top)",
+    if_exists: Literal["error", "replace", "merge"] | None = Field(
+        None,
+        description="If the slot already holds a clip: 'error' (default), 'replace' its notes, or 'merge' (add on top). "
+        "An arrangement clip always exists: its notes are replaced unless 'merge'",
     )
     clip_name: str | None = None
+
+    @model_validator(mode="after")
+    def _place(self) -> Generate:
+        _one_place(self, required=False)
+        return self
 
 
 class Harmonic(Generate):
@@ -118,7 +146,8 @@ class MelodySpec(Harmonic):
 class TransformSpec(Spec):
     kind: Literal["transform"] = "transform"
     track: TrackIndex
-    slot: SlotIndex
+    slot: SlotIndex | None = None
+    arrangement_clip: ArrangementClip = None
     operation: Operation
     note_ids: list[int] | None = Field(None, description="Only these notes (default: all notes in the clip)")
     amount: Amount = Field(0.5, description="humanize/variation intensity")
@@ -139,6 +168,11 @@ class TransformSpec(Spec):
     direction: ArpDirection = "up"
     octaves: Annotated[int, Field(ge=1, le=3)] = 1
     seed: Seed = None
+
+    @model_validator(mode="after")
+    def _place(self) -> TransformSpec:
+        _one_place(self, required=True)
+        return self
 
     @model_validator(mode="after")
     def _transpose_amount(self) -> TransformSpec:

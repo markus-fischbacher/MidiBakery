@@ -52,7 +52,9 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
 - Mixer: volume and sends in dB as Live shows them; routing by the names get_mixer(options=true)
   lists. Devices inside racks: chain_path [chain, device, ...].
 - Arrangement: bar n starts at beat (n-1) * beats per bar. edit_arrangement never overwrites
-  a clip; clip tools take arrangement_clip (from get_arrangement) instead of slot.
+  a clip; clip tools take arrangement_clip (from get_arrangement) instead of slot. compose and
+  transform_notes too: to rewrite or vary one part of a song (the bass in its Groove), give the
+  arrangement clip; compose then replaces its notes over its whole length.
 - A whole song: plan_song, then apply_plan; say which tracks it used and created.
   compose_takes puts variations of a part on take lanes to comp in Live.
 - compose writes one part into the track's first free slot (if_exists for occupied ones),
@@ -144,7 +146,8 @@ class PlanChanges(BaseModel):
     steps: list[PlanStep] = Field(min_length=1, max_length=16, description="Composition steps, in order")
 
     def specs(self) -> list[Any]:
-        return [STEP.validate_python(step.model_dump()) for step in self.steps]
+        # preview inside a step: models copy it from compose; plan_changes always previews
+        return [STEP.validate_python({k: v for k, v in step.model_dump().items() if k != "preview"}) for step in self.steps]
 
 
 class ApplyPlan(BaseModel):
@@ -191,11 +194,7 @@ def _make_tool(
             hint = f" Details: {exc.details}" if exc.details else ""
             raise ToolError(f"{exc.code}: {exc.message}.{hint}") from None
         except ValidationError as exc:
-            # loc + msg only: echoing the full input costs context and buries the message.
-            errors = "; ".join(
-                f"{'.'.join(map(str, e['loc'])) or 'arguments'}: {e['msg']}" for e in exc.errors(include_url=False, include_context=False)
-            )
-            raise ToolError(f"INVALID_PARAMS: {errors}") from None
+            raise ToolError(f"INVALID_PARAMS: {_validation_message(exc, model)}") from None
         if isinstance(result, dict | CallToolResult | InputRequiredResult):
             return result
         return {"result": result}
@@ -211,6 +210,28 @@ def _make_tool(
         "return": signature.return_annotation
     }
     return tool
+
+
+def _validation_message(exc: ValidationError, model: type[BaseModel]) -> str:
+    """loc + msg only: echoing the full input costs context and buries the message. An unknown field
+    names the fields the tool does take, so a model can fix the call instead of guessing again."""
+    parts = []
+    for e in exc.errors(include_url=False, include_context=False):
+        where = ".".join(map(str, e["loc"])) or "arguments"
+        if e["type"] == "extra_forbidden":
+            parts.append(f"{where}: unknown field")
+        else:
+            parts.append(f"{where}: {e['msg']}")
+    if any(e["type"] == "extra_forbidden" and len(e["loc"]) == 1 for e in exc.errors()):
+        parts.append("fields of this tool: " + ", ".join(model.model_fields))
+    return "; ".join(parts)
+
+
+def _clip_label(change: Any) -> str:
+    """As the user counts: track 2 slot 1, track 2 arrangement clip 3."""
+    if change.place.in_arrangement:
+        return f"track {change.track + 1} arrangement clip {change.place.arrangement_clip + 1}"
+    return f"track {change.track + 1} slot {change.slot + 1}"
 
 
 def _with_roll(plan: Plan, payload: dict[str, Any], applied: bool) -> CallToolResult:
@@ -362,7 +383,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         removed = plan.removes_existing
         if not removed:
             return None
-        clips = ", ".join(f"track {c.track + 1} slot {c.slot + 1}" for c in plan.changes if c.removes_existing)
+        clips = ", ".join(_clip_label(c) for c in plan.changes if c.removes_existing)
         return await confirm(ctx, f"Replace {removed} existing note(s) in {clips}?", state)
 
     for tool_name, model, title, description in COMPOSE_TOOLS:
