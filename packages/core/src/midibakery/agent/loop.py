@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import logging
 from typing import Any
 
 from midibakery.agent.providers.base import Emit, Provider, ToolCall, ToolResult
@@ -14,7 +15,7 @@ from midibakery.mcp.server import INSTRUCTIONS
 SYSTEM_PROMPT = (
     "You are MidiBakery, a music production assistant inside Ableton Live 12. "
     "You compose and edit MIDI and control the Live session through tools. "
-    "Answer in the user's language and keep replies short: say what you changed or propose, "
+    "Always answer in the language of the user's latest message and keep replies short: say what you changed or propose, "
     "with names of tracks, clips, chords and seeds where useful.\n\n"
     "Work like a producer: read the session before writing, keep parts in the song's scale and "
     "time signature, and make parts fit together (bass follows the kick and the chords, melody "
@@ -27,7 +28,7 @@ SYSTEM_PROMPT = (
 # For local models with a small context (e.g. 8k): the essentials of SYSTEM_PROMPT and INSTRUCTIONS.
 SMALL_SYSTEM_PROMPT = (
     "You are MidiBakery, a music assistant controlling the open Ableton Live 12 set through tools. "
-    "Answer in the user's language, briefly.\n"
+    "Always answer in the language of the user's latest message, briefly.\n"
     "- Call get_session first. Tracks and clip slots are zero-based indices; "
     "users count from 1, so \"track 1\" is index 0.\n"
     "- Times are in beats (quarter notes); pitch 60 = C3. Stay in the song scale.\n"
@@ -43,7 +44,11 @@ SMALL_SYSTEM_PROMPT = (
     "If the user declined a change (CANCELLED), nothing was written: say so, never claim it was done."
 )
 
+log = logging.getLogger("midibakery.agent")
+
 MAX_STEPS = 24
+# Small local models drift into another language over a long tool chain: each message reminds them.
+LANGUAGE_REMINDER = "\n\n(Reply in the language of this message.)"
 # A model that keeps failing gets stopped early instead of burning all MAX_STEPS rounds:
 SAME_FAILURE_LIMIT = 3  # the same call (tool and arguments) failed this often
 FAILED_ROUNDS_LIMIT = 6  # this many rounds in a row in which every call failed
@@ -85,6 +90,8 @@ class Agent:
     async def _call(self, call: ToolCall, emit: Emit, source: str = "model") -> ToolOutcome:
         await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": source})
         outcome = await self.host.call(call.name, call.input)
+        log.info("%s tool %s %s -> %s", source, call.name, describe_input(call.input, 400),
+                 "error: " + _first_line(outcome.text) if outcome.is_error else "ok")
         await emit({
             "type": "tool_result",
             "id": call.id,
@@ -103,7 +110,7 @@ class Agent:
             if self._notes:
                 text = "\n".join(self._notes) + "\n\n" + text
                 self._notes.clear()
-            self.provider.add_user(text)
+            self.provider.add_user(text + LANGUAGE_REMINDER if self.compact else text)
             failures: dict[str, int] = {}
             failed_rounds = 0
             for _ in range(self.max_steps):
