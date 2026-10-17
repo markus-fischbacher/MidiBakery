@@ -495,8 +495,8 @@ def reference_device() -> dict[str, Any]:
     to_v8 = p.obj("prepend genre", 600, 50, width=90)
     p.connect(genre, 0, to_v8)
     p.connect(to_v8, 0, v8)
-    # Sensitivity: how much each band's changes count when sections are found and merged (lower: fewer,
-    # longer sections; their phrases stay in the analysis); Lock moves them together
+    # Sensitivity: the fields' mean sets how finely the song is split (100: every change; lower merges more,
+    # the phrases stay in the analysis), their ratio how much each band's changes count; Lock moves them together
     p.comment("Sensitivity", (860, 100, 80, 14), presentation=(604, 4, 92, 14), fontsize=9.0, **THEMED_TEXT)
     route = p.obj("route " + " ".join(key for _, key in SENSITIVITY_BANDS), 860, 400,
                   outlets=[""] * (len(SENSITIVITY_BANDS) + 1), width=200)
@@ -506,7 +506,7 @@ def reference_device() -> dict[str, Any]:
         p.comment(label, (x, y, 40, 14), presentation=(604, 22 + 22 * i, 40, 14), fontsize=9.0, **THEMED_TEXT)
         field = p.parameter("live.numbox", (x, y + 20, 44, 15), (648, 21 + 22 * i, 48, 16), name=f"Sensitivity {label}",
                             short=label, ptype=FLOAT, inlets=1, outlets=["", "float"], parameter_mmin=0.0,
-                            parameter_mmax=100.0, parameter_initial=[100.0], parameter_initial_enable=1,
+                            parameter_mmax=100.0, parameter_initial=[50.0], parameter_initial_enable=1,
                             parameter_unitstyle=UNIT_INT)
         to_v8 = p.obj(f"prepend band {key}", x, y + 50, width=110)
         p.connect(field, 0, to_v8)

@@ -304,20 +304,25 @@ function perBar(beats, beatsPerBar) {
 
 const FEATURES = ["low", "bass", "mid", "high", "total"];
 
-// The device's Sensitivity fields, 0..100 each: how much a change in that band counts when the analysis
-// looks for sections and when it merges them. The total level counts as their mean.
+// The device's Sensitivity fields, 0..100 each (default 50). Their mean is how finely the song is split:
+// at 100 every change found is a section, lower merges more (MERGING). Their ratio is what counts as a
+// change: each band weighs as much as its field against the highest one, the total level as their mean.
 const SENSITIVITY = ["kick", "low", "bass", "mid", "high"];
+const DEFAULT_SENSITIVITY = 50;
 const FULL_SENSITIVITY = [1, 1, 1, 1, 1, 1];
 
-/** The weights in vector()'s order (low, bass, mid, high, total, kick) from {kick, low, ...: 0..100}. */
+/** {values: the fields, level: their mean 0..1, shape: weights in vector()'s order (low, bass, mid, high,
+ * total, kick), each field over the highest} from {kick, low, ...: 0..100}. */
 function weights(sensitivity = {}) {
-  const w = {};
+  const values = {};
   for (const band of SENSITIVITY) {
     const value = Number(sensitivity[band]);
-    w[band] = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) / 100 : 1;
+    values[band] = Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : DEFAULT_SENSITIVITY;
   }
-  const total = mean(SENSITIVITY.map((band) => w[band]));
-  return [w.low, w.bass, w.mid, w.high, total, w.kick];
+  const top = Math.max(...SENSITIVITY.map((band) => values[band]));
+  const w = (band) => (top > 0 ? values[band] / top : 1);
+  const shape = [w("low"), w("bass"), w("mid"), w("high"), mean(SENSITIVITY.map(w)), w("kick")];
+  return { values, level: mean(SENSITIVITY.map((band) => values[band])) / 100, shape };
 }
 
 function vector(bars, w = FULL_SENSITIVITY) {
@@ -422,32 +427,32 @@ function name(sections, names = {}) {
   return sections;
 }
 
-// Neighbours merge, the most alike first, while their cost stays under LIMIT; the Sensitivity fields
-// weigh the sound, so lower fields merge more. The same kind next to itself costs how far apart the two
-// sound (four breaks in a row are one long break); a drop next to its groove costs DROP_GROOVE times the
-// mean sensitivity more (one drop once the fields are below about 50); other kinds, the intro and the
-// outro never merge. The changes within a section stay as its phrases.
-const LIMIT = 12; // dB: phrases of one kind differ by up to ~8 dB (The Signal's breaks)
-const DROP_GROOVE = 24;
+// MERGING: neighbours merge, the most alike first, while their cost stays under a limit that rises from
+// 0 (fields at 100: every change found is a section) to MAX_COST (fields at 0). The same kind next to
+// itself costs how far apart the two sound (four breaks in a row are one long break by 50); a drop next
+// to its groove costs DROP_GROOVE more (one drop below 50); other kinds, the intro and the outro never
+// merge. The changes within a section stay as its phrases.
+const MAX_COST = 24; // dB: phrases of one kind differ by up to ~8 dB (The Signal's breaks)
+const DROP_GROOVE = 12;
 const FULL = ["drop", "groove"];
 
-function cost(bars, a, b, w) {
+function cost(bars, a, b, shape) {
   if (["intro", "outro"].includes(a.kind) || ["intro", "outro"].includes(b.kind)) return Infinity;
   const apart = (s) => bars.slice(s.start_bar - 1, s.start_bar - 1 + s.bars);
-  const sound = distance(vector(apart(a), w), vector(apart(b), w));
+  const sound = distance(vector(apart(a), shape), vector(apart(b), shape));
   if (a.kind === b.kind) return sound;
-  if (FULL.includes(a.kind) && FULL.includes(b.kind)) return DROP_GROOVE * w[4] + sound / 2; // w[4]: the mean
+  if (FULL.includes(a.kind) && FULL.includes(b.kind)) return DROP_GROOVE + sound / 2;
   return Infinity;
 }
 
-function merge(sections, bars, names = {}, w = FULL_SENSITIVITY) {
-  const limit = LIMIT;
+function merge(sections, bars, names = {}, w = weights()) {
+  const limit = (1 - w.level) * MAX_COST;
   const out = sections.map((s) => ({ ...s, phrases: [{ start_bar: s.start_bar, bars: s.bars, kind: s.kind, energy: s.energy, kick: s.kick, elements: s.elements }] }));
   for (;;) {
     let best = -1;
     let lowest = limit;
     for (let i = 0; i + 1 < out.length; i++) {
-      const c = cost(bars, out[i], out[i + 1], w);
+      const c = cost(bars, out[i], out[i + 1], w.shape);
       if (c < lowest) [best, lowest] = [i, c];
     }
     if (best < 0) break;
@@ -468,7 +473,7 @@ function analyze(samples, sampleRate, beats, { beatsPerBar = 4, threshold = 4, g
   // a kick's tail can rise out of near silence; a bar this quiet in the lows has no kick
   bars.forEach((b, i) => (b.kick = b.low > KICK_MIN_LOW_DB ? kicks[i] ?? 0 : 0));
   const w = weights(sensitivity);
-  const starts = boundaries(bars, threshold, genreProfile, w);
+  const starts = boundaries(bars, threshold, genreProfile, w.shape);
   const found = label(starts.map((s, i) => describe(bars, s, starts[i + 1] ?? bars.length)), genreProfile.names);
   const sections = merge(found, bars, genreProfile.names, w);
   const k = key(chromas(samples, sampleRate));
@@ -476,7 +481,7 @@ function analyze(samples, sampleRate, beats, { beatsPerBar = 4, threshold = 4, g
   return {
     bars: bars.length,
     genre: genreProfile.genre,
-    sensitivity: Object.fromEntries(SENSITIVITY.map((band, i) => [band, Math.round(w[[5, 0, 1, 2, 3][i]] * 100)])),
+    sensitivity: w.values,
     key: k.name,
     sections,
     lanes: {

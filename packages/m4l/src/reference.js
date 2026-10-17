@@ -27,7 +27,7 @@ var settleTask = null;
 var SETTLE_MS = 400; // a field dragged runs through many values: analyze once it rests
 // the Sensitivity fields, 0..100 per band; with Lock on, changing one moves the others by as much
 var BANDS = ["kick", "low", "bass", "mid", "high"];
-var sensitivity = { kick: 100, low: 100, bass: 100, mid: 100, high: 100 };
+var sensitivity = { kick: 50, low: 50, bass: 50, mid: 50, high: 50 };
 var locked = false;
 var job = null; // locator job: {queue, home, phase, ticks, task}
 var LOCATOR_TICK_MS = 60;
