@@ -59,6 +59,11 @@
   #live .rec { color: var(--err); }
   /* Claude API key: a password field in the browser; in the device the next line typed into the
      Max text field is taken as the key (jweb gets no keystrokes). */
+  /* A newer MidiBakery (the API's daily update check): Install downloads, verifies and opens its installer. */
+  #update { display: flex; gap: 6px; align-items: center; padding: 3px 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  #update[hidden] { display: none; }
+  #update .text { flex: 1; }
+  #update .text.err { color: var(--err); }
   #keyPanel { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 4px 6px; border-bottom: 1px solid var(--line); background: var(--panel); }
   #keyPanel[hidden] { display: none; }
   #keyPanel .text { flex: 1 1 100%; }
@@ -111,6 +116,11 @@
   <button id="reset" type="button" title="Forget the conversation">New</button>
 </header>
 <div id="live" hidden title="What Live is doing"></div>
+<div id="update" hidden>
+  <span id="updateText" class="text"></span>
+  <button id="updateInstall" class="primary" type="button">Install</button>
+  <button id="updateLater" type="button">Later</button>
+</div>
 <div id="keyPanel" hidden>
   <span id="keyText" class="text"></span>
   <span id="keyTypeHint" class="note">Paste the key into the message field on the right and press Enter. It is not sent to any model.</span>
@@ -697,8 +707,48 @@ try {
   }
 } catch (_) {}
 
+// ---- updates: the API checks once a day; "Later" hides the notice until the page reloads
+const UPDATE_POLL_MS = 6 * 3600 * 1000;
+let updateDismissed = false;
+
+function showUpdate(message, { error = false, install = false } = {}) {
+  $("update").hidden = false;
+  $("updateText").textContent = message;
+  $("updateText").classList.toggle("err", error);
+  $("updateInstall").hidden = !install;
+}
+
+async function checkUpdate() {
+  if (!token || updateDismissed) return;
+  try {
+    const response = await fetch("/update", { headers: { Authorization: `Bearer ${token}` } });
+    const data = await response.json();
+    if (data.update) showUpdate(`MidiBakery ${data.update.version} is available (you have ${data.current}).`, { install: true });
+  } catch (_) {
+    // the API is not reachable: the status line says so already
+  }
+}
+
+$("updateInstall").addEventListener("click", async () => {
+  $("updateInstall").disabled = true;
+  showUpdate("Downloading and verifying the installer…");
+  try {
+    const response = await fetch("/update/install", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || data.error || `HTTP ${response.status}`);
+    showUpdate(`The installer for ${data.version} is open: follow it, then restart Live.`);
+  } catch (error) {
+    showUpdate(`Update failed: ${error.message}`, { error: true, install: true });
+  } finally {
+    $("updateInstall").disabled = false;
+  }
+});
+$("updateLater").addEventListener("click", () => { updateDismissed = true; $("update").hidden = true; });
+
 connect();
 loadModels();
+checkUpdate();
+setInterval(checkUpdate, UPDATE_POLL_MS);
 </script>
 </body>
 </html>

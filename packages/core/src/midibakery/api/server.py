@@ -10,7 +10,9 @@
   messages (``connected``, ``state``) follow what Live plays, for the status line.
 - ``POST /miditool/generate`` and ``/miditool/transform``: the clip-view MIDI
   Tools. Notes in, notes out; nothing is written to Live by the server.
-- ``GET /health``: server and Live bridge status.
+- ``GET /health``: server and Live bridge status; ``update`` names a newer version, if there is one.
+- ``GET /update``: the daily update check's result (``midibakery.updates``); ``?force=1`` asks now.
+- ``POST /update/install``: downloads the newer version's installer, verifies it and opens it.
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
@@ -42,7 +44,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from midibakery import credentials
+from midibakery import credentials, updates
 from midibakery.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
@@ -53,6 +55,7 @@ from midibakery.api.models import list_models
 from midibakery.mcp import build_server
 
 VERSION = __version__
+UPDATE_RECHECK = 6 * 3600  # the API often runs for days; updates.check itself asks the service once a day
 UI_PAGE = Path(__file__).with_name("ui") / "chat.html"
 ProviderFactory = Callable[[dict[str, str]], Provider]
 
@@ -95,6 +98,42 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         return wrapped
 
     default: dict[str, str] = {}
+    update_state: dict[str, Any] = {"update": None, "error": None}
+
+    async def refresh_update(force: bool = False) -> None:
+        try:
+            update_state["update"] = await updates.check(force=force)
+            update_state["error"] = None
+        except updates.UpdateError as exc:
+            update_state["error"] = str(exc)
+
+    def update_info() -> dict[str, Any] | None:
+        update = update_state["update"]
+        if update is None or not update.available:
+            return None
+        return {"version": update.version, "notes": update.notes, "size": (update.file or {}).get("size")}
+
+    async def follow_updates() -> None:
+        while True:
+            await refresh_update()
+            await asyncio.sleep(UPDATE_RECHECK)
+
+    async def update_status(request: Request) -> JSONResponse:
+        if request.query_params.get("force"):
+            await refresh_update(force=True)
+        return JSONResponse({"current": VERSION, "enabled": updates.enabled(), "update": update_info(),
+                             "error": update_state["error"]})
+
+    async def update_install(request: Request) -> JSONResponse:
+        update = update_state["update"]
+        if update is None or not update.available:
+            return JSONResponse({"error": "NO_UPDATE"}, status_code=409)
+        try:
+            path = await updates.download(update)
+            updates.open_installer(path)
+        except updates.UpdateError as exc:
+            return JSONResponse({"error": "UPDATE_FAILED", "message": str(exc)}, status_code=502)
+        return JSONResponse({"ok": True, "version": update.version, "installer": path.name})
 
     async def models(request: Request) -> JSONResponse:
         """Model choices for the chat's menu; local models are listed when their server runs."""
@@ -138,7 +177,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         except (BridgeError, asyncio.TimeoutError) as exc:
             live = {"error": str(exc)}
         # pid: the Remote Script stops an API of another version (left from before an update) by it
-        return JSONResponse({"ok": True, "version": VERSION, "pid": os.getpid(), "live": live})
+        return JSONResponse({"ok": True, "version": VERSION, "pid": os.getpid(), "live": live, "update": update_info()})
 
     def notes_endpoint(model, run):
         async def endpoint(request: Request) -> JSONResponse:
@@ -254,11 +293,12 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
 
     @contextlib.asynccontextmanager
     async def lifespan(app: Starlette):
-        follow = asyncio.create_task(live.run())
+        tasks = [asyncio.create_task(live.run()), asyncio.create_task(follow_updates())]
         try:
             yield
         finally:
-            follow.cancel()
+            for task in tasks:
+                task.cancel()
 
     return Starlette(
         lifespan=lifespan,
@@ -266,6 +306,8 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/health", guard(health), methods=["GET"]),
             Route("/ui", ui, methods=["GET"]),
             Route("/models", guard(models), methods=["GET"]),
+            Route("/update", guard(update_status), methods=["GET"]),
+            Route("/update/install", guard(update_install), methods=["POST"]),
             Route("/auth/anthropic", guard(auth), methods=["GET", "PUT", "DELETE"]),
             Route("/miditool/generate", guard(notes_endpoint(GenerateRequest, generate)), methods=["POST"]),
             Route("/miditool/transform", guard(notes_endpoint(TransformRequest, transform)), methods=["POST"]),

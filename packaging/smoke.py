@@ -53,6 +53,9 @@ def main(app_dir: str) -> int:
 
     check(run("--version").stdout.strip() == f"MidiBakery {version}", f"--version says {version}")
 
+    # updates.verify imports it only when it checks a manifest
+    check(any((app / "_internal").glob("cryptography/hazmat/bindings/_rust*")), "the update signature check is bundled")
+
     library = home / "User Library"
     run("install", "--library", str(library), "--no-api")
     payload = app / "_internal" / "payload"

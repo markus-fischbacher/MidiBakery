@@ -143,6 +143,7 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 | Remote Script und Max-Geräte | einmalig; nach Änderungen am Remote Script oder in `packages/m4l` | `uv run midibakery install` (baut die Geräte, installiert beides; `--link` verlinkt das Remote Script), dann Live neu starten bzw. Gerät neu laden. Beim ersten Mal „MidiBakery“ als Control Surface wählen |
 | Lokale API | für die Max-Geräte; nach Änderungen im Core | `uv run midibakery api --provider lmstudio` (oder `anthropic`, `ollama`), danach neu starten. Die Geräte übernehmen den neuen Token selbst. |
 | Chat-Seite | nach Änderungen an `chat.html` | Die API liefert sie neu aus; das Chat-Gerät muss neu geladen werden (löschen und neu einfügen). |
+| Installierte Version (Paket) | wenn eine neue erscheint | Die API fragt einmal am Tag bei `updates.klirrwerk.com` nach; About-Zeile und Chat-Gerät zeigen das Update, *Install* lädt den Installer, prüft ihn gegen das signierte Manifest und öffnet ihn. Im Terminal: `midibakery update`. Details: `services/updates/README.md` |
 | MCP für Claude Code | einmalig | `claude mcp add midibakery -- uv --directory <Repo> run midibakery mcp`; nach Core-Änderungen eine neue Claude-Code-Session starten |
 
 ## Wo man nachsieht, wenn etwas hakt
@@ -165,4 +166,5 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 - Remote Script und API verlangen jeweils einen zufälligen Token aus einer Datei, die nur dein Benutzer lesen kann.
 - Die Chat-Seite enthält keinen Token; das Gerät übergibt ihn im URL-Fragment.
 - Logs schwärzen den Token.
+- Updates: Ein Installer wird nur geöffnet, wenn das Manifest mit einem in der App hinterlegten Ed25519-Schlüssel signiert ist und die SHA-256 der Datei passt. Der Update-Check schickt nur Version, System, Architektur und Kanal; `midibakery update --disable` schaltet ihn ab.
 - Cloud-LLMs (Claude) bekommen Session-Informationen wie Spurnamen, Noten und Tempo. Mit LM Studio oder Ollama bleibt alles lokal.

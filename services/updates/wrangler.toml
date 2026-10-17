@@ -1,0 +1,14 @@
+# MidiBakery's update service. Deployed by .github/workflows/release.yml (job "worker") with the
+# CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets; see services/updates/README.md.
+name = "midibakery-updates"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = false
+
+routes = [
+  { pattern = "updates.klirrwerk.com", custom_domain = true },
+]
+
+[[r2_buckets]]
+binding = "RELEASES"
+bucket_name = "midibakery-releases"

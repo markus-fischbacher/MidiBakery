@@ -11,6 +11,8 @@ See [docs/KONZEPT.md](docs/KONZEPT.md) for the concept and roadmap, and [docs/AR
 | `packages/core` | `midibakery` Python package: op catalog, bridge client, composition engine (`compose/`), agent loop (`agent/`), local API for Max for Live (`api/`), MCP server, CLI |
 | `packages/remote_script/MidiBakery` | Remote Script loaded by Live (stdlib only, Python 3.11) |
 | `packages/m4l` | Max for Live devices: build script and sources (chat device, MIDI Tools, reference analysis) |
+| `packaging/` | Packaged app (PyInstaller), macOS .pkg, Windows setup, release tools (signed update manifest) |
+| `services/updates` | Update service: Cloudflare Worker + R2 on `updates.klirrwerk.com` |
 | `tests/` | Contract tests: real Remote Script + fake Live Object Model over a real socket |
 
 ## Development
@@ -51,6 +53,14 @@ The Windows setup does the same for the current user, no administrator: the app 
 `%LOCALAPPDATA%\Programs\MidiBakery\runtime\<version>\`, then `midibakery install`. Running a newer setup updates;
 its uninstaller (Settings > Apps) runs `midibakery uninstall` and removes the app. CI installs, updates and
 uninstalls it on Windows. Neither installer is signed yet.
+
+### Updates
+
+The installer is the updater. The running API asks `updates.klirrwerk.com` once a day whether a newer
+version exists; the devices' About line and the Chat device then show it, and *Install* in the Chat device
+downloads the installer, checks it against the release's Ed25519-signed manifest and opens it.
+`midibakery update` does the same from the terminal (`--check` only asks, `--disable` turns the daily check off).
+A tag `v<version>` publishes a release; setup and details in [services/updates/README.md](services/updates/README.md).
 
 ### Chat and local API
 

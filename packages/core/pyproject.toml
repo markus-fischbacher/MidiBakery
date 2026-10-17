@@ -7,6 +7,7 @@ license = "LicenseRef-Proprietary"
 authors = [{ name = "Klirrwerk" }]
 dependencies = [
     "anthropic>=1",
+    "cryptography>=50",
     "httpx2>=2.13.1",
     "mcp>=2.3",
     "pydantic>=2.14",

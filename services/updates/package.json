@@ -1,0 +1,9 @@
+{
+  "name": "midibakery-updates",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/worker.test.js",
+    "deploy": "npx wrangler@4 deploy"
+  }
+}
