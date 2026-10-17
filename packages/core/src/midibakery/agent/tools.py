@@ -25,6 +25,7 @@ Confirm = Callable[[str], Awaitable[bool]]
 REDUCED_TOOLS = frozenset({
     "get_session",
     "get_clip",
+    "get_arrangement",
     "create_track",
     "create_clip",
     "edit_notes",

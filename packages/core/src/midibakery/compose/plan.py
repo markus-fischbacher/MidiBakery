@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import random
 import secrets
 from collections import OrderedDict
@@ -53,6 +54,33 @@ def new_seed() -> int:
     return secrets.randbelow(2**31)
 
 
+@dataclass(frozen=True)
+class Place:
+    """A clip a step reads or writes: a Session View slot or an Arrangement clip (by index on its track)."""
+
+    track: int
+    slot: int | None = None
+    arrangement_clip: int | None = None
+
+    @classmethod
+    def of(cls, spec: Any) -> Place:
+        return cls(spec.track, spec.slot, getattr(spec, "arrangement_clip", None))
+
+    @property
+    def in_arrangement(self) -> bool:
+        return self.arrangement_clip is not None
+
+    def params(self) -> dict[str, Any]:
+        if self.in_arrangement:
+            return {"track": self.track, "arrangement_clip": self.arrangement_clip}
+        return {"track": self.track, "slot": self.slot}
+
+    def __str__(self) -> str:
+        if self.in_arrangement:
+            return f"arrangement clip index {self.arrangement_clip} on track index {self.track}"
+        return f"slot index {self.slot} on track index {self.track}"
+
+
 def _fingerprint(track: tuple, exists: bool, is_midi: bool, length: float | None, notes: list[dict] | None) -> str:
     payload = [track, exists, is_midi, length, sorted(tuple(sorted(n.items())) for n in notes or [])]
     return hashlib.sha256(json.dumps(payload, default=str).encode()).hexdigest()[:16]
@@ -83,8 +111,9 @@ class Session:
         self.scale = Scale(0)
         self.meter = Meter()
         self.harmony: Harmony | None = None
-        self.planned: dict[tuple[int, int], ClipState] = {}
-        self._clips: dict[tuple[int, int], ClipState] = {}
+        self.planned: dict[Place, ClipState] = {}
+        self._clips: dict[Place, ClipState] = {}
+        self._arrangement: dict[int, list[dict[str, Any]]] = {}
         self._pads: dict[tuple[int, int | None], list[dict] | None] = {}
 
     async def load(self) -> Session:
@@ -99,12 +128,18 @@ class Session:
             raise BridgeError("NOT_FOUND", f"No track index {index} (song has {len(self.tracks)})", {"track": index})
         return self.tracks[index]
 
-    async def clip(self, track: int, slot: int, include_planned: bool = True) -> ClipState:
-        key = (track, slot)
+    async def clip(self, place: Place, include_planned: bool = True) -> ClipState:
+        key = place
         if include_planned and key in self.planned:
             return self.planned[key]
         if key in self._clips:
             return self._clips[key]
+        if place.in_arrangement:
+            state = await self._arrangement_clip(place)
+            self._clips[key] = state
+            return state
+        track, slot = place.track, place.slot
+        assert slot is not None
         info = self.track(track)
         scenes = int(self.song.get("scene_count", slot + 1))
         if slot >= scenes:
@@ -121,9 +156,34 @@ class Session:
         self._clips[key] = state
         return state
 
-    def free_slot(self, track: int, taken: set[tuple[int, int]]) -> int:
+    async def _arrangement_clip(self, place: Place) -> ClipState:
+        """An arrangement clip: it exists or the request is wrong (no new clips in the Arrangement here)."""
+        info = self.track(place.track)
+        identity = (info.get("id"), info.get("name"), info.get("kind"))
+        if place.track not in self._arrangement:
+            found = (await self._call("arrangement.get", {"track": place.track}))["tracks"]
+            self._arrangement[place.track] = found[0]["clips"] if found else []
+        clips = self._arrangement[place.track]
+        index = place.arrangement_clip
+        assert index is not None
+        if index >= len(clips):
+            listed = ", ".join(f"{c['index']} '{c.get('name', '')}' at beat {c['start']:g}" for c in clips[:12]) or "none"
+            raise BridgeError(
+                "NOT_FOUND",
+                f"No arrangement clip index {index} on track index {place.track} '{info.get('name')}' "
+                f"(its clips: {listed}); get_arrangement lists them, edit_arrangement adds new ones",
+                {"track": place.track, "arrangement_clip": index},
+            )
+        clip = clips[index]
+        if not clip.get("is_midi"):
+            return ClipState(True, False, clip["end"] - clip["start"], track=identity)
+        read = await self._call("notes.get", place.params())
+        length = read.get("clip_length") or clip["end"] - clip["start"]
+        return ClipState(True, True, length, read["notes"], track=identity)
+
+    def free_slot(self, track: int, taken: set[Place]) -> int:
         """The track's first slot without a clip and not targeted by this plan."""
-        used = {c["slot"] for c in self.track(track).get("clips", [])} | {s for t, s in taken if t == track}
+        used = {c["slot"] for c in self.track(track).get("clips", [])} | {p.slot for p in taken if p.track == track and p.slot is not None}
         scenes = int(self.song.get("scene_count", 0))
         free = next((s for s in range(scenes) if s not in used), None)
         if free is None:
@@ -150,8 +210,7 @@ class Session:
 
 @dataclass
 class ClipChange:
-    track: int
-    slot: int
+    place: Place
     kind: str
     seed: int | None = None
     create: dict[str, Any] | None = None
@@ -163,6 +222,14 @@ class ClipChange:
     existing: list[dict[str, Any]] = field(default_factory=list)  # notes in the clip before the change
 
     @property
+    def track(self) -> int:
+        return self.place.track
+
+    @property
+    def slot(self) -> int | None:
+        return self.place.slot
+
+    @property
     def removes_existing(self) -> bool:
         """True when user notes disappear without being re-created from them (replace, not arpeggiate)."""
         return bool(self.remove) and self.kind != "transform"
@@ -170,8 +237,7 @@ class ClipChange:
     def roll(self) -> dict[str, Any]:
         """Everything a piano-roll view needs to draw before and after, untruncated."""
         return {
-            "track": self.track,
-            "slot": self.slot,
+            **self.place.params(),
             "kind": self.kind,
             "length": self.length,
             "existing": [
@@ -192,7 +258,7 @@ class ClipChange:
         if self.create:
             ops.append({"op": "clip.create", "params": self.create})
         if self.edits_notes:
-            params: dict[str, Any] = {"track": self.track, "slot": self.slot}
+            params: dict[str, Any] = self.place.params()
             if self.add:
                 params["add"] = [n.to_spec() for n in self.add]
             if self.modify:
@@ -212,8 +278,7 @@ class ClipChange:
         else:
             action = "no change"
         data: dict[str, Any] = {
-            "track": self.track,
-            "slot": self.slot,
+            **self.place.params(),
             "kind": self.kind,
             "action": action,
             "add": len(self.add),
@@ -250,7 +315,7 @@ def _compact(note: Note) -> dict[str, Any]:
 class Plan:
     id: str
     changes: list[ClipChange]
-    fingerprints: dict[tuple[int, int], str]
+    fingerprints: dict[Place, str]
     scale: str
     meter: str
 
@@ -304,24 +369,28 @@ class PlanStore:
 
 async def _target(session: Session, spec: Generate) -> tuple[ClipState, float, dict[str, Any] | None, list[int]]:
     """Existing state, clip length, clip.create params and note ids to remove for a generator target."""
+    place = Place.of(spec)
     track = session.track(spec.track)
     if track.get("kind") != "midi":
         raise BridgeError("INVALID_PARAMS", f"Track index {spec.track} '{track.get('name')}' is not a MIDI track")
-    state = await session.clip(spec.track, spec.slot)
+    state = await session.clip(place)
+    assert spec.bars is not None  # build_plan fills it in
     length = session.meter.beats_per_bar * spec.bars
     if state.planned:
-        raise BridgeError("INVALID_PARAMS", f"The clip in slot index {spec.slot} on track index {spec.track} is already written by an earlier step of this plan")
+        raise BridgeError("INVALID_PARAMS", f"The clip in {place} is already written by an earlier step of this plan")
     if not state.exists:
         name = spec.clip_name or spec.kind.title()  # type: ignore[attr-defined]
-        return state, length, {"track": spec.track, "slot": spec.slot, "length": length, "name": name}, []
+        return state, length, {**place.params(), "length": length, "name": name}, []
     if not state.is_midi:
-        raise BridgeError("INVALID_PARAMS", f"The clip in slot index {spec.slot} on track index {spec.track} is an audio clip")
-    if spec.if_exists == "error":
+        raise BridgeError("INVALID_PARAMS", f"The clip in {place} is an audio clip")
+    # The user names an arrangement clip to rewrite it: its notes are replaced (after a confirmation) unless merge.
+    if_exists = spec.if_exists or ("replace" if place.in_arrangement else "error")
+    if if_exists == "error":
         raise BridgeError(
             "CONFLICT",
-            f"Slot index {spec.slot} of track index {spec.track} already has a clip; pass if_exists='replace' or 'merge', or pick an empty slot",
+            f"The {place} already has a clip; pass if_exists='replace' or 'merge', or pick an empty slot",
         )
-    remove = [n["note_id"] for n in state.notes or []] if spec.if_exists == "replace" else []
+    remove = [n["note_id"] for n in state.notes or []] if if_exists == "replace" else []
     return state, min(length, state.length or length), None, remove
 
 
@@ -354,9 +423,10 @@ async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harm
             result = harmony_mod.from_progression(spec.progression, scale, meter, spec.bars, spec.chords_per_bar)
         elif spec.chords_from is not None:
             _not_drums(session, spec.chords_from.track)
-            source = await session.clip(spec.chords_from.track, spec.chords_from.slot)
+            where = Place.of(spec.chords_from)
+            source = await session.clip(where)
             if not source.exists or not source.is_midi:
-                raise BridgeError("NOT_FOUND", f"chords_from: no MIDI clip in slot index {spec.chords_from.slot} on track index {spec.chords_from.track}")
+                raise BridgeError("NOT_FOUND", f"chords_from: no MIDI clip in {where}")
             source_bars = max(1, round((source.length or meter.beats_per_bar) / meter.beats_per_bar))
             result = harmony_mod.detect(source.notes or [], scale, meter, source_bars, spec.chords_per_bar)
             result = result.for_length(meter, spec.bars)
@@ -373,9 +443,10 @@ async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harm
 
 
 async def _kick(session: Session, location: ClipLocation, length: float) -> tuple[list[float], dict[str, Any]]:
-    source = await session.clip(location.track, location.slot)
+    where = Place.of(location)
+    source = await session.clip(where)
     if not source.exists or not source.is_midi:
-        raise BridgeError("NOT_FOUND", f"follow_kick: no MIDI clip in slot index {location.slot} on track index {location.track}")
+        raise BridgeError("NOT_FOUND", f"follow_kick: no MIDI clip in {where}")
     drum_map = map_pads(await session.drum_pads(location.track))
     kick_pitch = drum_map.note("kick")
     assert kick_pitch is not None
@@ -388,11 +459,11 @@ async def _kick(session: Session, location: ClipLocation, length: float) -> tupl
 def _finish(session: Session, spec: Generate, kind: str, seed: int, notes: list[Note], target: tuple, info: dict) -> ClipChange:
     state, length, create, remove = target
     notes = fit_to_length(notes, length)
-    session.planned[(spec.track, spec.slot)] = ClipState(
+    session.planned[Place.of(spec)] = ClipState(
         True, True, length if create else state.length, [_as_dict(n) for n in notes], planned=True
     )
     return ClipChange(
-        spec.track, spec.slot, kind, seed, create, notes, [], remove, info,
+        Place.of(spec), kind, seed, create, notes, [], remove, info,
         length=length if create else (state.length or length), existing=list(state.notes or []),
     )
 
@@ -465,11 +536,12 @@ async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
 
 
 async def _plan_transform(session: Session, spec: TransformSpec) -> ClipChange:
-    if (spec.track, spec.slot) in session.planned:
+    place = Place.of(spec)
+    if place in session.planned:
         raise BridgeError("INVALID_PARAMS", "Cannot transform a clip written earlier in the same plan; apply first, then transform")
-    state = await session.clip(spec.track, spec.slot)
+    state = await session.clip(place)
     if not state.exists or not state.is_midi:
-        raise BridgeError("NOT_FOUND", f"No MIDI clip in slot index {spec.slot} on track index {spec.track}")
+        raise BridgeError("NOT_FOUND", f"No MIDI clip in {place}")
     notes = state.notes or []
     if spec.note_ids is not None:
         known = {n["note_id"] for n in notes}
@@ -486,7 +558,7 @@ async def _plan_transform(session: Session, spec: TransformSpec) -> ClipChange:
         raise BridgeError("INVALID_PARAMS", str(exc)) from None
     uses_seed = op in ("humanize", "variation", "arpeggiate")
     return ClipChange(
-        spec.track, spec.slot, "transform", seed if uses_seed else None, None, diff.add, diff.modify, diff.remove,
+        place, "transform", seed if uses_seed else None, None, diff.add, diff.modify, diff.remove,
         {"operation": op, "notes_considered": len(notes)},
         length=state.length or 0.0,
         existing=list(state.notes or []),
@@ -502,23 +574,40 @@ _PLANNERS = {
 }
 
 
+async def _resolve(session: Session, step: Generate, targets: set[Place]) -> Generate:
+    """The defaults that depend on Live: the first free slot, and the length (4 bars, or the arrangement clip's)."""
+    update: dict[str, Any] = {}
+    if step.slot is None and step.arrangement_clip is None:
+        update["slot"] = session.free_slot(step.track, targets)
+    if step.bars is None:
+        bars = 4
+        if step.arrangement_clip is not None:
+            state = await session.clip(Place.of(step), include_planned=False)
+            bpb = session.meter.beats_per_bar
+            bars = max(1, math.ceil(round((state.length or bpb) / bpb, 6)))  # whole bars, rounded up
+            if bars > 64:
+                raise BridgeError("INVALID_PARAMS", f"The {Place.of(step)} is {bars} bars long; compose writes at most 64 (pass bars)")
+        update["bars"] = bars
+    return step.model_copy(update=update) if update else step
+
+
 async def build_plan(call: Call, steps: list[Spec]) -> Plan:
     if not steps:
         raise BridgeError("INVALID_PARAMS", "A plan needs at least one step")
     session = await Session(call).load()
     changes = []
-    targets: set[tuple[int, int]] = set()
+    targets: set[Place] = set()
     for step in steps:
-        if isinstance(step, Generate) and step.slot is None:
-            step = step.model_copy(update={"slot": session.free_slot(step.track, targets)})
-        key = (step.track, step.slot)  # type: ignore[attr-defined]
+        if isinstance(step, Generate):
+            step = await _resolve(session, step, targets)
+        key = Place.of(step)
         if key in targets:
-            raise BridgeError("INVALID_PARAMS", f"Two steps target slot index {key[1]} on track index {key[0]}; use one step per clip")
+            raise BridgeError("INVALID_PARAMS", f"Two steps target {key}; use one step per clip")
         targets.add(key)
         changes.append(await _PLANNERS[step.kind](session, step))  # type: ignore[attr-defined]
     fingerprints = {}
     for key in targets:
-        state = await session.clip(*key, include_planned=False)
+        state = await session.clip(key, include_planned=False)
         fingerprints[key] = state.fingerprint
     plan = Plan(
         secrets.token_hex(4),
@@ -552,23 +641,23 @@ async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, A
     if verify:
         session = await Session(call).load()
 
-        async def current(track: int, slot: int) -> Any:
+        async def current(place: Place) -> Any:
             try:
-                return await session.clip(track, slot, include_planned=False)
+                return await session.clip(place, include_planned=False)
             except BridgeError as exc:
                 if exc.code != "NOT_FOUND":
                     raise
                 return None
 
         targets = list(plan.fingerprints.items())
-        states = await asyncio.gather(*(current(track, slot) for (track, slot), _ in targets))  # one round trip, not one per clip
-        for ((track, slot), expected), state in zip(targets, states):
+        states = await asyncio.gather(*(current(place) for place, _ in targets))  # one round trip, not one per clip
+        for (place, expected), state in zip(targets, states):
             if state is None or state.fingerprint != expected:
                 raise BridgeError(
                     "CONFLICT",
-                    f"The clip in slot index {slot} on track index {track} or its track changed since plan {plan.id} was made "
+                    f"The clip in {place} or its track changed since plan {plan.id} was made "
                     "(tracks added, deleted or edited); plan again",
-                    {"track": track, "slot": slot},
+                    place.params(),
                 )
     ops = plan.ops()
     applied: list[dict[str, Any]] = []
@@ -580,7 +669,7 @@ async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, A
             raise
         cursor = 0
         for change in plan.changes:
-            entry: dict[str, Any] = {"track": change.track, "slot": change.slot, "kind": change.kind}
+            entry: dict[str, Any] = {**change.place.params(), "kind": change.kind}
             for op in change.ops():
                 result = results[cursor]
                 cursor += 1
