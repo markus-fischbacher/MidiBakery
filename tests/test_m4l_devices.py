@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -233,6 +234,15 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     assert boxes[lock]["mode"] == 1 and ((lock, 0), (by_text["prepend lock"], 0)) in lines
     v8_id = next(i for i, b in boxes.items() if b["maxclass"] == "v8.codebox")
     assert ((v8_id, 2), (route, 0)) in lines and "function band(" in code and "function lock(" in code
+    # each field level with its lane in the view (reference-view.js: lanes start below the header and blocks)
+    view_js = (build.SRC / "reference-view.js").read_text()
+    const = {k: int(re.search(rf"var {k} = (\d+);", view_js).group(1)) for k in ("HEADER", "BLOCKS", "LANE")}
+    lanes = re.findall(r'\["(\w+)", "(\w+)", -?\d+, \d+\]', view_js)
+    assert [key for _, key in lanes] == [key for _, key in build.SENSITIVITY_BANDS]
+    for n, (label, _) in enumerate(build.SENSITIVITY_BANDS):
+        top = const["HEADER"] + 2 + const["BLOCKS"] + 4 + const["LANE"] * n
+        _, fy, _, fh = boxes[fields[f"Sensitivity {label}"]]["presentation_rect"]
+        assert fy + fh / 2 == top + (const["LANE"] - 2) / 2
     shown_rects = [b["presentation_rect"] for b in boxes.values() if b.get("presentation")]
     assert not any(_overlap(a, b) for i, a in enumerate(shown_rects) for b in shown_rects[i + 1:])
 
