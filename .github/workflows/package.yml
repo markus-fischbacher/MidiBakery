@@ -1,7 +1,7 @@
 name: Package
 
 # The packaged app (PyInstaller) for macOS and Windows, smoke-tested on the system it was built for.
-# The macOS installer (.pkg) is built and installed here too. Signing comes in D4e, Windows' installer in D4d.
+# The installers (macOS .pkg, Windows setup) are built and installed here too. Signing comes in D4e.
 
 on:
   push:
@@ -52,11 +52,23 @@ jobs:
           installer -pkg build/app/MidiBakery-*-macos-*.pkg -target CurrentUserHomeDirectory
           uv run python packaging/macos/check_pkg.py
 
+      # The setup as a user runs it (silently here): install, an update in place, the uninstaller.
+      - name: Windows setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe" -ErrorAction SilentlyContinue)) {
+            choco install innosetup -y --no-progress
+          }
+          uv run python packaging/windows/build_setup.py
+          uv run python packaging/windows/check_setup.py (Get-Item build/app/MidiBakery-*-windows-x64-setup.exe).FullName
+
       - uses: actions/upload-artifact@v7
         with:
           name: midibakery-${{ matrix.os }}
           path: |
             build/app/MidiBakery-*.zip
             build/app/MidiBakery-*.pkg
+            build/app/MidiBakery-*-setup.exe
           if-no-files-found: error
           retention-days: 14

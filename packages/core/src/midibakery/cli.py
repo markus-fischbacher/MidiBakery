@@ -57,7 +57,9 @@ def cmd_install(args: argparse.Namespace) -> int:
 def cmd_uninstall(args: argparse.Namespace) -> int:
     from midibakery import install
 
-    runtime = install.app_runtime()
+    # macOS has no uninstaller for packages: the app removes itself. On Windows the setup's uninstaller does
+    # (a running program's files cannot be deleted there).
+    runtime = install.app_runtime() if sys.platform == "darwin" else None
     removed = install.uninstall(purge=args.purge, runtime=runtime)
     if runtime is not None:
         install.forget_pkg_receipt()
