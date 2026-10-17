@@ -19,7 +19,7 @@ See [docs/KONZEPT.md](docs/KONZEPT.md) for the concept and roadmap, and [docs/AR
 uv sync
 uv run pytest
 uv run midibakery manifest          # after changing the catalog
-uv run midibakery install-script --link
+uv run midibakery install --link    # Remote Script (symlinked), devices and the API's launch into Live
 uv run midibakery ping              # with Live running and MidiBakery selected as Control Surface
 ```
 
@@ -33,19 +33,25 @@ uv run midibakery chat --provider lmstudio --model google/gemma-4-e4b  # LM Stud
 uv run midibakery api                                   # HTTP/WebSocket API for the Max for Live devices
 ```
 
-Claude needs an API key: click **Key** in the chat (device or browser) or run `uv run midibakery auth set-key`. It is checked with the Claude API and stored in the macOS Keychain (service "MidiBakery"), so the API that Live starts finds it too; `auth status` / `auth remove` show or delete it. `ANTHROPIC_API_KEY` and an `ant auth login` profile work as well. The API listens on
+Claude needs an API key: click **Key** in the chat (device or browser) or run `uv run midibakery auth set-key`. It is checked with the Claude API and stored in the macOS Keychain (service "MidiBakery") or the Windows Credential Manager, so the API that Live starts finds it too; `auth status` / `auth remove` show or delete it. `ANTHROPIC_API_KEY` and an `ant auth login` profile work as well. The API listens on
 127.0.0.1:8766 and writes its port and token to `api.json` in the MidiBakery config folder.
 
 ### Max for Live devices
 
 ```bash
-uv run python packages/m4l/build.py --install   # builds the .amxd files into Live's User Library
-uv run midibakery install-script --api-provider lmstudio  # the devices talk to the API, which now starts with Live
+uv run midibakery install --api-provider lmstudio  # builds the devices, installs them and the Remote Script
+uv run midibakery uninstall                         # removes exactly that again (--purge: settings and key too)
 ```
 
+`install` finds the User Library Live uses (its `Library.cfg`; `--library` overrides), copies the Remote Script
+and the devices there and records every path in `installed.json` in the config folder: the next install removes
+what a new version no longer has, `uninstall` removes only those paths. The installers run the same command.
+
 The Remote Script starts the API when Live loads it and stops it when Live quits (`launcher.json` and
-`api.log` in the config folder; `--no-api` turns this off). An API that already runs on the port is used as is.
-Live does not see your shell's environment; that is why the Claude key lives in the Keychain.
+`api.log` in the config folder; `--no-api` turns this off). An API that already runs on the port is used as is,
+unless it is another MidiBakery version (left from before an update): that one is stopped and this one started.
+Live does not see your shell's environment; that is why the Claude key lives in the Keychain / Credential Manager.
+Each device's *About* button shows its version next to the API's and the Remote Script's.
 
 - **MidiBakery Chat** (Max for Live > Max MIDI Effect > MidiBakery): chat with the agent in the device view;
   MIDI passes through. *Pop out* opens the same chat in the browser.

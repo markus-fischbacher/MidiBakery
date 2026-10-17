@@ -117,15 +117,22 @@ def test_style_menus_have_the_scripting_names_v8_uses(devices):
     assert {"style_drums", "style_bass", "style_chords"} <= varnames
 
 
-def test_node_scripts_ship_next_to_every_device(devices, tmp_path):
+def test_node_scripts_ship_next_to_every_device(devices):
+    """install.json (what `midibakery install` follows) puts every node file beside every device."""
     for path in devices.values():
         for name in build.NODE_FILES:
             assert (path.parent / name).exists()
-    installed = build.install(list(devices.values()), tmp_path)
-    for path in installed:
-        for name in build.NODE_FILES:
-            assert (path.parent / name).exists()
-    assert (tmp_path / "MIDI Tools/Max Generators/MidiBakery Generator.amxd").exists()
+    out = next(iter(devices.values())).parents[1]
+    listing = json.loads((out / build.INSTALL_LIST).read_text())
+    assert listing["version"] == build.VERSION
+    targets = {e["target"] for e in listing["files"]}
+    for name, path in devices.items():
+        folder = build.INSTALL_DIRS[build.DEVICES[name][0]]
+        assert (folder / path.name).as_posix() in targets
+        assert {(folder / n).as_posix() for n in build.NODE_FILES} <= targets
+    assert "MIDI Tools/Max Generators/MidiBakery Generator.amxd" in targets
+    for entry in listing["files"]:
+        assert (out / entry["source"]).is_file()
 
 
 def test_each_device_starts_the_node_entry_for_its_mode(devices):

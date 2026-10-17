@@ -107,7 +107,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         return JSONResponse({"models": await list_models(default["provider"], default["model"])})
 
     async def auth(request: Request) -> JSONResponse:
-        """Claude's API key: GET status, PUT {"api_key"} stores it in the Keychain, DELETE removes it.
+        """Claude's API key: GET status, PUT {"api_key"} stores it (Keychain, Credential Manager), DELETE removes it.
         The key is never sent back."""
         store = credentials.store()
         if request.method == "PUT":
@@ -137,7 +137,8 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             live = await asyncio.wait_for(bridge.call("live.health"), 3.0)
         except (BridgeError, asyncio.TimeoutError) as exc:
             live = {"error": str(exc)}
-        return JSONResponse({"ok": True, "version": VERSION, "live": live})
+        # pid: the Remote Script stops an API of another version (left from before an update) by it
+        return JSONResponse({"ok": True, "version": VERSION, "pid": os.getpid(), "live": live})
 
     def notes_endpoint(model, run):
         async def endpoint(request: Request) -> JSONResponse:

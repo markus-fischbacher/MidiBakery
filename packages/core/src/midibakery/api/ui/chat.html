@@ -318,7 +318,7 @@ function handle(ev) {
     case "error":
       hidePending();
       current = null; thinking = null;
-      if (ev.code === "NO_API_KEY") { showKeyButton("anthropic"); openKeyPanel("Claude needs an API key. It is stored in your Keychain, not in MidiBakery's files."); break; }
+      if (ev.code === "NO_API_KEY") { showKeyButton("anthropic"); openKeyPanel("Claude needs an API key. It is stored in your system's credential store (Keychain on macOS), not in MidiBakery's files."); break; }
       add("error", ev.message);
       setBusy(false);
       break;
@@ -578,7 +578,7 @@ async function keyRequest(method, body) {
   return data;
 }
 
-const SOURCES = { env: "from ANTHROPIC_API_KEY", keychain: "stored in your Keychain", file: "stored in MidiBakery's config folder", profile: "from your Anthropic profile (ant auth login)" };
+const SOURCES = { env: "from ANTHROPIC_API_KEY", keychain: "stored in your Keychain", credential_manager: "stored in Windows Credential Manager", file: "stored in MidiBakery's config folder", profile: "from your Anthropic profile (ant auth login)" };
 
 // The Key button only matters for Claude; local models need no key.
 function showKeyButton(provider) {
@@ -597,7 +597,7 @@ function showKeyState(state, message, isError = false) {
   if ("configured" in state) markKeyButton(state);
   $("keyText").textContent = message || (state.configured ? `Claude key: ${SOURCES[state.source] || state.source}.` : "No Claude key yet.");
   $("keyText").className = "text" + (isError ? " err" : "");
-  $("keyRemove").hidden = !(state.source === "keychain" || state.source === "file");
+  $("keyRemove").hidden = !["keychain", "credential_manager", "file"].includes(state.source);
 }
 
 async function openKeyPanel(message) {

@@ -2,11 +2,12 @@
 
 import json
 import socket
+import subprocess
 import sys
+import time
 
-from MidiBakery.launcher import ApiLauncher, launcher_path
-
-from midibakery.cli import main
+from MidiBakery.launcher import ApiLauncher, launcher_path, port_in_use
+from MidiBakery.protocol import BRIDGE_VERSION
 
 SLEEPER = [sys.executable, "-c", "import time; time.sleep(30)"]
 
@@ -58,13 +59,54 @@ def test_no_start_after_live_already_quit(bridge_env):
     assert launcher._process is None
 
 
-def test_install_script_writes_and_removes_the_launcher(bridge_env, tmp_path):
-    target = tmp_path / "Remote Scripts"
-    assert main(["install-script", "--target", str(target), "--api-provider", "lmstudio", "--api-port", "9123"]) == 0
-    config = json.loads((bridge_env / "launcher.json").read_text())
-    assert config["port"] == 9123
-    assert config["command"][1:] == ["-u", "-m", "midibakery.cli", "api", "--provider", "lmstudio", "--port", "9123"]
-    assert (target / "MidiBakery" / "launcher.py").exists()
+FAKE_API = """
+import http.server, json, os, sys
+version = sys.argv[2]
+class Health(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        ok = self.path == "/health" and self.headers.get("Authorization") == "Bearer secret"
+        body = json.dumps({"ok": True, "version": version, "pid": os.getpid()} if ok else {"error": "UNAUTHORIZED"}).encode()
+        self.send_response(200 if ok else 401)
+        self.end_headers()
+        self.wfile.write(body)
+    def log_message(self, *args):
+        pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), Health).serve_forever()
+"""
 
-    assert main(["install-script", "--target", str(target), "--no-api"]) == 0
-    assert not (bridge_env / "launcher.json").exists()
+
+def run_fake_api(bridge_env, version):
+    """An API of `version` on a free port, with its api.json; returns (process, port)."""
+    port = free_port()
+    process = subprocess.Popen([sys.executable, "-c", FAKE_API, str(port), version])
+    (bridge_env / "api.json").write_text(json.dumps({"port": port, "token": "secret", "version": version}))
+    deadline = time.monotonic() + 10
+    while not port_in_use(port):
+        assert time.monotonic() < deadline, "fake API did not start"
+        time.sleep(0.05)
+    return process, port
+
+
+def test_an_api_of_another_version_is_replaced(bridge_env):
+    """An API left from before an update would serve the old version until it is stopped by hand."""
+    old, port = run_fake_api(bridge_env, "0.0.1")
+    try:
+        write_launcher(SLEEPER, port)
+        launcher = ApiLauncher(print)
+        launcher._start()
+        assert old.wait(10) is not None  # stopped
+        assert launcher._process is not None and launcher._process.poll() is None
+        launcher.stop()
+    finally:
+        old.kill()
+
+
+def test_an_api_of_this_version_is_used_as_it_is(bridge_env):
+    same, port = run_fake_api(bridge_env, BRIDGE_VERSION)
+    try:
+        write_launcher(SLEEPER, port)
+        launcher = ApiLauncher(print)
+        launcher._start()
+        assert launcher._process is None and same.poll() is None
+    finally:
+        same.kill()
