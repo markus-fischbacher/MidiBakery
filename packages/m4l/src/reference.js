@@ -23,6 +23,7 @@ var chosen = "auto";
 var job = null; // locator job: {queue, home, phase, ticks, task}
 var LOCATOR_TICK_MS = 60;
 var LOCATOR_TIMEOUT_TICKS = 40; // ~2.4 s per locator, then it is skipped
+var clipApi = null; // the LiveAPI object of the clip referenceClip() found last
 var warpJob = null; // auto-warp: {clip, plan, phase, ticks, task}
 var WARP_TIMEOUT_TICKS = 100; // ~6 s for the whole job
 var WARP_TOLERANCE = 0.01; // s: the warped grid must land this close to the detected one
@@ -79,6 +80,7 @@ function referenceClip() {
   }
   if (!best) return null;
   var clip = best.api;
+  clipApi = clip; // kept out of the description: it goes to node.script as JSON
   return {
     file: String(one(clip, "file_path")),
     name: String(one(clip, "name")),
@@ -180,7 +182,7 @@ function autoWarp(warp) {
   if (!plan) return;
   var song = new LiveAPI("live_set");
   // at the song's own tempo the unwarped clip spans exactly its bars; warped, it keeps them at any tempo
-  warpJob = { clip: found.api, song: song, plan: plan, tempo: one(song, "tempo"), phase: "tempo", ticks: 0 };
+  warpJob = { clip: clipApi, song: song, plan: plan, tempo: one(song, "tempo"), phase: "tempo", ticks: 0 };
   warpJob.task = new Task(warpStep, this);
   warpJob.task.interval = LOCATOR_TICK_MS;
   warpJob.task.repeat(-1);
