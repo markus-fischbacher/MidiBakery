@@ -112,10 +112,10 @@ Each device's *About* button shows its version next to the API's and the Remote 
   again. If that fails it says so: warp it by hand (1.1.1 on the first downbeat), then *Analyze*. plan_song refuses
   an unwarped reference unless the song plays at the reference's tempo. The *Genre* menu
   (Auto, or one of plan_song's genres) sets the section names (e.g. Lift/Peak for Peak Time Techno), the phrase
-  length (16 bars for Drum & Bass) and settles half or double time. *Sensitivity* (0-100 per band: Kick, Low,
-  Bass, Mid, High; 50 by default) sets how finely the song is split. Their mean works like one dial: at 100 every
+  length (16 bars for Drum & Bass) and settles half or double time. *Sensitivity* (0-100 per lane of the view:
+  Kick, Lows, Mids, Hats; 50 by default) sets how finely the song is split. Their mean works like one dial: at 100 every
   change found is a section, at 50 neighbours of the same kind are one section (four breaks in a row are one long
-  break), lower a drop and its groove become one drop. Their ratio sets what counts as a change: High at 30 with
+  break), lower a drop and its groove become one drop. Their ratio sets what counts as a change: Hats at 30 with
   the rest at 100 lets hi-hat changes pass, Kick alone splits the song where the kick stops and comes back. The analysis runs again
   once the fields rest. With *Lock* on, changing one field moves the others by as much. The changes within a
   merged section stay in the analysis as its phrases (ticks in the view, `phrases` in `get_reference`). It shows the sections

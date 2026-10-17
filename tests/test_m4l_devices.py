@@ -224,7 +224,7 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     # Sensitivity: a field per band to "band <key>", shown back through route -> prepend set; Lock to "lock"
     fields = {b["varname"]: i for i, b in boxes.items() if b["maxclass"] == "live.numbox"}
     assert sorted(fields) == sorted(f"Sensitivity {label}" for label, _ in build.SENSITIVITY_BANDS)
-    route = by_text["route kick low bass mid high"]
+    route = by_text["route kick low mid high"]
     for n, (label, key) in enumerate(build.SENSITIVITY_BANDS):
         assert ((fields[f"Sensitivity {label}"], 0), (by_text[f"prepend band {key}"], 0)) in lines
         shown = next(dst for (src, dst) in lines if src == (route, n))[0]

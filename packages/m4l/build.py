@@ -450,12 +450,12 @@ def transform_device() -> dict[str, Any]:
 
 
 REFERENCE_WIDTH, REFERENCE_HEIGHT = 800.0, 169.0
-SENSITIVITY_BANDS = (("Kick", "kick"), ("Low", "low"), ("Bass", "bass"), ("Mid", "mid"), ("High", "high"))
+SENSITIVITY_BANDS = (("Kick", "kick"), ("Lows", "low"), ("Mids", "mid"), ("Hats", "high"))  # the view's lanes
 
 
 def reference_device() -> dict[str, Any]:
-    """Layout (800 x 169): the view (sections and lanes) on the left, next to it the Sensitivity per band (Kick,
-    Low, Bass, Mid, High) and Lock; Analyze, the locator buttons, Genre and About on the right.
+    """Layout (800 x 169): the view (sections and lanes) on the left, next to it the Sensitivity per lane (Kick,
+    Lows, Mids, Hats) and Lock; Analyze, the locator buttons, Genre and About on the right.
     Audio passes through: the device sits on the reference song's own audio track."""
     p = Patcher()
     plugin = p.obj("plugin~", 20, 20, inlets=2, outlets=["signal", "signal"], width=60)
@@ -514,7 +514,7 @@ def reference_device() -> dict[str, Any]:
         shown = p.obj("prepend set", x, 430, width=70)
         p.connect(route, i, shown)
         p.connect(shown, 0, field)
-    lock = p.parameter("live.text", (860, 220, 50, 15), (604, 134, 92, 18), name="Sensitivity Lock", short="Lock",
+    lock = p.parameter("live.text", (860, 220, 50, 15), (604, 112, 92, 18), name="Sensitivity Lock", short="Lock",
                        ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 1, "text": "Lock", "texton": "Locked"})
     lock_to_v8 = p.obj("prepend lock", 860, 250, width=80)

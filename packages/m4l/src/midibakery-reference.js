@@ -171,7 +171,7 @@ async function run(clip) {
     warped: Boolean(warp),
     bar_grid: result.bar_grid, // "arrangement": bars are the Arrangement's; "song": the song's own bars from its start
     genre: result.genre, // as chosen in the device; "auto" guesses only the phrase length (D&B from 160 BPM)
-    sensitivity: result.sensitivity, // 0..100 per band (kick, low, bass, mid, high): how much its changes count; lower merges more
+    sensitivity: result.sensitivity, // 0..100 per band (kick, low, mid, high): how much its changes count; lower merges more
     key: result.key,
     first_bar: result.first_bar,
     bars: result.bars,

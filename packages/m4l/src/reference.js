@@ -6,7 +6,7 @@
  * device warps it onto the Set's grid (bar 1 on a bar line) and analyzes it again.
  *
  * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>,
- *           band <kick|low|bass|mid|high> <0..100>, lock <0|1>,
+ *           band <kick|low|mid|high> <0..100>, lock <0|1>,
  *           result <json>,
  *           status <text>
  * outlet 0: to node.script (analyze / lookup / log <json>)
@@ -26,8 +26,8 @@ var chosen = "auto";
 var settleTask = null;
 var SETTLE_MS = 400; // a field dragged runs through many values: analyze once it rests
 // the Sensitivity fields, 0..100 per band; with Lock on, changing one moves the others by as much
-var BANDS = ["kick", "low", "bass", "mid", "high"];
-var sensitivity = { kick: 50, low: 50, bass: 50, mid: 50, high: 50 };
+var BANDS = ["kick", "low", "mid", "high"]; // the view's lanes: Kick, Lows, Mids, Hats
+var sensitivity = { kick: 50, low: 50, mid: 50, high: 50 };
 var locked = false;
 var job = null; // locator job: {queue, home, phase, ticks, task}
 var LOCATOR_TICK_MS = 60;
