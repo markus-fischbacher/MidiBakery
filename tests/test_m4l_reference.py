@@ -168,19 +168,20 @@ def test_genre_names_the_sections():
 
 
 MERGE = """
-const { merge } = require(process.argv[1]);
+const { merge, weights } = require(process.argv[1]);
 // The Signal's sections as the analysis finds them (fine); bars: flat, the merge only re-describes them
 const found = [["intro", 1, 16], ["drop", 17, 8], ["groove", 25, 24], ["break", 49, 8], ["break", 57, 8], ["break", 65, 8],
   ["break", 73, 20], ["drop", 93, 32], ["groove", 125, 24], ["outro", 149, 9]]
   .map(([kind, start_bar, bars]) => ({ kind, start_bar, bars, energy: -3, kick: 1, elements: [] }));
 const bars = Array.from({ length: 157 }, () => ({ low: -3, bass: -3, mid: -3, high: -3, total: -3, centroid: 1000, kick: 1 }));
 const out = {};
-for (const [detail, at] of [["coarse", 0], ["normal", 50], ["fine", 100]])
-  out[detail] = merge(found.map((s) => ({ ...s })), bars, at, { break: "Breakdown" })
+const all = (n) => weights({ kick: n, low: n, bass: n, mid: n, high: n });
+for (const [level, n] of [["coarse", 40], ["normal", 100]])
+  out[level] = merge(found.map((s) => ({ ...s })), bars, { break: "Breakdown" }, all(n))
     .map((s) => [s.name, s.start_bar, s.bars, (s.phrases || []).map((p) => p.start_bar)]);
-// two breaks 4 dB apart: they merge only once the dial is low enough (limit (1 - detail/100) * 24 dB)
-const loud = bars.map((b, i) => (i >= 56 && i < 64 ? { ...b, low: 1, bass: 1, mid: 1, high: 1, total: 1 } : b));
-out.dial = [100, 90, 85, 84, 50].map((at) => merge(found.slice(3, 5).map((s) => ({ ...s })), loud, at).length);
+// two breaks 16 dB apart: they merge once the fields weigh that under the 12 dB limit
+const loud = bars.map((b, i) => (i >= 56 && i < 64 ? { ...b, low: 13, bass: 13, mid: 13, high: 13, total: 13 } : b));
+out.fields = [100, 90, 85, 80, 50].map((n) => merge(found.slice(3, 5).map((s) => ({ ...s })), loud, {}, all(n)).length);
 console.log(JSON.stringify(out));
 """
 
@@ -188,13 +189,12 @@ console.log(JSON.stringify(out));
 @needs_node
 def test_neighbours_of_the_same_kind_merge_and_keep_their_phrases():
     out = json.loads(_node("-e", MERGE, str(ROOT / "packages/m4l/src/reference-analysis.js")))
-    # normal: the four breaks in a row are one breakdown of 44 bars; where they changed stays as phrases
+    # all fields at 100 (default): the four breaks in a row are one breakdown of 44 bars; where they changed stays as phrases
     assert out["normal"] == [["Intro", 1, 16, []], ["Drop", 17, 8, []], ["Groove", 25, 24, []],
                              ["Breakdown", 49, 44, [49, 57, 65, 73]], ["Drop 2", 93, 32, []], ["Groove 2", 125, 24, []],
                              ["Outro", 149, 9, []]]
-    # coarse: a drop and its groove are one drop
+    # all fields at 40: a drop and its groove are one drop as well
     assert out["coarse"] == [["Intro", 1, 16, []], ["Drop", 17, 32, [17, 25]], ["Breakdown", 49, 44, [49, 57, 65, 73]],
                              ["Drop 2", 93, 56, [93, 125]], ["Outro", 149, 9, []]]
-    # breaks 4 dB apart (the distance over five features plus the kick: ~3.65) merge from 84 % down
-    assert out["dial"] == [2, 2, 2, 1, 1]
-    assert [(s[1], s[2], s[3]) for s in out["fine"]][3:7] == [(49, 8, []), (57, 8, []), (65, 8, []), (73, 20, [])]  # as found
+    # breaks 16 dB apart (the distance over five features plus the kick: ~14.6) merge from about 82 down
+    assert out["fields"] == [2, 2, 2, 1, 1]

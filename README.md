@@ -112,13 +112,12 @@ Each device's *About* button shows its version next to the API's and the Remote 
   again. If that fails it says so: warp it by hand (1.1.1 on the first downbeat), then *Analyze*. plan_song refuses
   an unwarped reference unless the song plays at the reference's tempo. The *Genre* menu
   (Auto, or one of plan_song's genres) sets the section names (e.g. Lift/Peak for Peak Time Techno), the phrase
-  length (16 bars for Drum & Bass) and settles half or double time. The *Detail* dial (0-100 %) sets how far
-  neighbouring sections merge, the most alike first: at 100 % every change found is a section; at 50 % (default)
-  neighbours of the same kind are one section (four breaks in a row are one long break); towards 0 % a drop and
-  its groove become one drop. The analysis runs again once the dial rests. *Sensitivity* (0-100 per band: Kick, Low,
+  length (16 bars for Drum & Bass) and settles half or double time. *Sensitivity* (0-100 per band: Kick, Low,
   Bass, Mid, High; all 100 by default) sets how much a change in that band counts, both for finding sections and
-  for merging them: High at 30 lets hi-hat changes pass, Kick alone splits the song where the kick stops and comes
-  back. With *Lock* on, changing one field moves the others by as much. The changes within a
+  for merging neighbours (the most alike first): at 100 neighbours of the same kind are one section (four breaks
+  in a row are one long break); lower fields find fewer changes and merge more, below about 50 a drop and its
+  groove become one drop. Kick alone splits the song where the kick stops and comes back. The analysis runs again
+  once the fields rest. With *Lock* on, changing one field moves the others by as much. The changes within a
   merged section stay in the analysis as its phrases (ticks in the view, `phrases` in `get_reference`). It shows the sections
   (intro, build, drop, break, outro), key, tempo and per-bar lanes for kick, lows, mids and hats; *Set Locators*
   sets Arrangement locators at the sections, *Remove Locators* removes all locators within the clip. Runs fully inside Live (Node for Max; decoding via macOS

@@ -5,7 +5,7 @@
  * plays at its own tempo, so its bars drift away from the Set's: after its tempo is detected the
  * device warps it onto the Set's grid (bar 1 on a bar line) and analyzes it again.
  *
- * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>, detail <0..100>,
+ * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>,
  *           band <kick|low|bass|mid|high> <0..100>, lock <0|1>,
  *           result <json>,
  *           status <text>
@@ -23,10 +23,8 @@ var current = null; // the last result
 // the Genre menu's items, as plan_song names the genres
 var GENRES = ["auto", "house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"];
 var chosen = "auto";
-// the Detail dial, 0..100: lower merges more neighbouring sections
-var chosenDetail = 50;
-var detailTask = null;
-var DETAIL_SETTLE_MS = 400; // the dial turns through many values: analyze once it rests
+var settleTask = null;
+var SETTLE_MS = 400; // a field dragged runs through many values: analyze once it rests
 // the Sensitivity fields, 0..100 per band; with Lock on, changing one moves the others by as much
 var BANDS = ["kick", "low", "bass", "mid", "high"];
 var sensitivity = { kick: 100, low: 100, bass: 100, mid: 100, high: 100 };
@@ -104,7 +102,6 @@ function referenceClip() {
     warp_markers: warpMarkers(clip),
     tempo: one(new LiveAPI("live_set"), "tempo"),
     genre: chosen,
-    detail: chosenDetail,
     sensitivity: sensitivity,
   };
 }
@@ -113,18 +110,12 @@ function genre(index) {
   chosen = GENRES[index] || "auto";
 }
 
-/** A new Detail splits the song again once the dial rests: the analysis takes a second. */
-function detail(value) {
-  var was = chosenDetail;
-  chosenDetail = Math.max(0, Math.min(100, Math.round(Number(value))));
-  if (chosenDetail !== was) reanalyzeLater();
-}
-
+/** New sensitivities split the song again once the fields rest: the analysis takes a second. */
 function reanalyzeLater() {
   if (!ready || !current) return;
-  if (!detailTask) detailTask = new Task(settled, this);
-  detailTask.cancel();
-  detailTask.schedule(DETAIL_SETTLE_MS);
+  if (!settleTask) settleTask = new Task(settled, this);
+  settleTask.cancel();
+  settleTask.schedule(SETTLE_MS);
 }
 
 /** One band's sensitivity; with Lock on the others follow by the same amount (kept within 0..100). */
@@ -149,7 +140,7 @@ function lock(on) {
 }
 
 function settled() {
-  if (job || warpJob) detailTask.schedule(DETAIL_SETTLE_MS);
+  if (job || warpJob) settleTask.schedule(SETTLE_MS);
   else analyze();
 }
 

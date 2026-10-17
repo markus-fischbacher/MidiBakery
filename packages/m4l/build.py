@@ -454,8 +454,8 @@ SENSITIVITY_BANDS = (("Kick", "kick"), ("Low", "low"), ("Bass", "bass"), ("Mid",
 
 
 def reference_device() -> dict[str, Any]:
-    """Layout (800 x 169): the view (sections and lanes) on the left; Analyze, the locator buttons, Genre, Detail
-    and About in the middle column; the Sensitivity per band (Kick, Low, Bass, Mid, High) and Lock on the right.
+    """Layout (800 x 169): the view (sections and lanes) on the left, next to it the Sensitivity per band (Kick,
+    Low, Bass, Mid, High) and Lock; Analyze, the locator buttons, Genre and About on the right.
     Audio passes through: the device sits on the reference song's own audio track."""
     p = Patcher()
     plugin = p.obj("plugin~", 20, 20, inlets=2, outlets=["signal", "signal"], width=60)
@@ -486,29 +486,25 @@ def reference_device() -> dict[str, Any]:
 
     buttons = (("Analyze", "analyze"), ("Set Locators", "locators"), ("Remove Locators", "unlocators"))
     for i, (label, message) in enumerate(buttons):
-        button = p.parameter("live.text", (300 + 90 * i, 20, 80, 18), (606, 6 + 24 * i, 90, 20), name=label, short=label,
+        button = p.parameter("live.text", (300 + 90 * i, 20, 80, 18), (706, 6 + 24 * i, 90, 20), name=label, short=label,
                              ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
         p.boxes[-1]["box"].update({"mode": 0, "text": label, "texton": label})
         _on_press(p, button, message, v8, 300 + 90 * i, 50)
-    genre = _menu(p, (600, 20, 110, 15), (606, 80, 90, 18), "Genre", "Genre",
+    genre = _menu(p, (600, 20, 110, 15), (706, 80, 90, 18), "Genre", "Genre",
                   ["Auto", "House", "Melodic Techno", "Peak Time Techno", "Drum & Bass", "Trap"], 0)
     to_v8 = p.obj("prepend genre", 600, 50, width=90)
     p.connect(genre, 0, to_v8)
     p.connect(to_v8, 0, v8)
-    # Detail: lower merges more neighbouring sections (their phrases stay in the analysis)
-    detail = _dial(p, (720, 20, 44, 48), (627, 100, 48, 48), "Detail", "Detail", 50.0)
-    detail_to_v8 = p.obj("prepend detail", 720, 50, width=90)
-    p.connect(detail, 0, detail_to_v8)
-    p.connect(detail_to_v8, 0, v8)
-    # Sensitivity: how much each band's changes count (detecting and merging sections); Lock moves them together
-    p.comment("Sensitivity", (860, 100, 80, 14), presentation=(704, 4, 92, 14), fontsize=9.0, **THEMED_TEXT)
+    # Sensitivity: how much each band's changes count when sections are found and merged (lower: fewer,
+    # longer sections; their phrases stay in the analysis); Lock moves them together
+    p.comment("Sensitivity", (860, 100, 80, 14), presentation=(604, 4, 92, 14), fontsize=9.0, **THEMED_TEXT)
     route = p.obj("route " + " ".join(key for _, key in SENSITIVITY_BANDS), 860, 400,
                   outlets=[""] * (len(SENSITIVITY_BANDS) + 1), width=200)
     p.connect(v8, 2, route)
     for i, (label, key) in enumerate(SENSITIVITY_BANDS):
         x, y = 860 + 70 * i, 140
-        p.comment(label, (x, y, 40, 14), presentation=(704, 22 + 22 * i, 40, 14), fontsize=9.0, **THEMED_TEXT)
-        field = p.parameter("live.numbox", (x, y + 20, 44, 15), (748, 21 + 22 * i, 48, 16), name=f"Sensitivity {label}",
+        p.comment(label, (x, y, 40, 14), presentation=(604, 22 + 22 * i, 40, 14), fontsize=9.0, **THEMED_TEXT)
+        field = p.parameter("live.numbox", (x, y + 20, 44, 15), (648, 21 + 22 * i, 48, 16), name=f"Sensitivity {label}",
                             short=label, ptype=FLOAT, inlets=1, outlets=["", "float"], parameter_mmin=0.0,
                             parameter_mmax=100.0, parameter_initial=[100.0], parameter_initial_enable=1,
                             parameter_unitstyle=UNIT_INT)
@@ -518,13 +514,13 @@ def reference_device() -> dict[str, Any]:
         shown = p.obj("prepend set", x, 430, width=70)
         p.connect(route, i, shown)
         p.connect(shown, 0, field)
-    lock = p.parameter("live.text", (860, 220, 50, 15), (704, 134, 92, 18), name="Sensitivity Lock", short="Lock",
+    lock = p.parameter("live.text", (860, 220, 50, 15), (604, 134, 92, 18), name="Sensitivity Lock", short="Lock",
                        ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 1, "text": "Lock", "texton": "Locked"})
     lock_to_v8 = p.obj("prepend lock", 860, 250, width=80)
     p.connect(lock, 0, lock_to_v8)
     p.connect(lock_to_v8, 0, v8)
-    _about(p, (606, 148, 90, 18), node, 760, 20)
+    _about(p, (706, 148, 90, 18), node, 760, 20)
     return p.to_json(kind="audio_effect", title="MidiBakery Reference Analyzer", width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
 
 
