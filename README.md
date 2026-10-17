@@ -12,7 +12,7 @@ See [docs/KONZEPT.md](docs/KONZEPT.md) for the concept and roadmap, and [docs/AR
 | `packages/remote_script/MidiBakery` | Remote Script loaded by Live (stdlib only, Python 3.11) |
 | `packages/m4l` | Max for Live devices: build script and sources (chat device, MIDI Tools, reference analysis) |
 | `packaging/` | Packaged app (PyInstaller), macOS .pkg, Windows setup, release tools (signed update manifest) |
-| `services/updates` | Update service: Cloudflare Worker + R2 on `updates.klirrwerk.com` |
+| `services/updates` | Update and license service: Cloudflare Worker + R2 + D1 on `updates.klirrwerk.com` |
 | `tests/` | Contract tests: real Remote Script + fake Live Object Model over a real socket |
 
 ## Development
@@ -62,6 +62,13 @@ version exists; the devices' About line and the Chat device then show it, and *I
 downloads the installer, checks it against the release's Ed25519-signed manifest and opens it.
 `midibakery update` does the same from the terminal (`--check` only asks, `--disable` turns the daily check off).
 A tag `v<version>` publishes a release; setup and details in [services/updates/README.md](services/updates/README.md).
+
+### License
+
+A 30-day trial, then a license key (perpetual, 12 months of updates, two computers). The Chat device and
+`midibakery license` start the trial and activate a key; the app checks the signed license offline.
+Without one it still reads Live and undoes, but generates and edits nothing. Licensing stays off until a
+public key is in `LICENSE_KEYS` (`midibakery/license.py`); see [services/updates/README.md](services/updates/README.md).
 
 ### Chat and local API
 

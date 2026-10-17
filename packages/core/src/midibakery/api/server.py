@@ -13,6 +13,9 @@
 - ``GET /health``: server and Live bridge status; ``update`` names a newer version, if there is one.
 - ``GET /update``: the daily update check's result (``midibakery.updates``); ``?force=1`` asks now.
 - ``POST /update/install``: downloads the newer version's installer, verifies it and opens it.
+- ``GET /license``: trial or license state (``midibakery.license``); ``POST /license/trial``,
+  ``POST /license/activate`` ``{"key"}``, ``POST /license/deactivate``. Without the trial or a license the
+  MIDI Tools and the chat answer ``LICENSE_REQUIRED``; reading Live and undo keep working.
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
@@ -44,7 +47,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from midibakery import credentials, updates
+from midibakery import credentials, license, updates
 from midibakery.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
@@ -111,10 +114,12 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         update = update_state["update"]
         if update is None or not update.available:
             return None
-        return {"version": update.version, "notes": update.notes, "size": (update.file or {}).get("size")}
+        return {"version": update.version, "notes": update.notes, "size": (update.file or {}).get("size"),
+                "included": update.included}
 
     async def follow_updates() -> None:
         while True:
+            await license.refresh()
             await refresh_update()
             await asyncio.sleep(UPDATE_RECHECK)
 
@@ -128,6 +133,9 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         update = update_state["update"]
         if update is None or not update.available:
             return JSONResponse({"error": "NO_UPDATE"}, status_code=409)
+        if not update.included:
+            return JSONResponse({"error": "NOT_INCLUDED", "message": f"MidiBakery {update.version} is not included in "
+                                 "your license's updates.", "purchase_url": license.PURCHASE_URL}, status_code=402)
         try:
             path = await updates.download(update)
             updates.open_installer(path)
@@ -177,10 +185,36 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         except (BridgeError, asyncio.TimeoutError) as exc:
             live = {"error": str(exc)}
         # pid: the Remote Script stops an API of another version (left from before an update) by it
-        return JSONResponse({"ok": True, "version": VERSION, "pid": os.getpid(), "live": live, "update": update_info()})
+        state = license.status()
+        return JSONResponse({"ok": True, "version": VERSION, "pid": os.getpid(), "live": live, "update": update_info(),
+                             "license": {"state": state.state, "message": state.message}})
+
+    async def license_state(request: Request) -> JSONResponse:
+        return JSONResponse(license.status().as_dict())
+
+    async def license_action(request: Request) -> JSONResponse:
+        action = request.path_params["action"]
+        try:
+            if action == "trial":
+                await license.start_trial()
+            elif action == "activate":
+                try:
+                    key = str((await request.json()).get("key", ""))
+                except (ValueError, AttributeError):
+                    key = ""
+                await license.activate(key)
+            elif action == "deactivate":
+                await license.deactivate()
+            else:
+                return JSONResponse({"error": "NOT_FOUND"}, status_code=404)
+        except license.LicenseError as exc:
+            return JSONResponse({"error": exc.code, "message": str(exc)}, status_code=422)
+        return JSONResponse(license.status().as_dict())
 
     def notes_endpoint(model, run):
         async def endpoint(request: Request) -> JSONResponse:
+            if not license.allowed():
+                return JSONResponse({"error": "LICENSE_REQUIRED", "message": license.status().message}, status_code=402)
             try:
                 body = model.model_validate(await request.json())
                 return JSONResponse(run(body))
@@ -260,6 +294,10 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
                         if running is not None and not running.done():
                             await emit({"type": "error", "message": "Still working on the previous message; send cancel first."})
                             continue
+                        if kind == "user" and not license.allowed():
+                            # before the model runs: no tokens spent on an answer whose tools would refuse
+                            await emit({"type": "error", "code": "LICENSE_REQUIRED", "message": license.status().message})
+                            continue
                         if kind == "user":
                             work = agent.send(str(message.get("text", "")), emit)
                         else:
@@ -308,6 +346,8 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/models", guard(models), methods=["GET"]),
             Route("/update", guard(update_status), methods=["GET"]),
             Route("/update/install", guard(update_install), methods=["POST"]),
+            Route("/license", guard(license_state), methods=["GET"]),
+            Route("/license/{action}", guard(license_action), methods=["POST"]),
             Route("/auth/anthropic", guard(auth), methods=["GET", "PUT", "DELETE"]),
             Route("/miditool/generate", guard(notes_endpoint(GenerateRequest, generate)), methods=["POST"]),
             Route("/miditool/transform", guard(notes_endpoint(TransformRequest, transform)), methods=["POST"]),

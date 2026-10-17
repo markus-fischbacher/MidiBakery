@@ -48,6 +48,8 @@ class Update:
     notes: str = ""
     file: dict | None = None  # {"name", "size", "sha256"} of this system's installer
     checked: float = 0.0  # time.time() of the check
+    released: str = ""  # ISO time of the release
+    included: bool = True  # within the license's updates (midibakery.license); the service refuses others
 
     @property
     def url(self) -> str | None:
@@ -122,18 +124,25 @@ def evaluate(manifest: dict, current: str = __version__, system: str | None = No
     file = manifest.get("files", {}).get(system)
     newer = parse_version(manifest["version"]) > parse_version(current)
     return Update(version=manifest["version"], available=newer and file is not None, notes=manifest.get("notes", ""),
-                  file=file, checked=time.time())
+                  file=file, checked=time.time(), released=manifest.get("released", ""),
+                  included=_included(manifest.get("released", "")))
+
+
+def _included(released: str) -> bool:
+    from midibakery import license
+
+    until = license.status().updates_until
+    return not (until and released and released[:10] > until)
 
 
 # ---------------------------------------------------------------------------- asking the service
 
 
 def _headers() -> dict[str, str]:
-    headers = {"User-Agent": f"MidiBakery/{__version__}"}
-    license_key = settings().get("license_key")  # sold versions: the service can then check it
-    if license_key:
-        headers["Authorization"] = f"License {license_key}"
-    return headers
+    from midibakery import license
+
+    # the license token (signed, no secret): the service lets it download the updates it includes
+    return {"User-Agent": f"MidiBakery/{__version__}"} | license.updates_header()
 
 
 async def fetch(client=None) -> Update:
@@ -191,6 +200,7 @@ def evaluate_cached(update: Update) -> Update:
     """A cached answer after this version changed (an update installed meanwhile) is no longer news."""
     if update.available and parse_version(update.version) <= parse_version(__version__):
         update.available = False
+    update.included = _included(update.released)  # the license may have been renewed meanwhile
     return update
 
 
@@ -203,6 +213,8 @@ async def download(update: Update, client=None) -> Path:
 
     if not update.available or not update.file:
         raise UpdateError("no update to download")
+    if not update.included:
+        raise UpdateError(f"MidiBakery {update.version} is not included in your license's updates; renew them first")
     target = config_dir() / "downloads" / Path(update.file["name"]).name
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_suffix(target.suffix + ".part")

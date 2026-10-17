@@ -166,5 +166,6 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 - Remote Script und API verlangen jeweils einen zufälligen Token aus einer Datei, die nur dein Benutzer lesen kann.
 - Die Chat-Seite enthält keinen Token; das Gerät übergibt ihn im URL-Fragment.
 - Logs schwärzen den Token.
+- Lizenz: Testphase und Lizenz sind vom Dienst signierte Tokens, die die App offline prüft; gebunden an einen Hash der Rechner-ID, nichts Persönliches. Ohne Lizenz bleiben Lesen und Undo möglich, ein Set wird nie verändert.
 - Updates: Ein Installer wird nur geöffnet, wenn das Manifest mit einem in der App hinterlegten Ed25519-Schlüssel signiert ist und die SHA-256 der Datei passt. Der Update-Check schickt nur Version, System, Architektur und Kanal; `midibakery update --disable` schaltet ihn ab.
 - Cloud-LLMs (Claude) bekommen Session-Informationen wie Spurnamen, Noten und Tempo. Mit LM Studio oder Ollama bleibt alles lokal.

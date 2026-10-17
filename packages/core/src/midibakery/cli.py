@@ -101,6 +101,37 @@ def cmd_update(args: argparse.Namespace) -> int:
     return asyncio.run(run())
 
 
+def cmd_license(args: argparse.Namespace) -> int:
+    from midibakery import license
+
+    if not license.enabled():
+        print("this build needs no license")
+        return 0
+
+    async def run() -> int:
+        try:
+            if args.action == "trial":
+                await license.start_trial()
+            elif args.action == "activate":
+                await license.activate(args.key or input("License key: "))
+            elif args.action == "deactivate":
+                await license.deactivate()
+                print("this computer is deactivated; its seat is free again")
+                return 0
+        except license.LicenseError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        state = license.status()
+        print(state.message or state.state)
+        if state.updates_until:
+            print(f"updates included until {state.updates_until}")
+        if not state.allowed:
+            print(f"buy a license: {license.PURCHASE_URL}")
+        return 0 if state.allowed else 1
+
+    return asyncio.run(run())
+
+
 def cmd_auth(args: argparse.Namespace) -> int:
     from getpass import getpass
 
@@ -273,6 +304,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--disable", action="store_true", help="turn the daily check (in the API) off")
     p.add_argument("--enable", action="store_true", help="turn the daily check back on")
     p.set_defaults(func=cmd_update)
+
+    p = sub.add_parser("license", help="show the license; start the trial, activate or deactivate this computer")
+    p.add_argument("action", nargs="?", choices=["status", "trial", "activate", "deactivate"], default="status")
+    p.add_argument("key", nargs="?", help="for activate: the license key (asked for when left out)")
+    p.set_defaults(func=cmd_license)
 
     p = sub.add_parser("auth", help="manage the Claude API key (in the macOS Keychain or Windows Credential Manager)")
     p.add_argument("action", choices=["set-key", "status", "remove"])
