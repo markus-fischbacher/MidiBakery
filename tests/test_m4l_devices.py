@@ -215,8 +215,9 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     assert labels == ["About", "Analyze", "Remove Locators", "Set Locators"]
     menus = [b for b in boxes.values() if b["maxclass"] == "live.menu"]
     menu = next(b for b in menus if b["saved_attribute_attributes"]["valueof"]["parameter_enum"][0] == "Auto")
-    detail = next(b for b in menus if b is not menu)
-    assert detail["saved_attribute_attributes"]["valueof"]["parameter_enum"] == ["Detail: Coarse", "Detail: Normal", "Detail: Fine"]
+    assert len(menus) == 1
+    detail = next(b for b in boxes.values() if b["maxclass"] == "live.dial")
+    assert detail["varname"] == "Detail" and detail["saved_attribute_attributes"]["valueof"]["parameter_initial"] == [50.0]
     assert ((next(i for i, b in boxes.items() if b is detail), 0), (by_text["prepend detail"], 0)) in lines
     assert "function detail(" in code
     to_v8 = by_text["prepend genre"]

@@ -494,9 +494,8 @@ def reference_device() -> dict[str, Any]:
     to_v8 = p.obj("prepend genre", 600, 50, width=90)
     p.connect(genre, 0, to_v8)
     p.connect(to_v8, 0, v8)
-    # Detail: how far neighbouring sections are merged (their phrases stay in the analysis)
-    detail = _menu(p, (720, 20, 110, 15), (606, 102, 90, 18), "Detail", "Detail",
-                   ["Detail: Coarse", "Detail: Normal", "Detail: Fine"], 1)
+    # Detail: lower merges more neighbouring sections (their phrases stay in the analysis)
+    detail = _dial(p, (720, 20, 44, 48), (627, 100, 48, 48), "Detail", "Detail", 50.0)
     detail_to_v8 = p.obj("prepend detail", 720, 50, width=90)
     p.connect(detail, 0, detail_to_v8)
     p.connect(detail_to_v8, 0, v8)

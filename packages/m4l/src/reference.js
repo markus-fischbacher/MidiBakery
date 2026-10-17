@@ -5,7 +5,7 @@
  * plays at its own tempo, so its bars drift away from the Set's: after its tempo is detected the
  * device warps it onto the Set's grid (bar 1 on a bar line) and analyzes it again.
  *
- * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>, detail <menu index>,
+ * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>, detail <0..100>,
  *           result <json>,
  *           status <text>
  * outlet 0: to node.script (analyze / lookup / log <json>)
@@ -21,9 +21,10 @@ var current = null; // the last result
 // the Genre menu's items, as plan_song names the genres
 var GENRES = ["auto", "house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"];
 var chosen = "auto";
-// the Detail menu's items: how far neighbouring sections are merged
-var DETAILS = ["coarse", "normal", "fine"];
-var chosenDetail = "normal";
+// the Detail dial, 0..100: lower merges more neighbouring sections
+var chosenDetail = 50;
+var detailTask = null;
+var DETAIL_SETTLE_MS = 400; // the dial turns through many values: analyze once it rests
 var job = null; // locator job: {queue, home, phase, ticks, task}
 var LOCATOR_TICK_MS = 60;
 var LOCATOR_TIMEOUT_TICKS = 40; // ~2.4 s per locator, then it is skipped
@@ -105,11 +106,19 @@ function genre(index) {
   chosen = GENRES[index] || "auto";
 }
 
-/** A new Detail splits the song again: the analysis takes a second. */
-function detail(index) {
+/** A new Detail splits the song again once the dial rests: the analysis takes a second. */
+function detail(value) {
   var was = chosenDetail;
-  chosenDetail = DETAILS[index] || "normal";
-  if (ready && current && chosenDetail !== was && !job) analyze();
+  chosenDetail = Math.max(0, Math.min(100, Math.round(Number(value))));
+  if (!ready || !current || chosenDetail === was) return;
+  if (!detailTask) detailTask = new Task(settled, this);
+  detailTask.cancel();
+  detailTask.schedule(DETAIL_SETTLE_MS);
+}
+
+function settled() {
+  if (job || warpJob) detailTask.schedule(DETAIL_SETTLE_MS);
+  else analyze();
 }
 
 function init() {

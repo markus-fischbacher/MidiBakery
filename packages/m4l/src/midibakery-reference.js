@@ -171,7 +171,7 @@ async function run(clip) {
     warped: Boolean(warp),
     bar_grid: result.bar_grid, // "arrangement": bars are the Arrangement's; "song": the song's own bars from its start
     genre: result.genre, // as chosen in the device; "auto" guesses only the phrase length (D&B from 160 BPM)
-    detail: result.detail, // coarse | normal | fine: how far neighbouring sections are merged (their phrases stay)
+    detail: result.detail, // 0..100, the Detail dial: lower merges more neighbouring sections (their phrases stay)
     key: result.key,
     first_bar: result.first_bar,
     bars: result.bars,
