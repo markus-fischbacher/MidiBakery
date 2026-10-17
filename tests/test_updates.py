@@ -34,6 +34,7 @@ def key(tmp_path, monkeypatch):
     """A fresh signing key the app trusts, and an empty config folder with the check switched on."""
     monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path / "home"))
     monkeypatch.delenv("MIDIBAKERY_NO_UPDATE_CHECK", raising=False)
+    monkeypatch.setattr(updates, "platform_key", lambda: "macos-arm64")  # releases exist for macOS and Windows only
     private = Ed25519PrivateKey.generate()
     seed = private.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
     public = private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
@@ -44,7 +45,7 @@ def key(tmp_path, monkeypatch):
 def release(tmp_path, key, version=NEWER, payload=INSTALLER) -> dict:
     folder = tmp_path / "release"
     folder.mkdir(exist_ok=True)
-    (folder / f"MidiBakery-{version}-{updates.platform_key()}{'-setup.exe' if 'windows' in updates.platform_key() else '.pkg'}").write_bytes(payload)
+    (folder / f"MidiBakery-{version}-macos-arm64.pkg").write_bytes(payload)
     (folder / f"MidiBakery-{version}-macos-arm64.zip").write_bytes(b"not an installer")
     return make_manifest.sign(make_manifest.manifest(folder, version, "stable", "Faster chat."), key)
 
@@ -95,7 +96,7 @@ def test_release_files_must_carry_the_release_version(tmp_path, key):
         make_manifest.manifest(folder, NEWER, "stable", "")
 
 
-def test_evaluate_needs_a_newer_version_with_an_installer_for_this_system():
+def test_evaluate_needs_a_newer_version_with_an_installer_for_this_system(key):
     manifest = {"version": NEWER, "files": {"plan9-x64": {"name": "x", "size": 1, "sha256": "0"}}}
     assert not updates.evaluate(manifest).available
     manifest["files"][updates.platform_key()] = {"name": "y", "size": 1, "sha256": "0"}
