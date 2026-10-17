@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import hmac
 import itertools
 import json
@@ -367,7 +368,9 @@ def serve(provider_factory: ProviderFactory, port: int = 8766) -> None:
     bridge = BridgeClient()
     app = build_app(bridge, provider_factory, token)
     path = write_api_info(port, token)
-    print(f"MidiBakery API on http://127.0.0.1:{port} (token in {path})")
+    # api.log is where a chat goes wrong is read afterwards: when, and which tool call
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", force=True)
+    print(f"MidiBakery API on http://127.0.0.1:{port} (token in {path})", flush=True)
     try:
         uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
     finally:
