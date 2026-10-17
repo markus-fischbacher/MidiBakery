@@ -53,16 +53,15 @@ The app's side: `midibakery license [status|trial|activate KEY|deactivate]`, or 
      that know the key check for updates.
    - Keep the key file offline (password manager); it never goes into the repository.
 2. **Cloudflare.**
-   - R2: create the bucket `midibakery-releases`.
+   - R2: the bucket `midibakery-releases` exists.
    - API token (My Profile > API Tokens > Create Token) with *Account: Workers Scripts: Edit*,
      *Account: Workers R2 Storage: Edit* and *Zone klirrwerk.com: Workers Routes: Edit*. The first
      deploy creates the custom domain `updates.klirrwerk.com` (`wrangler.toml`).
 3. **Licensing** (when you start selling):
    - `uv run python packaging/release/keygen.py --license ~/midibakery-license.key`; the printed line goes
      into `LICENSE_KEYS` in `license.py` and `LICENSE_PUBLIC_KEYS` in `wrangler.toml`.
-   - In `services/updates`: `npx wrangler d1 create midibakery`, put its id into `wrangler.toml`
-     (uncomment the D1 block), `npx wrangler d1 migrations apply midibakery --remote`,
-     `npx wrangler secret put LICENSE_SIGNING_KEY` (the key file's line).
+   - D1 `midibakery` exists (in `wrangler.toml`, migrations applied). In `services/updates`:
+     `npx wrangler secret put LICENSE_SIGNING_KEY` (the key file's line), after the Worker's first deploy.
    - A release with `LICENSE_KEYS` filled turns licensing on in the app; `REQUIRE_LICENSE_FOR_UPDATES`
      ties downloads to it.
    - `PURCHASE_URL` in `license.py` points at the shop page.
