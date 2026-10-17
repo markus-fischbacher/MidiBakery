@@ -22,6 +22,8 @@ TICK_SECONDS = 0.005
 
 
 def pytest_configure(config):
+    # Tests never ask the real update service (the API checks for updates when it starts).
+    os.environ["MIDIBAKERY_NO_UPDATE_CHECK"] = "1"
     # CI sets this: the Max devices' JavaScript tests skip without Node.js, which must not go unnoticed there.
     if os.environ.get("MIDIBAKERY_REQUIRE_NODE") and shutil.which("node") is None:
         raise pytest.UsageError("MIDIBAKERY_REQUIRE_NODE is set but there is no node on PATH")

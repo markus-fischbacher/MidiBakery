@@ -68,6 +68,39 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_update(args: argparse.Namespace) -> int:
+    from midibakery import updates
+
+    if args.disable or args.enable:
+        updates.set_enabled(bool(args.enable))
+        print(f"daily update check {'on' if args.enable else 'off'}")
+        return 0
+    if not updates.UPDATE_KEYS:
+        print("this build has no update key; updates come with the next installer", file=sys.stderr)
+        return 1
+
+    async def run() -> int:
+        try:
+            update = await updates.check(force=True)
+            if not update.available:
+                print(f"MidiBakery {__version__} is up to date (newest: {update.version})")
+                return 0
+            print(f"MidiBakery {update.version} is available (installed: {__version__})")
+            if update.notes:
+                print(update.notes)
+            if args.check:
+                return 0
+            path = await updates.download(update)
+        except updates.UpdateError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        print(f"verified {path}; opening the installer")
+        updates.open_installer(path)
+        return 0
+
+    return asyncio.run(run())
+
+
 def cmd_auth(args: argparse.Namespace) -> int:
     from getpass import getpass
 
@@ -234,6 +267,12 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("uninstall", help="remove what `install` put into Live and the API's launch")
     p.add_argument("--purge", action="store_true", help="also remove the settings, stored analyses and the stored API key")
     p.set_defaults(func=cmd_uninstall)
+
+    p = sub.add_parser("update", help="look for a newer MidiBakery, download its installer and open it")
+    p.add_argument("--check", action="store_true", help="only say whether there is one")
+    p.add_argument("--disable", action="store_true", help="turn the daily check (in the API) off")
+    p.add_argument("--enable", action="store_true", help="turn the daily check back on")
+    p.set_defaults(func=cmd_update)
 
     p = sub.add_parser("auth", help="manage the Claude API key (in the macOS Keychain or Windows Credential Manager)")
     p.add_argument("action", choices=["set-key", "status", "remove"])

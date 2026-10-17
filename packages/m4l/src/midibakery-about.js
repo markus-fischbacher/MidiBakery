@@ -31,10 +31,11 @@ function readApi() {
   return null;
 }
 
-/** {api, script}: the versions the API reports; api null when it does not answer, script null without Live. */
+/** {api, script, update}: the versions the API reports; api null when it does not answer, script null without
+ * Live, update the newer version the API's daily check found (null when none). */
 async function versions() {
   const info = readApi();
-  if (!info) return { api: null, script: null };
+  if (!info) return { api: null, script: null, update: null };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -43,9 +44,13 @@ async function versions() {
       signal: controller.signal,
     });
     const data = await response.json();
-    return { api: data.version || null, script: (data.live && data.live.bridge) || null };
+    return {
+      api: data.version || null,
+      script: (data.live && data.live.bridge) || null,
+      update: (data.update && data.update.version) || null,
+    };
   } catch (_) {
-    return { api: null, script: null };
+    return { api: null, script: null, update: null };
   } finally {
     clearTimeout(timer);
   }
@@ -53,6 +58,11 @@ async function versions() {
 
 /** One line for the device's status, e.g. "MidiBakery 0.2.0 (device, API, Remote Script)". */
 function aboutText(device, found) {
+  const line = versionText(device, found);
+  return found.update ? `${line} · Update ${found.update} available: Install in the Chat device` : line;
+}
+
+function versionText(device, found) {
   if (!found.api) return `MidiBakery ${device} · API not running`;
   const parts = [["device", device], ["API", found.api]];
   if (found.script) parts.push(["Remote Script", found.script]);

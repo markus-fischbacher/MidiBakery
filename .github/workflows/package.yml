@@ -72,3 +72,78 @@ jobs:
             build/app/MidiBakery-*-setup.exe
           if-no-files-found: error
           retention-days: 14
+
+  # A release (tag v<version>): the update service, then the installers and their signed manifest in R2.
+  # The secrets live in the GitHub environment "release" (see services/updates/README.md); nothing else
+  # sees them. The channel file goes up last: until then the app still finds the previous release.
+  worker:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Worker tests
+        working-directory: services/updates
+        run: node --test test/worker.test.js
+
+      - name: Deploy the update service
+        working-directory: services/updates
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4.147.0 deploy
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [app, worker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: The tag names this version
+        run: |
+          version=$(uv run python -c "import midibakery; print(midibakery.__version__)")
+          test "${GITHUB_REF_NAME}" = "v${version}" || { echo "tag ${GITHUB_REF_NAME} but version ${version}"; exit 1; }
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: midibakery-*
+          path: release
+          merge-multiple: true
+
+      - name: Sign the manifest
+        env:
+          MIDIBAKERY_SIGNING_KEY: ${{ secrets.MIDIBAKERY_SIGNING_KEY }}
+        run: uv run python packaging/release/make_manifest.py release stable.json --channel stable
+
+      - name: Upload to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          put() { npx --yes wrangler@4.147.0 r2 object put "midibakery-releases/$1" --file "$2" --content-type "$3" --remote; }
+          for file in release/MidiBakery-*.pkg release/MidiBakery-*-setup.exe; do
+            put "midibakery/releases/${VERSION}/$(basename "$file")" "$file" application/octet-stream
+          done
+          put midibakery/channels/stable.json stable.json application/json

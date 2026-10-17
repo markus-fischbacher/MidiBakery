@@ -255,7 +255,7 @@ def test_a_rebuild_leaves_no_renamed_device_behind(tmp_path):
 
 @pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
 def test_about_line_compares_the_versions(tmp_path):
-    """midibakery-about.js against a stand-in API: same versions, a difference, no Live, no API."""
+    """midibakery-about.js against a stand-in API: same versions, a difference, no Live, no API, an update."""
     node = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
     script = tmp_path / "about-test.js"
     script.write_text(f"""
@@ -266,10 +266,11 @@ const out = [];
 out.push(aboutText("0.2.0", {{ api: "0.2.0", script: "0.2.0" }}));
 out.push(aboutText("0.2.0", {{ api: "0.3.0", script: "0.2.0" }}));
 out.push(aboutText("0.2.0", {{ api: "0.2.0", script: null }}));
+out.push(aboutText("0.2.0", {{ api: "0.2.0", script: "0.2.0", update: "0.3.0" }}));
 const server = http.createServer((req, res) => {{
   const ok = req.url === "/health" && req.headers.authorization === "Bearer secret";
   res.writeHead(ok ? 200 : 401, {{ "content-type": "application/json" }});
-  res.end(JSON.stringify(ok ? {{ ok: true, version: "0.2.0", live: {{ bridge: "0.1.9" }} }} : {{ error: "UNAUTHORIZED" }}));
+  res.end(JSON.stringify(ok ? {{ ok: true, version: "0.2.0", live: {{ bridge: "0.1.9" }}, update: {{ version: "0.3.0" }} }} : {{ error: "UNAUTHORIZED" }}));
 }});
 server.listen(0, "127.0.0.1", async () => {{
   out.push(await about("0.2.0"));  // no api.json yet
@@ -286,8 +287,10 @@ server.listen(0, "127.0.0.1", async () => {{
         "MidiBakery 0.2.0 (device, API, Remote Script)",
         "Versions differ: device 0.2.0, API 0.3.0, Remote Script 0.2.0 - reinstall MidiBakery",
         "MidiBakery 0.2.0 (device, API) · Remote Script not connected",
+        "MidiBakery 0.2.0 (device, API, Remote Script) · Update 0.3.0 available: Install in the Chat device",
         "MidiBakery 0.2.0 · API not running",
-        "Versions differ: device 0.2.0, API 0.2.0, Remote Script 0.1.9 - reinstall MidiBakery",
+        "Versions differ: device 0.2.0, API 0.2.0, Remote Script 0.1.9 - reinstall MidiBakery"
+        " · Update 0.3.0 available: Install in the Chat device",
     ]
 
 
