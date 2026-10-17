@@ -22,6 +22,7 @@ from mcp.types import ToolAnnotations
 from mcp_types import CallToolResult, InputRequiredResult, TextContent
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
+from midibakery import __version__
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.catalog import get_op
 from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty
@@ -236,7 +237,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         "midibakery",
         title="MidiBakery by Klirrwerk for Ableton Live",
         instructions=INSTRUCTIONS,
-        version="0.1.0",
+        version=__version__,
         extensions=[apps],
     )
 

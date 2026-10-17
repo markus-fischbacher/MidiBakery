@@ -7,7 +7,7 @@ import pytest
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from midibakery import credentials
+from midibakery import __version__, credentials
 from midibakery.agent import REDUCED_TOOLS
 from midibakery.agent.providers.base import ToolCall, Turn
 from midibakery.api.server import api_info_path, build_app, write_api_info
@@ -49,7 +49,7 @@ def test_requests_need_the_token(app_factory):
 def test_discovery_file_is_private(bridge_env):
     path = write_api_info(8766, TOKEN)
     assert path == api_info_path()
-    assert json.loads(path.read_text()) == {"port": 8766, "token": TOKEN, "version": "0.1.0"}
+    assert json.loads(path.read_text()) == {"port": 8766, "token": TOKEN, "version": __version__}
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
