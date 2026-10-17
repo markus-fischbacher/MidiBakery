@@ -43,6 +43,15 @@ The macOS installer installs for the current user, no administrator: the app int
 Installing a newer package updates and keeps the API's settings; `.../runtime/<version>/midibakery uninstall`
 removes the app, the Remote Script, the devices and the package receipt. CI installs and uninstalls it on macOS.
 
+```bash
+python packaging/windows/build_setup.py   # on Windows, with Inno Setup 6: build/app/MidiBakery-<version>-windows-x64-setup.exe
+```
+
+The Windows setup does the same for the current user, no administrator: the app into
+`%LOCALAPPDATA%\Programs\MidiBakery\runtime\<version>\`, then `midibakery install`. Running a newer setup updates;
+its uninstaller (Settings > Apps) runs `midibakery uninstall` and removes the app. CI installs, updates and
+uninstalls it on Windows. Neither installer is signed yet.
+
 ### Chat and local API
 
 ```bash
