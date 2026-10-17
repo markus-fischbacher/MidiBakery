@@ -672,6 +672,19 @@ async def test_a_reference_sets_tempo_and_key_with_set_tempo(client, live, refer
     assert song == (124, 3, "Minor")
 
 
+async def test_an_unwarped_reference_needs_its_own_tempo(client, live, references, tmp_path):
+    _studio(live)
+    # analyzed unwarped: bars of the song's own 124 BPM, the Set plays 120
+    unwarped = {**REFERENCE, "bar_grid": "song", "warped": False}
+    (tmp_path / "references" / "katoff.json").write_text(json.dumps(unwarped))
+    server = build_server(client)
+    with pytest.raises(ToolError, match="is not warped: it plays at its own 124 BPM while the song would play at 120 BPM"):
+        await _plan(server, genre="peak_time_techno", reference="katoff")
+    # at the reference's tempo the bars line up; the plan still says how to make it tempo-proof
+    preview = await _plan(server, genre="peak_time_techno", reference="katoff", set_tempo=True)
+    assert preview["tempo"] == 124 and any("not warped" in w for w in preview["warnings"])
+
+
 async def test_a_reference_song_starts_under_the_reference_clip(client, live, references, tmp_path):
     _studio(live)
     reference = {**REFERENCE, "sections": [{**s, "beat": (s["start_bar"] + 7) * 4} for s in REFERENCE["sections"]]}

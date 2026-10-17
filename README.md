@@ -106,8 +106,11 @@ Each device's *About* button shows its version next to the API's and the Remote 
   engine on the selected time range, in the clip's scale. MIDI Tools must answer synchronously, so the first
   apply shows "Working..." and the result follows a moment later in the same apply cycle.
 - **MidiBakery Reference Analyzer** (Max for Live > Max Audio Effect > MidiBakery): put it on an audio track that holds a
-  reference song in the Arrangement and press *Analyze*. A warped clip is analyzed on Live's bars; an unwarped one
-  gets its tempo detected and is analyzed on its own bars, with locators at the matching times. The *Genre* menu
+  reference song in the Arrangement and press *Analyze*. A warped clip is analyzed on Live's bars. An unwarped one
+  plays at its own tempo, so its bars drift away from the Set's: the device detects its tempo and first downbeat,
+  warps the clip onto them (bar 1 on a bar line of the Arrangement, the Set's tempo unchanged) and analyzes it
+  again. If that fails it says so: warp it by hand (1.1.1 on the first downbeat), then *Analyze*. plan_song refuses
+  an unwarped reference unless the song plays at the reference's tempo. The *Genre* menu
   (Auto, or one of plan_song's genres) sets the section names (e.g. Lift/Peak for Peak Time Techno), the phrase
   length (16 bars for Drum & Bass) and settles half or double time. It shows the sections
   (intro, build, drop, break, outro), key, tempo and per-bar lanes for kick, lows, mids and hats; *Set Locators*

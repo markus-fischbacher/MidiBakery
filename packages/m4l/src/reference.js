@@ -1,7 +1,9 @@
 /*
  * MidiBakery Reference Analyzer device, v8 side: finds the reference clip on this track through the Live
  * API, hands it to node.script for the analysis, passes the result to the view and sets
- * Arrangement locators at its sections (or removes the locators within the clip).
+ * Arrangement locators at its sections (or removes the locators within the clip). An unwarped clip
+ * plays at its own tempo, so its bars drift away from the Set's: after its tempo is detected the
+ * device warps it onto the Set's grid (bar 1 on a bar line) and analyzes it again.
  *
  * inlet 0:  init (live.thisdevice), analyze, locators, unlocators, genre <menu index>, result <json>,
  *           status <text>
@@ -21,6 +23,9 @@ var chosen = "auto";
 var job = null; // locator job: {queue, home, phase, ticks, task}
 var LOCATOR_TICK_MS = 60;
 var LOCATOR_TIMEOUT_TICKS = 40; // ~2.4 s per locator, then it is skipped
+var warpJob = null; // auto-warp: {clip, plan, phase, ticks, task}
+var WARP_TIMEOUT_TICKS = 100; // ~6 s for the whole job
+var WARP_TOLERANCE = 0.01; // s: the warped grid must land this close to the detected one
 
 function status(text) {
   outlet(1, "status", text);
@@ -101,13 +106,14 @@ function init() {
 }
 
 function analyze() {
-  if (!ready) return;
+  if (!ready || warpJob) return;
   var clip = referenceClip();
   if (!clip) {
     status("No audio clip in this track's Arrangement");
     return;
   }
   status("Analyzing " + clip.name + (clip.warping ? "..." : " (not warped: detecting its tempo)..."));
+  fresh = true;
   outlet(0, "analyze", JSON.stringify(clip));
 }
 
@@ -119,6 +125,145 @@ function result(json) {
     return;
   }
   outlet(1, "show", json);
+  if (!current.warped && current.warp && current.analyzed && fresh) autoWarp(current.warp);
+  fresh = false;
+}
+
+// ---------------------------------------------------------------------------- auto-warp
+
+var fresh = false; // the result comes from a press of Analyze (not a stored one): warping is wanted
+
+/** Where the warp markers go: bar 1 (the detected first downbeat, `first` s into the file) on a bar
+ * line of the Arrangement, a second marker a whole number of bars later near the file's end, both on
+ * the detected tempo. The start marker keeps the part of the file the clip played before, moved by
+ * less than two beats so that bar lines stay bar lines. */
+function warpPlan(warp, clipStart) {
+  var spb = 60 / warp.bpm; // seconds per beat
+  var firstBeats = warp.first / spb;
+  var down = 4 * Math.max(0, Math.ceil(firstBeats / 4 - 0.1)); // clip beat of bar 1: the audio before it stays
+  var beatAt = function (seconds) { return down + (seconds - warp.first) / spb; };
+  var bars = Math.floor((warp.length - warp.first) / (4 * spb)) - 1;
+  if (bars < 8) return null;
+  var r = ((clipStart % 4) + 4) % 4; // start marker = this, mod 4: the downbeat then sits on a bar line
+  var start = 4 * Math.round((beatAt(warp.offset || 0) - r) / 4) + r;
+  return {
+    bpm: warp.bpm,
+    down: down,
+    first: warp.first,
+    end: { beat_time: down + bars * 4, sample_time: warp.first + bars * 4 * spb },
+    beatAt: beatAt,
+    start: start,
+  };
+}
+
+/** Seconds into the file at a clip beat, by Live's warp markers. */
+function secondsAt(markers, beat) {
+  var sorted = markers.slice().sort(function (a, b) { return a.beat_time - b.beat_time; });
+  if (sorted.length < 2) return NaN;
+  var i = 0;
+  while (i < sorted.length - 2 && sorted[i + 1].beat_time <= beat) i++;
+  var a = sorted[i];
+  var b = sorted[i + 1];
+  return a.sample_time + ((beat - a.beat_time) * (b.sample_time - a.sample_time)) / (b.beat_time - a.beat_time);
+}
+
+/** The warped clip plays the detected grid: bar 1 and the end marker where the plan put them. */
+function warpedOk(markers, plan) {
+  return Math.abs(secondsAt(markers, plan.down) - plan.first) < WARP_TOLERANCE &&
+    Math.abs(secondsAt(markers, plan.end.beat_time) - plan.end.sample_time) < WARP_TOLERANCE;
+}
+
+function autoWarp(warp) {
+  var found = referenceClip();
+  if (!found || found.warping) return;
+  var plan = warpPlan(warp, found.start);
+  if (!plan) return;
+  var song = new LiveAPI("live_set");
+  // at the song's own tempo the unwarped clip spans exactly its bars; warped, it keeps them at any tempo
+  warpJob = { clip: found.api, song: song, plan: plan, tempo: one(song, "tempo"), phase: "tempo", ticks: 0 };
+  warpJob.task = new Task(warpStep, this);
+  warpJob.task.interval = LOCATOR_TICK_MS;
+  warpJob.task.repeat(-1);
+  status("Warping the clip at " + plan.bpm + " BPM...");
+}
+
+function warpDone(message, ok) {
+  var job = warpJob;
+  job.task.cancel();
+  if (Math.abs(one(job.song, "tempo") - job.tempo) > 1e-6) job.song.set("tempo", job.tempo);
+  warpJob = null;
+  log("auto-warp: " + message);
+  if (ok) {
+    status(message + "; analyzing again...");
+    analyze();
+  } else {
+    status(message + ": warp it by hand (1.1.1 on the first downbeat at " + job.plan.bpm + " BPM), then Analyze");
+  }
+}
+
+function warpStep() {
+  var job = warpJob;
+  var clip = job.clip;
+  var plan = job.plan;
+  if (++job.ticks > WARP_TIMEOUT_TICKS) {
+    warpDone("Auto-warp stopped (" + job.phase + ")", false);
+    return;
+  }
+  try {
+    if (job.phase === "tempo") {
+      job.song.set("tempo", plan.bpm);
+      job.phase = "tempo wait";
+    } else if (job.phase === "tempo wait") {
+      if (Math.abs(one(job.song, "tempo") - plan.bpm) < 0.001) {
+        clip.set("warping", 1); // Live defers this one
+        job.phase = "warp wait";
+      }
+    } else if (job.phase === "warp wait") {
+      if (one(clip, "warping")) job.phase = "clean";
+    } else if (job.phase === "clean") {
+      // keep the first marker and Live's hidden last one; the ones between are Live's own guess
+      var markers = warpMarkers(clip).sort(function (a, b) { return a.beat_time - b.beat_time; });
+      for (var i = markers.length - 2; i >= 1; i--) clip.call("remove_warp_marker", markers[i].beat_time);
+      job.phase = "move";
+    } else if (job.phase === "move") {
+      var first = warpMarkers(clip).sort(function (a, b) { return a.beat_time - b.beat_time; })[0];
+      var target = plan.beatAt(first.sample_time);
+      if (Math.abs(target - first.beat_time) > 1e-6) clip.call("move_warp_marker", first.beat_time, target - first.beat_time);
+      job.phase = "add";
+    } else if (job.phase === "add") {
+      var marker = { beat_time: plan.end.beat_time, sample_time: plan.end.sample_time };
+      try {
+        clip.call("add_warp_marker", marker); // Max converts the object to a dictionary
+      } catch (e) {
+        log("add_warp_marker with an object: " + e);
+      }
+      if (!hasMarker(clip, plan.end.beat_time)) {
+        var d = new Dict();
+        d.set("beat_time", marker.beat_time);
+        d.set("sample_time", marker.sample_time);
+        clip.call("add_warp_marker", "dictionary", d.name);
+      }
+      job.phase = "start";
+    } else if (job.phase === "start") {
+      clip.set("start_marker", plan.start);
+      job.phase = "check";
+    } else if (job.phase === "check") {
+      var now = warpMarkers(clip);
+      if (warpedOk(now, plan)) warpDone("Warped at " + plan.bpm + " BPM, bar 1 on a bar line", true);
+      else {
+        log("auto-warp markers: " + JSON.stringify(now));
+        warpDone("Auto-warp did not land on the detected grid", false);
+      }
+    }
+  } catch (e) {
+    warpDone("Auto-warp failed in " + job.phase + " (" + e + ")", false);
+  }
+}
+
+function hasMarker(clip, beat) {
+  var markers = warpMarkers(clip);
+  for (var i = 0; i < markers.length; i++) if (Math.abs(markers[i].beat_time - beat) < 0.001) return true;
+  return false;
 }
 
 function locators() {

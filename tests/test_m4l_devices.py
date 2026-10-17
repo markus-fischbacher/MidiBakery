@@ -210,6 +210,7 @@ def test_reference_device_passes_audio_and_embeds_its_code(devices):
     assert view["textfile"]["embed"] == 1 and "function paint()" in view["textfile"]["text"]
     code = next(b for b in boxes.values() if b["maxclass"] == "v8.codebox")["code"]
     assert "set_or_delete_cue" in code and "warp_markers" in code and "function unlocators()" in code
+    assert "add_warp_marker" in code and "function autoWarp(" in code
     labels = sorted(b["text"] for b in boxes.values() if b["maxclass"] == "live.text")
     assert labels == ["About", "Analyze", "Remove Locators", "Set Locators"]
     menu = next(b for b in boxes.values() if b["maxclass"] == "live.menu")

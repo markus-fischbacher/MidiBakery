@@ -60,7 +60,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   follow_kick the drum clip; or plan_changes, where later steps share the first step's chords.
 - preview=true or plan_changes return a diff (a piano roll in MCP Apps clients) and a plan_id;
   apply_plan writes it as one undo step.
-- get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick); plan_song(reference=name) follows one.
+- get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick); plan_song(reference=name) follows one (warped; an unwarped one only at its own tempo).
 - Deleting tracks or clips and replacing notes ask the user first; a declined change returns CANCELLED.
 """
 

@@ -146,7 +146,9 @@ function runUnwarped(clip, samples, rate) {
   const result = analyze(samples, rate, grid.beats, { beatsPerBar: BEATS_PER_BAR, genre: clip.genre, bpm: grid.bpm });
   const beatAt = (sample) => Math.round((clip.start + ((sample / rate - offset) * clip.tempo) / 60) * 1000) / 1000;
   const sections = result.sections.map((s) => ({ ...s, beat: beatAt(grid.beats[(s.start_bar - 1) * BEATS_PER_BAR]) }));
-  return { ...result, sections, tempo: grid.bpm, first_bar: 1, bar_grid: "song" };
+  // what the device needs to warp the clip onto this grid: the tempo, where bar 1 starts and the file's length (s)
+  const warp = { bpm: grid.bpm, first: grid.beats[0] / rate, length: samples.length / rate, offset };
+  return { ...result, sections, tempo: grid.bpm, first_bar: 1, bar_grid: "song", warp };
 }
 
 async function run(clip) {
@@ -168,6 +170,7 @@ async function run(clip) {
     bars: result.bars,
     sections: result.sections,
     lanes: result.lanes,
+    ...(result.warp ? { warp: result.warp } : {}),
   };
 }
 
