@@ -137,9 +137,12 @@ const found = [["intro", 1, 16], ["drop", 17, 8], ["groove", 25, 24], ["break", 
   .map(([kind, start_bar, bars]) => ({ kind, start_bar, bars, energy: -3, kick: 1, elements: [] }));
 const bars = Array.from({ length: 157 }, () => ({ low: -3, bass: -3, mid: -3, high: -3, total: -3, centroid: 1000, kick: 1 }));
 const out = {};
-for (const detail of ["coarse", "normal", "fine"])
-  out[detail] = merge(found.map((s) => ({ ...s })), bars, detail, { break: "Breakdown" })
+for (const [detail, at] of [["coarse", 0], ["normal", 50], ["fine", 100]])
+  out[detail] = merge(found.map((s) => ({ ...s })), bars, at, { break: "Breakdown" })
     .map((s) => [s.name, s.start_bar, s.bars, (s.phrases || []).map((p) => p.start_bar)]);
+// two breaks 4 dB apart: they merge only once the dial is low enough (limit (1 - detail/100) * 24 dB)
+const loud = bars.map((b, i) => (i >= 56 && i < 64 ? { ...b, low: 1, bass: 1, mid: 1, high: 1, total: 1 } : b));
+out.dial = [100, 90, 85, 84, 50].map((at) => merge(found.slice(3, 5).map((s) => ({ ...s })), loud, at).length);
 console.log(JSON.stringify(out));
 """
 
@@ -154,4 +157,6 @@ def test_neighbours_of_the_same_kind_merge_and_keep_their_phrases():
     # coarse: a drop and its groove are one drop
     assert out["coarse"] == [["Intro", 1, 16, []], ["Drop", 17, 32, [17, 25]], ["Breakdown", 49, 44, [49, 57, 65, 73]],
                              ["Drop 2", 93, 56, [93, 125]], ["Outro", 149, 9, []]]
+    # breaks 4 dB apart (the distance over five features plus the kick: ~3.65) merge from 84 % down
+    assert out["dial"] == [2, 2, 2, 1, 1]
     assert [(s[1], s[2], s[3]) for s in out["fine"]][3:7] == [(49, 8, []), (57, 8, []), (65, 8, []), (73, 20, [])]  # as found
