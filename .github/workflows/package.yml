@@ -2,12 +2,15 @@ name: Package
 
 # The packaged app (PyInstaller) for macOS and Windows, smoke-tested on the system it was built for.
 # The installers (macOS .pkg, Windows setup) are built and installed here too. Signing comes in D4e.
+# Intel Macs get their own build on release tags and on PRs labelled "intel" (macOS minutes are dear;
+# GitHub's Intel runners are expected to go in 2027, and with them this build).
 
 on:
   push:
     branches: [main]
     tags: ["v*"]
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
 
 concurrency:
   group: package-${{ github.ref }}
@@ -21,7 +24,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]  # macos-latest is Apple silicon
+        # macos-latest is Apple silicon; macos-15-intel builds MidiBakery-<version>-macos-x64.pkg
+        os: ${{ (startsWith(github.ref, 'refs/tags/v') || contains(github.event.pull_request.labels.*.name, 'intel'))
+          && fromJSON('["macos-latest", "windows-latest", "macos-15-intel"]')
+          || fromJSON('["macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:

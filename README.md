@@ -37,13 +37,14 @@ folder; `midibakery install` from there installs into Live like from the checkou
 runs on: CI (`.github/workflows/package.yml`) builds and smoke-tests macOS (Apple silicon) and Windows.
 
 ```bash
-python packaging/macos/build_pkg.py   # build/app/MidiBakery-<version>-macos-arm64.pkg (not signed yet)
+python packaging/macos/build_pkg.py   # build/app/MidiBakery-<version>-macos-arm64.pkg, -macos-x64.pkg on Intel (not signed yet)
 ```
 
 The macOS installer installs for the current user, no administrator: the app into
 `~/Library/Application Support/MidiBakery/runtime/<version>/`, then its postinstall runs `midibakery install`.
 Installing a newer package updates and keeps the API's settings; `.../runtime/<version>/midibakery uninstall`
-removes the app, the Remote Script, the devices and the package receipt. CI installs and uninstalls it on macOS.
+removes the app, the Remote Script, the devices and the package receipt. CI installs and uninstalls it on macOS;
+the Intel package is built and tested on release tags and on PRs labelled `intel`.
 
 ```bash
 python packaging/windows/build_setup.py   # on Windows, with Inno Setup 6: build/app/MidiBakery-<version>-windows-x64-setup.exe
