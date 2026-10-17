@@ -456,6 +456,12 @@ SENSITIVITY_BANDS = (("Kick", "kick"), ("Lows", "low"), ("Mids", "mid"), ("Hats"
 LANES_TOP, LANE_HEIGHT = 16 + 2 + 32 + 4, 22
 
 
+def _row(k: int) -> float:
+    """The reference device's control rows on the view's lane grid: 2..5 are the lanes, 0 and 1 above them
+    (y 10 and 32), 6 below; a control 18 high sits at _row(k) + 1, centred like the fields."""
+    return LANES_TOP + LANE_HEIGHT * (k - 2)
+
+
 def reference_device() -> dict[str, Any]:
     """Layout (800 x 169): the view (sections and lanes) on the left, next to it the Sensitivity per lane (Kick,
     Lows, Mids, Hats) and Lock; Analyze, the locator buttons, Genre and About on the right.
@@ -487,20 +493,22 @@ def reference_device() -> dict[str, Any]:
                  textfile={"text": view_code, "filename": "none", "flags": 0, "embed": 1, "autowatch": 0})
     p.connect(v8, 1, view)
 
-    buttons = (("Analyze", "analyze"), ("Set Locators", "locators"), ("Remove Locators", "unlocators"))
-    for i, (label, message) in enumerate(buttons):
-        button = p.parameter("live.text", (300 + 90 * i, 20, 80, 18), (706, 6 + 24 * i, 90, 20), name=label, short=label,
+    # the right column in two blocks on the lane grid: Genre and Analyze on top (rows 0-1), the locator
+    # buttons and About at the bottom (rows 4-6, About level with Lock)
+    buttons = (("Analyze", "analyze", 1), ("Set Locators", "locators", 4), ("Remove Locators", "unlocators", 5))
+    for i, (label, message, row) in enumerate(buttons):
+        button = p.parameter("live.text", (300 + 90 * i, 20, 80, 18), (706, _row(row) + 1, 90, 18), name=label, short=label,
                              ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
         p.boxes[-1]["box"].update({"mode": 0, "text": label, "texton": label})
         _on_press(p, button, message, v8, 300 + 90 * i, 50)
-    genre = _menu(p, (600, 20, 110, 15), (706, 80, 90, 18), "Genre", "Genre",
+    genre = _menu(p, (600, 20, 110, 15), (706, _row(0) + 1, 90, 18), "Genre", "Genre",
                   ["Auto", "House", "Melodic Techno", "Peak Time Techno", "Drum & Bass", "Trap"], 0)
     to_v8 = p.obj("prepend genre", 600, 50, width=90)
     p.connect(genre, 0, to_v8)
     p.connect(to_v8, 0, v8)
     # Sensitivity: the fields' mean sets how finely the song is split (100: every change; lower merges more,
     # the phrases stay in the analysis), their ratio how much each band's changes count; Lock moves them together
-    p.comment("Sensitivity", (860, 100, 80, 14), presentation=(604, LANES_TOP - 16, 92, 14), fontsize=9.0, **THEMED_TEXT)
+    p.comment("Sensitivity", (860, 100, 80, 14), presentation=(604, _row(1) + 3, 92, 14), fontsize=9.0, **THEMED_TEXT)
     route = p.obj("route " + " ".join(key for _, key in SENSITIVITY_BANDS), 860, 400,
                   outlets=[""] * (len(SENSITIVITY_BANDS) + 1), width=200)
     p.connect(v8, 2, route)
@@ -518,13 +526,13 @@ def reference_device() -> dict[str, Any]:
         shown = p.obj("prepend set", x, 430, width=70)
         p.connect(route, i, shown)
         p.connect(shown, 0, field)
-    lock = p.parameter("live.text", (860, 220, 50, 15), (604, LANES_TOP + LANE_HEIGHT * len(SENSITIVITY_BANDS) + 2, 92, 18), name="Sensitivity Lock", short="Lock",
+    lock = p.parameter("live.text", (860, 220, 50, 15), (604, _row(6) + 1, 92, 18), name="Sensitivity Lock", short="Lock",
                        ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 1, "text": "Lock", "texton": "Locked"})
     lock_to_v8 = p.obj("prepend lock", 860, 250, width=80)
     p.connect(lock, 0, lock_to_v8)
     p.connect(lock_to_v8, 0, v8)
-    _about(p, (706, 148, 90, 18), node, 760, 20)
+    _about(p, (706, _row(6) + 1, 90, 18), node, 760, 20)
     return p.to_json(kind="audio_effect", title="MidiBakery Reference Analyzer", width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
 
 
