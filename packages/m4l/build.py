@@ -500,8 +500,6 @@ def reference_device() -> dict[str, Any]:
     detail_to_v8 = p.obj("prepend detail", 720, 50, width=90)
     p.connect(detail, 0, detail_to_v8)
     p.connect(detail_to_v8, 0, v8)
-    p.comment("Locators: zoom in to 1 bar.",
-              (300, 110, 200, 40), presentation=(606, 122, 90, 26), linecount=2, fontsize=9.0, **THEMED_TEXT)
     _about(p, (606, 148, 90, 18), node, 760, 20)
     return p.to_json(kind="audio_effect", title="MidiBakery Reference Analyzer", width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
 

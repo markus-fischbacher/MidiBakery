@@ -357,7 +357,8 @@ function step() {
   var song = job.song;
   var item = job.queue[0];
   if (!item) {
-    finish(job.done + " locators set");
+    // Live puts a locator on the Arrangement's grid: zoomed out, that grid can be coarser than a bar
+    finish(job.done + " locators set" + (job.snapped ? "; " + job.snapped + " off the bar: zoom in to 1 bar, Remove Locators, Set Locators" : ""));
     return;
   }
   job.ticks++;
@@ -399,7 +400,10 @@ function step() {
     for (var j = 0; j < now.length; j++) {
       if (known[now[j].id]) continue;
       now[j].api.set("name", item.name);
-      if (Math.abs(now[j].time - item.time) > 0.01) log("locator " + item.name + " snapped from beat " + item.time + " to " + now[j].time);
+      if (Math.abs(now[j].time - item.time) > 0.01) {
+        log("locator " + item.name + " snapped from beat " + item.time + " to " + now[j].time);
+        job.snapped = (job.snapped || 0) + 1;
+      }
       job.done++;
       next();
       return;
