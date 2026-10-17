@@ -63,6 +63,7 @@ def test_malformed_keys_never_reach_the_keychain():
         credentials.KeychainStore(run).save('sk-ant" ; delete-keychain')
 
 
+@pytest.mark.skipif(credentials.sys.platform == "win32", reason="POSIX file modes; Windows uses the Credential Manager")
 def test_file_store_is_private(tmp_path):
     store = credentials.FileStore(tmp_path / "key")
     store.save(KEY)
@@ -75,7 +76,7 @@ def test_file_store_is_private(tmp_path):
 def test_status_names_the_source_not_the_key(memory, monkeypatch):
     assert credentials.status() == {"configured": False, "source": None}
     memory.key = KEY
-    assert credentials.status()["source"] in ("keychain", "file")
+    assert credentials.status()["source"] == credentials.store_name()
     monkeypatch.setenv(credentials.ENV_KEY, KEY)
     assert credentials.status() == {"configured": True, "source": "env"}
     assert KEY not in str(credentials.status())
@@ -133,3 +134,29 @@ def test_chat_page_offers_key_entry_in_browser_and_device(api):
     # Only for Claude: hidden until a connection or the model choice says anthropic.
     assert '<button id="keyButton" type="button" title="Claude API key" hidden>' in page
     assert 'const claude = provider === "anthropic";' in page
+
+
+def test_each_system_has_its_own_store(monkeypatch):
+    monkeypatch.setattr(credentials.sys, "platform", "linux")
+    assert isinstance(credentials.store(), credentials.FileStore) and credentials.store_name() == "file"
+    monkeypatch.setattr(credentials.sys, "platform", "darwin")
+    assert isinstance(credentials.store(), credentials.KeychainStore) and credentials.store_name() == "keychain"
+
+
+@pytest.mark.skipif(credentials.sys.platform != "win32", reason="Windows Credential Manager (runs on the Windows CI job)")
+def test_credential_manager_stores_reads_and_removes_the_key(monkeypatch):
+    import uuid
+
+    monkeypatch.setattr(credentials.CredentialManagerStore, "TARGET", f"MidiBakery/test-{uuid.uuid4().hex}")
+    store = credentials.store()
+    assert isinstance(store, credentials.CredentialManagerStore) and credentials.store_name() == "credential_manager"
+    assert store.load() is None
+    store.delete()  # nothing stored: no error
+    store.save(KEY)
+    assert store.load() == KEY
+    store.save(KEY[:-1] + "b")  # replaces
+    assert store.load() == KEY[:-1] + "b"
+    with pytest.raises(credentials.InvalidKey):
+        store.save("not a key")
+    store.delete()
+    assert store.load() is None

@@ -1,7 +1,7 @@
 """Builds the MidiBakery Max for Live devices (.amxd) from the sources in src/.
 
-    uv run python packages/m4l/build.py            # -> packages/m4l/dist/
-    uv run python packages/m4l/build.py --install  # also copy into Live's User Library
+    uv run python packages/m4l/build.py  # -> packages/m4l/dist/, with install.json
+    uv run midibakery install            # builds them and installs everything into Live
 
 Devices:
 - MidiBakery Chat (MIDI Effect): chat with the MidiBakery agent in Live's device
@@ -24,7 +24,6 @@ import json
 import re
 import shutil
 import struct
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -509,57 +508,39 @@ DEVICES = {
 }
 
 
+INSTALL_LIST = "install.json"
+
+
 def build(out: Path = DIST) -> list[Path]:
+    """The devices and, in INSTALL_LIST, where each built file goes in Live's User Library: `midibakery install`
+    follows that list, so it needs neither this script nor the device kinds."""
     # From scratch: a renamed device must not linger in dist (and from there in an install).
     for kind in INSTALL_DIRS:
         shutil.rmtree(out / kind, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)
     paths = []
+    files = []
     for name, (kind, factory) in DEVICES.items():
         path = out / kind / f"{name}.amxd"
         path.parent.mkdir(parents=True, exist_ok=True)
         write_amxd(path, kind, factory())
-        for name in NODE_FILES:
-            shutil.copy2(SRC / name, path.parent / name)
+        for node_file in NODE_FILES:
+            shutil.copy2(SRC / node_file, path.parent / node_file)
         paths.append(path)
-    return paths
-
-
-def user_library() -> Path:
-    if sys.platform == "darwin":
-        return Path.home() / "Music/Ableton/User Library"
-    if sys.platform.startswith("win"):
-        return Path.home() / "Documents/Ableton/User Library"
-    raise SystemExit("Ableton Live only runs on macOS and Windows")
-
-
-def install(paths: list[Path], library: Path) -> list[Path]:
-    installed = []
-    for path in paths:
-        kind = path.parent.name
-        target_dir = library / INSTALL_DIRS[kind]
-        target_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, target_dir / path.name)
         # node.script finds its files next to the device.
-        for name in NODE_FILES:
-            shutil.copy2(path.parent / name, target_dir / name)
-        installed.append(target_dir / path.name)
-    return installed
+        for file in (path.name, *NODE_FILES):
+            entry = {"source": f"{kind}/{file}", "target": (INSTALL_DIRS[kind] / file).as_posix()}
+            if entry not in files:
+                files.append(entry)
+    (out / INSTALL_LIST).write_text(json.dumps({"version": VERSION, "files": files}, indent=1) + "\n", encoding="utf-8")
+    return paths
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--install", action="store_true", help="copy the devices into Live's User Library")
-    parser.add_argument("--library", type=Path, help="User Library folder (default: the standard location)")
-    args = parser.parse_args(argv)
-    paths = build()
-    for path in paths:
+    parser.parse_args(argv)
+    for path in build():
         print(f"built {path.relative_to(HERE)} ({VERSION})")
-    if args.install:
-        for path in install(paths, args.library or user_library()):
-            print(f"installed {path}")
-        print("In Live: Chat is under Max for Live > Max MIDI Effect, Reference Analyzer under Max Audio Effect;"
-              " Generator/Transform in the clip view's Generate/Transform panels.")
     return 0
 
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import shutil
 import sys
 from pathlib import Path
 
@@ -33,50 +32,33 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     return 0
 
 
-def _user_remote_scripts() -> Path:
-    if sys.platform == "darwin":
-        return Path.home() / "Music/Ableton/User Library/Remote Scripts"
-    if sys.platform.startswith("win"):
-        return Path.home() / "Documents/Ableton/User Library/Remote Scripts"
-    raise SystemExit("Ableton Live only runs on macOS and Windows")
-
-
-def launcher_command(provider: str, model: str | None, port: int) -> list[str]:
-    command = [sys.executable, "-u", "-m", "midibakery.cli", "api", "--provider", provider, "--port", str(port)]
-    return command + ["--model", model] if model else command
-
-
-def _write_launcher(args: argparse.Namespace) -> None:
-    """launcher.json tells the Remote Script how to start the API with Live."""
-    from midibakery.bridge.client import config_dir
-
-    path = config_dir() / "launcher.json"
-    if args.no_api:
-        path.unlink(missing_ok=True)
-        print("the API will not start with Live")
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    config = {"command": launcher_command(args.api_provider, args.api_model, args.api_port), "cwd": str(REPO_ROOT), "port": args.api_port}
-    path.write_text(json.dumps(config, indent=2) + "\n")
-    print(f"the API ({args.api_provider}) starts with Live; log in {path.with_name('api.log')}")
-
-
 def cmd_install(args: argparse.Namespace) -> int:
-    MANIFEST_PATH.write_text(manifest_json())
-    target_root = Path(args.target) if args.target else _user_remote_scripts()
-    target = target_root / "MidiBakery"
-    target_root.mkdir(parents=True, exist_ok=True)
-    if target.is_symlink() or target.is_file():
-        target.unlink()
-    elif target.exists():
-        shutil.rmtree(target)
-    if args.link:
-        target.symlink_to(SCRIPT_SOURCE, target_is_directory=True)
+    from midibakery import install
+
+    if not install.frozen():
+        MANIFEST_PATH.write_text(manifest_json())  # the Remote Script validates against it
+    library = Path(args.library) if args.library else install.user_library()
+    record = install.install(library, install.payload(), link=args.link)
+    print(f"installed MidiBakery {record['version']} into {library} ({len(record['paths'])} paths)")
+    if args.no_api:
+        install.remove_launcher()
+        print("the API will not start with Live")
     else:
-        shutil.copytree(SCRIPT_SOURCE, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    print(f"installed Remote Script to {target}")
-    _write_launcher(args)
-    print("Restart Live, then choose 'MidiBakery' under Settings > Link, Tempo & MIDI > Control Surface.")
+        path = install.write_launcher(args.api_provider, args.api_model, args.api_port)
+        print(f"the API ({args.api_provider}) starts with Live; log in {path.with_name('api.log')}")
+    if install.frozen():
+        for old in install.prune_runtimes(Path(sys.executable).parent):
+            print(f"removed {old}")
+    print("Restart Live. First time: choose 'MidiBakery' under Settings > Link, Tempo & MIDI > Control Surface.")
+    return 0
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    from midibakery import install
+
+    removed = install.uninstall(purge=args.purge)
+    print(f"removed {len(removed)} paths" + (", the settings and the stored API key" if args.purge else ""))
+    print("Restart Live to unload the Remote Script.")
     return 0
 
 
@@ -233,16 +215,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--check", action="store_true", help="fail if the manifest is out of date")
     p.set_defaults(func=cmd_manifest)
 
-    p = sub.add_parser("install-script", help="install the Remote Script into Live's User Library")
-    p.add_argument("--link", action="store_true", help="symlink instead of copy (development)")
-    p.add_argument("--target", help="Remote Scripts folder (default: User Library)")
+    p = sub.add_parser("install", help="install (or update) the Remote Script and the devices into Live's User Library")
+    p.add_argument("--link", action="store_true", help="symlink the Remote Script instead of copying it (development)")
+    p.add_argument("--library", help="User Library folder (default: the one Live uses)")
     p.add_argument("--api-provider", choices=["anthropic", "ollama", "lmstudio"], default="anthropic", help="provider of the API that starts with Live")
     p.add_argument("--api-model", help="model of the API that starts with Live")
     p.add_argument("--api-port", type=int, default=8766)
     p.add_argument("--no-api", action="store_true", help="do not start the API with Live")
     p.set_defaults(func=cmd_install)
 
-    p = sub.add_parser("auth", help="manage the Claude API key (stored in the macOS Keychain)")
+    p = sub.add_parser("uninstall", help="remove what `install` put into Live and the API's launch")
+    p.add_argument("--purge", action="store_true", help="also remove the settings, stored analyses and the stored API key")
+    p.set_defaults(func=cmd_uninstall)
+
+    p = sub.add_parser("auth", help="manage the Claude API key (in the macOS Keychain or Windows Credential Manager)")
     p.add_argument("action", choices=["set-key", "status", "remove"])
     p.set_defaults(func=cmd_auth)
 

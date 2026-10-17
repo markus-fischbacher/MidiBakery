@@ -48,3 +48,24 @@ jobs:
         env:
           MIDIBAKERY_REQUIRE_NODE: "1"
         run: uv run pytest -q -rs
+
+  # Install paths, the Remote Script's launcher and the Credential Manager behave differently on
+  # Windows; the rest of the suite is platform-neutral and runs above.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Windows tests
+        run: uv run pytest -q -rs tests/test_install.py tests/test_launcher.py tests/test_credentials.py tests/test_version.py

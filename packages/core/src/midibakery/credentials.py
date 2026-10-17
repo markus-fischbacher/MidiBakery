@@ -1,9 +1,10 @@
-"""The Claude API key: from the environment, the macOS Keychain or an Anthropic profile.
+"""The Claude API key: from the environment, the system's credential store or an Anthropic profile.
 
 The API that Live starts does not see the user's shell, so a key exported there
-is not enough. `midibakery auth set-key` and the chat page store it in the
-Keychain (service "MidiBakery"); on other systems in a file only the user can
-read. An `ant auth login` profile works too: the Anthropic SDK finds it itself.
+is not enough. `midibakery auth set-key` and the chat page store it in the macOS
+Keychain (service "MidiBakery") or the Windows Credential Manager (target
+"MidiBakery/anthropic-api-key"); elsewhere in a file only the user can read.
+An `ant auth login` profile works too: the Anthropic SDK finds it itself.
 """
 
 from __future__ import annotations
@@ -57,8 +58,87 @@ class KeychainStore:
         self._run([SECURITY, "delete-generic-password", "-s", SERVICE, "-a", ACCOUNT], capture_output=True, text=True)
 
 
+class CredentialManagerStore:
+    """Windows Credential Manager (a generic credential of the current user), through advapi32."""
+
+    TARGET = f"{SERVICE}/{ACCOUNT}"
+    CRED_TYPE_GENERIC = 1
+    CRED_PERSIST_LOCAL_MACHINE = 2  # this user, kept across logons, not roamed
+    ERROR_NOT_FOUND = 1168
+
+    def __init__(self):
+        import ctypes
+        from ctypes import wintypes
+
+        class CREDENTIAL(ctypes.Structure):
+            _fields_ = [
+                ("Flags", wintypes.DWORD),
+                ("Type", wintypes.DWORD),
+                ("TargetName", wintypes.LPWSTR),
+                ("Comment", wintypes.LPWSTR),
+                ("LastWritten", wintypes.FILETIME),
+                ("CredentialBlobSize", wintypes.DWORD),
+                ("CredentialBlob", ctypes.POINTER(ctypes.c_ubyte)),
+                ("Persist", wintypes.DWORD),
+                ("AttributeCount", wintypes.DWORD),
+                ("Attributes", ctypes.c_void_p),
+                ("TargetAlias", wintypes.LPWSTR),
+                ("UserName", wintypes.LPWSTR),
+            ]
+
+        self._ctypes = ctypes
+        self._credential = CREDENTIAL
+        advapi = ctypes.WinDLL("advapi32", use_last_error=True)
+        self._read = advapi.CredReadW
+        self._read.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.POINTER(ctypes.POINTER(CREDENTIAL))]
+        self._read.restype = wintypes.BOOL
+        self._write = advapi.CredWriteW
+        self._write.argtypes = [ctypes.POINTER(CREDENTIAL), wintypes.DWORD]
+        self._write.restype = wintypes.BOOL
+        self._delete = advapi.CredDeleteW
+        self._delete.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD]
+        self._delete.restype = wintypes.BOOL
+        self._free = advapi.CredFree
+        self._free.argtypes = [ctypes.c_void_p]
+        self._free.restype = None
+
+    def load(self) -> str | None:
+        ctypes = self._ctypes
+        found = ctypes.POINTER(self._credential)()
+        if not self._read(self.TARGET, self.CRED_TYPE_GENERIC, 0, ctypes.byref(found)):
+            return None
+        try:
+            blob = ctypes.string_at(found.contents.CredentialBlob, found.contents.CredentialBlobSize)
+        finally:
+            self._free(found)
+        return blob.decode("utf-8").strip() or None
+
+    def save(self, key: str) -> None:
+        if not valid_format(key):
+            raise InvalidKey("That does not look like a Claude API key")
+        ctypes = self._ctypes
+        data = key.encode("utf-8")
+        blob = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
+        credential = self._credential()
+        credential.Type = self.CRED_TYPE_GENERIC
+        credential.TargetName = self.TARGET
+        credential.Comment = "MidiBakery Claude API key"
+        credential.CredentialBlobSize = len(data)
+        credential.CredentialBlob = ctypes.cast(blob, ctypes.POINTER(ctypes.c_ubyte))
+        credential.Persist = self.CRED_PERSIST_LOCAL_MACHINE
+        credential.UserName = ACCOUNT
+        if not self._write(ctypes.byref(credential), 0):
+            raise OSError(f"Credential Manager refused the key (error {ctypes.get_last_error()})")
+
+    def delete(self) -> None:
+        if not self._delete(self.TARGET, self.CRED_TYPE_GENERIC, 0):
+            error = self._ctypes.get_last_error()
+            if error != self.ERROR_NOT_FOUND:
+                raise OSError(f"Credential Manager could not remove the key (error {error})")
+
+
 class FileStore:
-    """Fallback outside macOS: a file in the config folder, readable by the user only."""
+    """Fallback outside macOS and Windows: a file in the config folder, readable by the user only."""
 
     def __init__(self, path: Path | None = None):
         if path is None:
@@ -85,8 +165,17 @@ class FileStore:
         self.path.unlink(missing_ok=True)
 
 
-def store() -> KeychainStore | FileStore:
-    return KeychainStore() if sys.platform == "darwin" else FileStore()
+def store() -> KeychainStore | CredentialManagerStore | FileStore:
+    if sys.platform == "darwin":
+        return KeychainStore()
+    if sys.platform == "win32":
+        return CredentialManagerStore()
+    return FileStore()
+
+
+def store_name() -> str:
+    """How status() names the store: keychain, credential_manager or file."""
+    return {"darwin": "keychain", "win32": "credential_manager"}.get(sys.platform, "file")
 
 
 def _has_profile() -> bool:
@@ -108,7 +197,7 @@ def status() -> dict[str, object]:
     if os.environ.get(ENV_KEY):
         source = "env"
     elif store().load():
-        source = "keychain" if sys.platform == "darwin" else "file"
+        source = store_name()
     elif _has_profile():
         source = "profile"
     else:

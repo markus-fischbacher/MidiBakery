@@ -140,9 +140,8 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 
 | Was | Wann nötig | Wie |
 |---|---|---|
-| Remote Script | einmalig; nach Änderungen am Remote Script | `uv run midibakery install-script`, dann Live neu starten und „MidiBakery“ als Control Surface wählen |
+| Remote Script und Max-Geräte | einmalig; nach Änderungen am Remote Script oder in `packages/m4l` | `uv run midibakery install` (baut die Geräte, installiert beides; `--link` verlinkt das Remote Script), dann Live neu starten bzw. Gerät neu laden. Beim ersten Mal „MidiBakery“ als Control Surface wählen |
 | Lokale API | für die Max-Geräte; nach Änderungen im Core | `uv run midibakery api --provider lmstudio` (oder `anthropic`, `ollama`), danach neu starten. Die Geräte übernehmen den neuen Token selbst. |
-| Max-Geräte | nach Änderungen in `packages/m4l` | `uv run python packages/m4l/build.py --install`, dann Gerät/Tool in Live neu laden |
 | Chat-Seite | nach Änderungen an `chat.html` | Die API liefert sie neu aus; das Chat-Gerät muss neu geladen werden (löschen und neu einfügen). |
 | MCP für Claude Code | einmalig | `claude mcp add midibakery -- uv --directory <Repo> run midibakery mcp`; nach Core-Änderungen eine neue Claude-Code-Session starten |
 
