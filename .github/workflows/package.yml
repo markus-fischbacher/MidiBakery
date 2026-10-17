@@ -1,7 +1,7 @@
 name: Package
 
 # The packaged app (PyInstaller) for macOS and Windows, smoke-tested on the system it was built for.
-# Signing (D4e) and the installers (D4c, D4d) build on these artifacts.
+# The macOS installer (.pkg) is built and installed here too. Signing comes in D4e, Windows' installer in D4d.
 
 on:
   push:
@@ -44,9 +44,19 @@ jobs:
       - name: Smoke test
         run: uv run python packaging/smoke.py build/app/midibakery
 
+      # The installer as a user runs it: for the current user, no administrator; then the app's uninstall.
+      - name: macOS installer
+        if: runner.os == 'macOS'
+        run: |
+          uv run python packaging/macos/build_pkg.py
+          installer -pkg build/app/MidiBakery-*-macos-*.pkg -target CurrentUserHomeDirectory
+          uv run python packaging/macos/check_pkg.py
+
       - uses: actions/upload-artifact@v7
         with:
           name: midibakery-${{ matrix.os }}
-          path: build/app/MidiBakery-*.zip
+          path: |
+            build/app/MidiBakery-*.zip
+            build/app/MidiBakery-*.pkg
           if-no-files-found: error
           retention-days: 14

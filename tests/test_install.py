@@ -165,3 +165,46 @@ def test_the_cli_installs_and_uninstalls(bridge_env, tmp_path, capsys):
     assert main(["uninstall"]) == 0
     assert not (library / "Remote Scripts/MidiBakery").exists()
     assert f"installed MidiBakery {__version__}" in capsys.readouterr().out
+
+
+def test_an_update_keeps_the_apis_settings(bridge_env, tmp_path):
+    library = tmp_path / "User Library"
+
+    def launched():
+        return install.launcher_settings()
+
+    assert main(["install", "--library", str(library)]) == 0
+    assert launched() == {"provider": "anthropic", "model": None, "port": 8766}
+    assert main(["install", "--library", str(library), "--api-provider", "lmstudio", "--api-model", "qwen", "--api-port", "9123"]) == 0
+    assert main(["install", "--library", str(library)]) == 0  # the update (what the installers run)
+    assert launched() == {"provider": "lmstudio", "model": "qwen", "port": 9123}
+    assert main(["install", "--library", str(library), "--api-provider", "ollama"]) == 0
+    assert launched() == {"provider": "ollama", "model": None, "port": 9123}  # lmstudio's model is no ollama model
+
+    assert main(["install", "--library", str(library), "--no-api"]) == 0
+    assert main(["install", "--library", str(library)]) == 0
+    assert launched() is None  # still off
+    assert main(["install", "--library", str(library), "--api-provider", "anthropic"]) == 0
+    assert launched() == {"provider": "anthropic", "model": None, "port": 8766}
+
+
+def test_settings_of_an_older_launcher_json_are_read_from_its_command(bridge_env):
+    (bridge_env / "launcher.json").write_text(json.dumps({
+        "command": ["/x/python", "-u", "-m", "midibakery.cli", "api", "--provider", "lmstudio", "--port", "8766", "--model", "gemma"],
+        "cwd": "/x", "port": 8766}))
+    assert install.launcher_settings() == {"provider": "lmstudio", "model": "gemma", "port": 8766}
+    assert install.api_settings() == {"provider": "lmstudio", "model": "gemma", "port": 8766}
+
+
+def test_the_app_uninstalls_itself_too(bridge_env, tmp_path, payload, monkeypatch):
+    runtime = tmp_path / "MidiBakery/runtime"
+    app = runtime / "0.2.0"
+    app.mkdir(parents=True)
+    (app / "midibakery").write_bytes(b"app")
+    assert install.app_runtime() is None  # from the checkout: no app folder to remove
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(app / "midibakery"))
+    assert install.app_runtime() == runtime
+    install.install(tmp_path / "User Library", payload)
+    removed = install.uninstall(runtime=install.app_runtime())
+    assert runtime in removed and not runtime.exists()
