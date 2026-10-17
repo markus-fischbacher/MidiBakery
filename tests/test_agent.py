@@ -564,3 +564,20 @@ async def test_a_model_failing_in_every_round_is_stopped(client, live):
     provider = ScriptedProvider([tool_turn(("compose", {"kind": "bass", "track": 1, "arrangement_clip": i})) for i in range(30)])
     events = await run(build_server(client), provider, "vary the bass")
     assert len(provider.results) == 6 and events[-1]["code"] == "STUCK" and "6 rounds in a row" in events[-1]["message"]
+
+
+def test_compact_session_shows_the_arrangement():
+    from midibakery.mcp.server import with_arrangement
+
+    arrangement = {"locators": [{"index": 0, "name": "Drop", "time": 0.0}, {"index": 1, "name": "Groove", "time": 32.0}],
+                   "tracks": [{"index": 1, "name": "Chord Stabs", "clips": [
+                       {"index": 0, "name": "Drop Bass", "start": 0.0, "end": 32.0, "is_midi": True},
+                       {"index": 1, "name": "Groove Bass", "start": 32.0, "end": 128.0, "is_midi": True}]}]}
+    session = with_arrangement(SESSION, arrangement)
+    assert session["tracks"][1]["arrangement_clips"][1] == {"index": 1, "name": "Groove Bass", "start_bar": 9, "bars": 24}
+    assert session["locators"] == [{"name": "Drop", "bar": 1}, {"name": "Groove", "bar": 9}]
+    lines = compact_session(session).splitlines()
+    assert lines[2] == "Arrangement sections (locators): Drop bar 1, Groove bar 9."
+    assert lines[4].endswith("; arrangement clips 0 'Drop Bass' bars 1-8, 1 'Groove Bass' bars 9-32")
+    assert "arrangement_clip=<index>" in lines[-1]
+    assert compact_session(SESSION).splitlines()[2].startswith("0 'Drums'")  # no arrangement: as before

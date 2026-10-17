@@ -250,7 +250,19 @@ def compact_session(result: dict[str, Any]) -> str:
         free = [i for i in range(scenes) if i not in used]
         free_text = f"free slots {_ranges(free)}" if free else "no free slot"
         clip_text = f"clips {', '.join(parts)}" if parts else "no clips"
-        lines.append(f"{head}; {free_text}; {clip_text}")
+        line = f"{head}; {free_text}; {clip_text}"
+        arranged = track.get("arrangement_clips") or []
+        if arranged:
+            line += "; arrangement clips " + ", ".join(
+                f"{c['index']} '{c.get('name', '')}' bars {_num(c['start_bar'])}-{_num(round(c['start_bar'] + c['bars'] - 1, 2))}"
+                for c in arranged)
+        lines.append(line)
+    if any(t.get("arrangement_clips") for t in result.get("tracks", [])):
+        locators = ", ".join(f"{l['name']} bar {_num(l['bar'])}" for l in result.get("locators", []))
+        if locators:
+            lines.insert(2, f"Arrangement sections (locators): {locators}.")
+        lines.append("A section of the song (e.g. the Groove's bass): its arrangement clip; change it with compose or "
+                     "transform_notes and arrangement_clip=<index>, not a new slot clip.")
     return "\n".join(lines)
 
 

@@ -227,6 +227,25 @@ def _validation_message(exc: ValidationError, model: type[BaseModel]) -> str:
     return "; ".join(parts)
 
 
+def with_arrangement(session: dict[str, Any], arrangement: dict[str, Any]) -> dict[str, Any]:
+    """The Arrangement in bars next to the Session View: locators, and per track its arrangement clips
+    (the index compose and transform_notes take as arrangement_clip). A song from plan_song lives there;
+    without this a model only sees the slots and writes a new clip instead of changing the section."""
+    song = session["song"]
+    bpb = song.get("signature_numerator", 4) * 4 / (song.get("signature_denominator", 4) or 4)
+    bar = lambda beat: round(beat / bpb, 2) + 1  # noqa: E731
+    clips = {t["index"]: t.get("clips", []) for t in arrangement.get("tracks", [])}
+    tracks = [
+        {**t, "arrangement_clips": [
+            {"index": c["index"], "name": c.get("name", ""), "start_bar": bar(c["start"]), "bars": round((c["end"] - c["start"]) / bpb, 2)}
+            for c in clips.get(t["index"], [])
+        ]} if clips.get(t["index"]) else t
+        for t in session.get("tracks", [])
+    ]
+    locators = [{"name": c["name"], "bar": bar(c["time"])} for c in arrangement.get("locators", [])]
+    return {**session, "tracks": tracks, **({"locators": locators} if locators else {})}
+
+
 def _clip_label(change: Any) -> str:
     """As the user counts: track 2 slot 1, track 2 arrangement clip 3."""
     if change.place.in_arrangement:
@@ -272,7 +291,12 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
 
     async def get_session(_: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
         song, tracks = await asyncio.gather(bridge.call("song.get"), bridge.call("tracks.list"))
-        return {"song": song, **tracks}
+        session = {"song": song, **tracks}
+        try:
+            arrangement = await bridge.call("arrangement.get")
+        except BridgeError:
+            return session
+        return with_arrangement(session, arrangement)
 
     async def get_clip(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
         clip = await bridge.call("clip.get", args)
