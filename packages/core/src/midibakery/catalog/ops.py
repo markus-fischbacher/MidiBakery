@@ -99,7 +99,7 @@ class TrackSet(Params):
     mute: bool | None = None
     solo: bool | None = None
     arm: bool | None = None
-    volume: Annotated[float, Field(ge=0, le=1, description="Normalised fader value; 0.85 = 0 dB")] | None = None
+    volume: Annotated[float, Field(ge=0, le=1, description="0.85 = 0 dB; quieter/louder: current value -/+ 0.1")] | None = None
     pan: Annotated[float, Field(ge=-1, le=1)] | None = None
 
 
@@ -268,7 +268,7 @@ class SendSet(BaseModel):
 
 
 class MixerSet(MixerTarget):
-    volume: Annotated[float, Field(ge=0, le=1, description="Normalised fader value; 0.85 = 0 dB")] | None = None
+    volume: Annotated[float, Field(ge=0, le=1, description="0.85 = 0 dB; quieter/louder: current value -/+ 0.1")] | None = None
     volume_db: Annotated[float, Field(le=6, description="Fader in dB as Live shows it, e.g. -6")] | None = None
     pan: Annotated[float, Field(ge=-1, le=1)] | None = None
     sends: list[SendSet] = Field(default_factory=list)
