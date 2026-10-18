@@ -1,9 +1,12 @@
 name: CI
 
+# Markdown-only changes (docs, READMEs) run nothing: no test or build reads them.
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]
   pull_request:
+    paths-ignore: ["**.md"]
 
 concurrency:
   group: ci-${{ github.ref }}
