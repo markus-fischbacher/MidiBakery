@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from midibakery.compose.bass import BassStyle, KickRelation
 from midibakery.compose.chords import ChordRhythm
 from midibakery.compose.drums import DrumStyle
+from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
 from midibakery.compose.transform import ArpDirection, Operation
 
 TrackIndex = Annotated[int, Field(ge=0, description="Zero-based track index")]
@@ -31,6 +32,20 @@ SWING_UNITS = {"1/16": 0.25, "1/8": 0.5}
 
 class Spec(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+def _check_mood(spec: Any) -> None:
+    if spec.pattern is None:
+        return
+    if spec.pattern not in mood_names():
+        raise ValueError(f"unknown chord pattern {spec.pattern!r}; use one of: {', '.join(mood_names())}")
+    if spec.progression or spec.chords_from is not None:
+        raise ValueError("give either pattern or progression/chords_from, not both")
+
+
+def _check_pattern(name: str | None, names: tuple[str, ...], what: str) -> None:
+    if name is not None and name not in names:
+        raise ValueError(f"unknown {what} pattern {name!r}; use one of: {', '.join(names)}")
 
 
 def _one_place(spec: Any, required: bool) -> None:
@@ -102,6 +117,12 @@ class DrumsSpec(Generate):
         "always plays (default), 0.5 = the style's natural variation, 0 = twice as much; backbeats always play",
     )
     device: Annotated[int | None, Field(ge=0, description="Drum Rack device index; default: first Drum Rack")] = None
+    pattern: str | None = None
+
+    @model_validator(mode="after")
+    def _pattern(self) -> DrumsSpec:
+        _check_pattern(self.pattern, drum_names(), "drums")
+        return self
 
 
 class BassSpec(Harmonic):
@@ -113,6 +134,12 @@ class BassSpec(Harmonic):
     density: Amount = 0.5
     swing: Swing = 0.0
     swing_unit: SwingUnit = "1/16"
+    pattern: str | None = None
+
+    @model_validator(mode="after")
+    def _pattern(self) -> BassSpec:
+        _check_pattern(self.pattern, bass_names(), "bass")
+        return self
 
 
 class ChordsSpec(Harmonic):
@@ -124,6 +151,12 @@ class ChordsSpec(Harmonic):
     sevenths: bool = Field(False, description="Use seventh chords for a generated progression")
     swing: Swing = 0.0
     swing_unit: SwingUnit = "1/16"
+    pattern: str | None = None
+
+    @model_validator(mode="after")
+    def _mood(self) -> ChordsSpec:
+        _check_mood(self)
+        return self
 
     @model_validator(mode="after")
     def _range(self) -> ChordsSpec:
@@ -139,6 +172,12 @@ class MelodySpec(Harmonic):
     density: Amount = 0.5
     swing: Swing = 0.0
     swing_unit: SwingUnit = "1/16"
+    pattern: str | None = None
+
+    @model_validator(mode="after")
+    def _pattern(self) -> MelodySpec:
+        _check_pattern(self.pattern, lead_names(), "melody")
+        return self
 
     @model_validator(mode="after")
     def _range(self) -> MelodySpec:
@@ -213,7 +252,7 @@ class ComposeRequest(Generate):
         "('Am F C G'). Default: chords_from, else a generated functional progression.",
     )
     chords_from: ClipLocation | None = Field(None, description="(bass, chords, melody) Follow the chords of an existing MIDI clip")
-    chords_per_bar: Annotated[float, Field(gt=0, le=4, description="(bass, chords, melody) 1 = a chord per bar, 0.5 = one per two bars")] | None = None
+    pattern: str | None = Field(None, description="Named pattern (names: see tool description)")
     style: Literal[DrumStyle, BassStyle] | None = Field(  # type: ignore[valid-type]
         None,
         description="(drums) house, techno, hiphop, trap, rock, breakbeat; (bass) sustained, pulse, offbeat, octave, walking, syncopated",
