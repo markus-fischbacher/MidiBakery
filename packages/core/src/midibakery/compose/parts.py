@@ -7,6 +7,7 @@ import random
 
 from midibakery.compose.bass import generate_bass
 from midibakery.compose.chords import generate_chords
+from midibakery.compose.counter import generate_counter
 from midibakery.compose.drums import DrumMap, generate_drums, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.melody import generate_melody
@@ -30,6 +31,7 @@ def generate_part(
     rng: random.Random,
     drum_map: DrumMap | None = None,
     kick: list[float] | None = None,
+    main: list[Note] | None = None,
 ) -> list[Note]:
     """Drums need no harmony (`drum_map` defaults to General MIDI); the others need one."""
     unit = SWING_UNITS[spec.swing_unit]  # type: ignore[attr-defined]
@@ -55,6 +57,12 @@ def generate_part(
             return dedupe([n for notes in parts.values() for n in notes])
         return generate_chords(harmony, meter, bars, spec.rhythm, rng, spec.low, spec.high, spec.voices, swing=spec.swing, swing_unit=unit)
     if isinstance(spec, MelodySpec):
+        if spec.counter_to is not None:
+            assert main is not None, "a counter melody needs the main melody's notes"
+            return generate_counter(
+                main, harmony, scale, meter, bars, rng, spec.counter_mode or "fill_the_gaps", spec.counter_register or "above",
+                density=spec.density if "density" in spec.model_fields_set else None, swing=spec.swing,
+            )
         if spec.pattern:
             parts = generate_lead_template(lead_template(spec.pattern), harmony, scale, meter, bars, spec.swing)
             return dedupe([n for notes in parts.values() for n in notes])

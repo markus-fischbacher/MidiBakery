@@ -37,6 +37,7 @@ SMALL_SYSTEM_PROMPT = (
     "- Times are in beats (quarter notes); pitch 60 = C3. Stay in the song scale.\n"
     "- compose (kind drums/bass/chords/melody) writes a new clip into a free slot (omit slot for the first free one). "
     "Give bass and melody chords_from = the chord clip (never a drums track), the bass follow_kick = the drum clip. "
+    "A counter melody = compose kind melody with counter_to = the lead's clip. "
     "Never overwrite a clip unless the user asks for it.\n"
     "- A song in the Arrangement: get_arrangement lists each track's clips (arrangement_clip index, start beat, name). "
     "To change one part of it, give compose or transform_notes arrangement_clip (its index or its name, "
