@@ -23,13 +23,13 @@ def _param_dict(index, param):
 
 @op("device.insert")
 def device_insert(ctx, params):
-    track = ctx.track(params["track"])
+    track, where = ctx.device_owner(params)
     index = params.get("index", -1)
     count = len(track.devices)
     if index == -1:
         index = count
     if index > count:
-        raise OpError(ErrorCode.INVALID_PARAMS, "Device index %d is beyond the end of the chain (it has %d)" % (index, count))
+        raise OpError(ErrorCode.INVALID_PARAMS, "Device index %d is beyond the end of the chain on %s (it has %d)" % (index, where, count))
     try:
         track.insert_device(params["name"], index)
     except RuntimeError as exc:

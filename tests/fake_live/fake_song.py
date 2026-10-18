@@ -7,7 +7,8 @@ from Live import LiveObject
 
 NOTE_FIELDS = ("pitch", "start_time", "duration", "velocity", "mute",
                "probability", "velocity_deviation", "release_velocity")
-NATIVE_DEVICES = {"Compressor", "Operator", "Drift", "Wavetable", "Reverb", "Delay", "Auto Filter", "Drum Rack", "Simpler", "Instrument Rack", "Audio Effect Rack"}
+NATIVE_DEVICES = {"Compressor", "Operator", "Drift", "Wavetable", "Reverb", "Delay", "Auto Filter", "Drum Rack", "Simpler", "Instrument Rack", "Audio Effect Rack",
+                  "EQ Eight", "Glue Compressor", "Limiter"}
 RACK_CLASSES = {"Instrument Rack": "InstrumentGroupDevice", "Audio Effect Rack": "AudioEffectGroupDevice", "Drum Rack": "DrumGroupDevice"}
 
 
@@ -28,6 +29,8 @@ def make_device(name, track=None):
         ]
     if name == "Compressor":
         return CompressorDevice(track)
+    if name in MASTER_DEVICES:
+        device.parameters = [Parameter("Device On", 1.0, 0.0, 1.0, True, ("Off", "On"))] + MASTER_DEVICES[name]()
     if name == "Reverb":
         device.parameters += [Parameter("Decay Time", 0.314), Parameter("Dry/Wet", 0.5)]
     if name == "Delay":
@@ -191,6 +194,41 @@ class ShownParameter(Parameter):
 
     def str_for_value(self, value):
         return self.show(value)
+
+
+def _master_devices():
+    """The parameters plan_master sets, named and shown as Live 12.4 does (measured)."""
+    filters = ("High Pass 48dB", "High Pass 12dB", "Low Shelf", "Bell", "Notch", "High Shelf", "Low Pass 12dB", "Low Pass 48dB")
+    hz = lambda v: "%.1f Hz" % (10 * 2200 ** v) if 10 * 2200 ** v < 1000 else "%.1f kHz" % (10 * 2200 ** v / 1000)
+    db = lambda low, high: lambda v: "%.1f dB" % (low + (high - low) * v)
+    on = ("Off", "On")
+
+    def threshold():
+        parameter = ShownParameter("Threshold", 0.0, lambda v: "%.1f dB" % v)
+        parameter.min = -40.0
+        return parameter
+
+    return {
+        "EQ Eight": lambda: [
+            Parameter("1 Filter On A", 1.0, 0.0, 1.0, True, on),
+            Parameter("1 Filter Type A", 0.0, 0.0, 7.0, True, filters),
+            ShownParameter("1 Frequency A", 0.1427, hz),
+        ],
+        "Glue Compressor": lambda: [  # Threshold's raw value is dB, -40..0
+            threshold(),
+            Parameter("Attack", 3.0, 0.0, 6.0, True, ("0.01", "0.1", "0.3", "1", "3", "10", "30")),
+            Parameter("Ratio", 1.0, 0.0, 2.0, True, ("2", "4", "10")),
+            Parameter("Release", 3.0, 0.0, 6.0, True, (".1", ".2", ".4", ".6", ".8", "1.2", "A")),
+            Parameter("S/C EQ Type", 5.0, 0.0, 5.0, True, ("Low Shelf", "Bell", "High Shelf", "Low pass", "Peak", "High pass")),
+            Parameter("S/C EQ On", 0.0, 0.0, 1.0, True, on),
+            ShownParameter("S/C EQ Freq", 0.5, hz),
+        ],
+        "Limiter": lambda: [
+            ShownParameter("Input Gain", 0.5, db(-24.0, 24.0)),
+            ShownParameter("Ceiling", 1.0, db(-24.0, 0.0)),
+            Parameter("Mode", 0.0, 0.0, 2.0, True, ("Standard", "Soft Clip", "True Peak")),
+        ],
+    }
 
 
 class CompressorDevice(Device):
@@ -733,3 +771,6 @@ class CInstance(object):
 
     def instance_identifier(self):
         return 0
+
+
+MASTER_DEVICES = _master_devices()

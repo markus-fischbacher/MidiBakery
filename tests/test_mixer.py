@@ -29,7 +29,7 @@ async def test_device_on_a_return_track(client):
     with pytest.raises(BridgeError, match="No return_track index 1"):
         await client.call("device.params", {"return_track": 1, "device": 0})
     for both_or_none in ({"track": 0, "return_track": 0}, {}):
-        with pytest.raises(ValidationError, match="either track or return_track"):
+        with pytest.raises(ValidationError, match="exactly one of track, return_track, master"):
             DeviceParamSet(device=0, parameter=0, value=0, **both_or_none)
 
 
