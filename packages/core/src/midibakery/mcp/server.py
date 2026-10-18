@@ -149,7 +149,16 @@ class PlanChanges(BaseModel):
 
     def specs(self) -> list[Any]:
         # preview inside a step: models copy it from compose; plan_changes always previews
-        return [STEP.validate_python({k: v for k, v in step.model_dump().items() if k != "preview"}) for step in self.steps]
+        return [STEP.validate_python({k: v for k, v in _unnest(step.model_dump()).items() if k != "preview"}) for step in self.steps]
+
+
+def _unnest(step: dict[str, Any]) -> dict[str, Any]:
+    """Local models nest a step's fields in operation: {"kind": "transform", "operation": {"operation":
+    "variation", "track": 3, ...}}; three retries of that ended in a stuck chat, so lift them out."""
+    nested = step.get("operation")
+    if not isinstance(nested, dict):
+        return step
+    return {**{k: v for k, v in step.items() if k != "operation"}, **nested}
 
 
 class ApplyPlan(BaseModel):
