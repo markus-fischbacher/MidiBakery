@@ -199,11 +199,16 @@ def _first_sentence(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+# What the system prompt already says ("Times are in beats (quarter notes)"): dropped from every field.
+_SAID_IN_PROMPT = frozenset({"Beats (quarter notes)", "Beats"})
+
+
 def compact_schema(node: Any, limit: int = 90) -> Any:
     """Shrink an inlined JSON schema for small context windows.
 
     Drops titles, bounds and discriminator mappings, folds Optional (anyOf [X, null]) into X, removes
-    null/empty/false defaults (an option left out is off) and cuts descriptions to their first sentence.
+    null/empty/false defaults (an option left out is off), descriptions the system prompt already gives
+    (_SAID_IN_PROMPT), and cuts descriptions to their first sentence.
     """
     if isinstance(node, list):
         return [compact_schema(v, limit) for v in node]
@@ -222,6 +227,8 @@ def compact_schema(node: Any, limit: int = 90) -> Any:
     out: dict[str, Any] = {}
     for key, value in node.items():
         if key in _DROP_KEYS or (key == "default" and (value is False or value in (None, [], {}))):
+            continue
+        if key == "description" and value in _SAID_IN_PROMPT:
             continue
         if key == "description" and isinstance(value, str):
             out[key] = _first_sentence(value, limit)
