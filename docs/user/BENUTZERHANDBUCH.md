@@ -328,13 +328,28 @@ Einen Teil schreibst du als **neuen Clip in den ersten freien Slot** einer Spur.
 | **Drums** | Stil: house, techno, hiphop, trap, rock, breakbeat. Dichte, Swing, Fills am Ende jeder Viertaktphrase, „Chance“ (wie zufällig Ghost-Notes und manche Hi-Hats kommen). Die Noten gehen auf die Pads des **Drum Racks** der Spur; Pads ohne Sound werden ausgelassen. |
 | **Bass** | Stil: syncopated, sustained, pulse, offbeat, octave, walking. Oktave. Folgt den Akkorden und auf Wunsch der Kick eines Drum-Clips (einrasten oder ausweichen). |
 | **Akkorde** | Rhythmus: sustain, pulse, offbeat, stabs. 3 oder 4 Stimmen, Tonhöhenbereich, Vierklänge, eigene Akkordfolge. |
-| **Melodie** | Dichte, Tonhöhenbereich, folgt den Akkorden. |
+| **Melodie** | Dichte, Tonhöhenbereich, folgt den Akkorden. Auch als [Gegenmelodie](#gegenmelodie) zu einem Lead. |
 
 Gemeinsam: **Länge** in Takten (Standard 4), **Swing** (wie sehr die Offbeats nach hinten schwingen), **Seed** (reproduzierbar).
 
 **Wie die Teile zusammenpassen:** Bass und Melodie richten sich nach den Akkorden eines Clips („passend zu den Akkorden auf Spur 3“). Der Bass richtet sich nach der Kick eines Drum-Clips. Bittest du um mehrere Teile in einem Auftrag, teilen sie sich dieselbe Akkordfolge.
 
 Alles liegt **in der Tonart und im Takt deines Sets**. Stelle also zuerst Tonart (*Scale* in Live) und Tempo ein.
+
+### Gegenmelodie
+
+Eine zweite Melodie, die auf eine vorhandene Lead-Melodie antwortet. Frage: *„Schreib eine Gegenmelodie zum Lead in Slot 1 von Spur 2“*. Sie kommt in einen neuen Clip, der Lead bleibt unverändert. Ohne Akkorde werden diese aus den Noten des Leads abgeleitet. Der Lead darf auch ein Clip sein, der im selben Auftrag vorher geplant wurde.
+
+Modi (in Worten sagen, Standard ist der erste):
+
+- **fill_the_gaps**: spielt nur, wo der Lead eine Note hält oder pausiert.
+- **call_and_response**: antwortet in den stillen Schlägen und Takten des Leads.
+- **passive_over_active**: ruhige lange Noten über einem lebhaften Lead (mehr Noten über einem sparsamen).
+- **contrasting_rhythm**: sparsam, wo der Lead dicht ist, und umgekehrt.
+- **harmonic_notes**: geht im Rhythmus des Leads mit, auf einer passenden anderen Note.
+- **note_layering**: die Noten des Leads eine Oktave entfernt, gleichzeitig oder verzögert.
+
+Lage (`counter_register`): **above** über dem Lead (Standard), **below** darunter oder **same** (dann beginnt sie nie gleichzeitig mit dem Lead). Auf betonten Zählzeiten spielt sie Terzen, Quinten, Sexten oder Oktaven zum Lead. Feste Figuren wie die Treppe kommen später.
 
 ### Ganze Songs nach Genre
 

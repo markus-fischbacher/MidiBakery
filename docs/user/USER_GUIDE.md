@@ -327,13 +327,28 @@ A part is written as a **new clip into the first free slot** of a track. Existin
 | **Drums** | Style: house, techno, hiphop, trap, rock, breakbeat. Density, swing, fills at the end of each four-bar phrase, "chance" (how random ghost notes and some hi-hats are). Notes go to the pads of the track's **Drum Rack**; pads without a sound are skipped. |
 | **Bass** | Style: syncopated, sustained, pulse, offbeat, octave, walking. Octave. Follows the chords and, on request, the kick of a drum clip (lock or avoid). |
 | **Chords** | Rhythm: sustain, pulse, offbeat, stabs. 3 or 4 voices, pitch range, seventh chords, own progression. |
-| **Melody** | Density, pitch range, follows the chords. |
+| **Melody** | Density, pitch range, follows the chords. Can also be a [counter melody](#counter-melody) to a lead. |
 
 Common: **length** in bars (default 4), **swing** (how far off-beats lean back), **seed** (reproducible).
 
 **How parts fit together:** bass and melody follow the chords of a clip ("fitting the chords on track 3"). The bass follows the kick of a drum clip. If you ask for several parts in one request, they share the same chord progression.
 
 Everything is **in the key and time signature of your set**. So set key (*Scale* in Live) and tempo first.
+
+### Counter melody
+
+A second melody that answers a lead you already have. Ask: *"Write a counter melody to the lead in slot 1 of track 2"*. It goes into a new clip, the lead stays as it is. Without chords given, they are taken from the lead's notes. The lead can also be a clip planned earlier in the same request.
+
+Modes (say them in words, default is the first):
+
+- **fill_the_gaps**: plays only where the lead holds a note or rests.
+- **call_and_response**: answers in the silent beats and bars of the lead.
+- **passive_over_active**: calm long notes over a busy lead (more notes over a sparse one).
+- **contrasting_rhythm**: sparse where the lead is dense and the other way round.
+- **harmonic_notes**: moves with the lead's rhythm on a fitting other note.
+- **note_layering**: the lead's own notes an octave away, same time or delayed.
+
+Register (`counter_register`): **above** the lead (default), **below** it, or **same** (then it never starts together with the lead). On strong beats it plays thirds, fifths, sixths or octaves to the lead. Fixed figures such as the staircase come later.
 
 ### Whole songs by genre
 
