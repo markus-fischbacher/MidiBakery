@@ -7,7 +7,7 @@ English version: [MCP_SERVER.md](MCP_SERVER.md) · Zurück zum [Benutzerhandbuch
 **Inhalt**
 
 - Teil A: [Kurz erklärt](#teil-a-kurz-erklärt) – was das ist, einrichten, was du sagen kannst
-- Teil B: [Referenz aller 39 Werkzeuge](#teil-b-referenz-aller-38-werkzeuge)
+- Teil B: [Referenz aller 40 Werkzeuge](#teil-b-referenz-aller-38-werkzeuge)
 
 ---
 
@@ -58,7 +58,7 @@ claude mcp add midibakery -- uv --directory <Pfad zum Repository> run midibakery
 }
 ```
 
-Beende Claude Desktop vollständig und starte es neu. Dann zeigt das Werkzeug-Symbol im Chat „midibakery“ mit 39 Werkzeugen.
+Beende Claude Desktop vollständig und starte es neu. Dann zeigt das Werkzeug-Symbol im Chat „midibakery“ mit 40 Werkzeugen.
 
 **Hinweis zu Updates:** Das installierte Programm liegt in einem Ordner mit der Versionsnummer. Nach einem MidiBakery-Update zeigt der Pfad auf die neue Version: passe ihn an (Claude Code: `claude mcp remove midibakery`, dann neu hinzufügen).
 
@@ -90,7 +90,7 @@ Der Unterschied zum Chat-Gerät: Claude Desktop und Claude Code können **mehr**
 
 ---
 
-## Teil B: Referenz aller 39 Werkzeuge
+## Teil B: Referenz aller 40 Werkzeuge
 
 Konventionen, die Claude kennt (siehe die Anweisungen, die der Server mitschickt):
 
@@ -161,6 +161,7 @@ Die Spalte **Art** zeigt: **lesen** (ändert nichts), **schreiben**, **fragt nac
 | `plan_changes` | lesen | Plant mehrere Schritte (Drums, Bass, Akkorde, Melodie, Transform) **ohne etwas zu ändern**. Spätere Schritte sehen frühere (der Bass kann der geplanten Kick folgen; Akkorde werden geteilt). Liefert eine Vorschau und eine `plan_id`. |
 | `plan_song` | lesen | Plant einen **ganzen Song** nach Genre (`house`, `melodic_techno`, `peak_time_techno`, `drum_and_bass`, `trap`): Abschnitte, Locators, Spuren (fehlende werden angelegt), optional Mix, Automation, Sidechain, FX. Felder: `length` (`radio`/`standard`/`extended`) oder `minutes`, `start_bar`, `roles`, `clips`, `create_missing`, `sounds`, `mix`, `fx`, `sidechain`, `progression`, `set_tempo`, `reference`, `seed`. Liefert Vorschau und `plan_id`; **bis `apply_plan` ändert sich nichts**. |
 | `measure_master` | lesen | Liest die **Lautheit des Masters** vom Gerät MidiBakery Loudness Meter (letztes Gerät auf dem Master): Momentary, Short-term und Integrated LUFS (BS.1770), Sample-Peak, gemessene Sekunden, ob Live gerade spielt. `reset=true` startet Integrated und Peak neu. Ohne das Gerät: Fehler mit dem Hinweis, wo es im Browser liegt. |
+| `plan_loudness` | lesen | Eine **Runde zur Ziel-Lautheit**: liest den integrierten Wert des Loudness Meters (mind. 30 s seit dem Reset) und plant den Input Gain des Limiters auf dem Master (höchstens 6 dB pro Runde, insgesamt +12 dB). `target`: Genre oder `streaming` (-14 LUFS), oder `target_lufs`. Innerhalb von 0,5 LU meldet es `on_target`. `apply_plan` setzt den Wert in einem Undo-Schritt und setzt das Meter zurück. |
 | `plan_master` | lesen | Plant eine **Master-Kette** (EQ Eight mit Low Cut, Glue Compressor, Limiter mit -1 dB True Peak) mit den Werten des Genres (`genre`, optional; `ceiling_db`). Ein Startpunkt: Sie hört nichts und macht nicht lauter. Liefert Vorschau und `plan_id`; `apply_plan` schreibt sie in zwei Undo-Schritten. Ein Master mit Limiter, EQ Eight oder Glue Compressor bleibt unberührt. |
 | `apply_plan` | **fragt nach** (beim Ersetzen von Noten) | Schreibt einen Plan als **einen Undo-Schritt** nach Live. Schlägt mit `CONFLICT` fehl, wenn sich ein Ziel-Clip seit der Planung geändert hat; dann neu planen. |
 | `compose_takes` | schreiben | Mehrere **Varianten** eines Teils (`kind`: Hook, Melodie, Bass, Akkorde, Drums; `count`) über denselben Akkorden, jede auf einer **Take Lane** im Arrangement (Live 12.2+), zum Comping in Live. Ein Undo-Schritt. |

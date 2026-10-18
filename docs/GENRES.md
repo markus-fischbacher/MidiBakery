@@ -513,7 +513,38 @@ Das Max-for-Live-Gerät **MidiBakery Loudness Meter** sitzt als letztes Gerät a
 - **In Live geprüft (Live 12.4, 48 kHz):** ein gemasterter Referenzsong (5 min, MP3) zeigte integriert -11,3 LUFS; pyloudnorm misst dieselbe Datei offline mit -11,34 LUFS.
 - **Grenzen:** Sample-Peak statt True Peak (bis ~0,5 dB darunter). Max liest die Blöcke im Scheduler-Takt, nicht samplegenau: eine Näherung, kein geeichtes Messgerät.
 
+## Lautheitsziele (`plan_loudness`)
+
+`plan_loudness` bringt den Master in Runden an ein Lautheitsziel. Eine Runde:
+1. Sie liest den integrierten Wert des Loudness Meters, mindestens 30 s seit dem letzten Reset.
+2. Sie stellt die Differenz zum Ziel am **Input Gain** des Limiters ein, höchstens 6 dB pro Runde und insgesamt höchstens +12 dB. Ab +6 dB warnt sie vor starkem Limiting.
+3. `apply_plan` setzt den Wert (ein Undo-Schritt) und setzt das Meter zurück; dann spielt man den Song noch einmal.
+
+Der Limiter macht aus einem Teil jedes zusätzlichen dB Gain-Reduction, darum bewegt eine Runde die Lautheit weniger als ihr Gain. Die Runden enden innerhalb von ±0,5 LU. Der Ceiling bleibt, also bleiben auch die Spitzen.
+
+Die Ziele sind der Median der integrierten Lautheit veröffentlichter Tracks des Genres, gemessen mit einem Stereo-Meter nach BS.1770, also so wie das Loudness Meter misst.
+
+| Ziel | LUFS | Spanne | Grundlage | Bewertung |
+|---|---|---|---|---|
+| House | -8,0 | -9,0 bis -7,1 (mittlere 50 %) | TrackSensei, 54 Tracks | gut: Messung |
+| Melodic Techno | -8,8 | -9,9 bis -8,0 (mittlere 50 %) | TrackSensei, 56 Tracks | gut: Messung |
+| Peak-Time Techno | -7,7 | – | TrackSensei, 308 Tracks | gut: Messung |
+| Drum & Bass | -6,3 | -9,0 bis -4,0 (mittlere 80 %) | WeFoundDNB, 101 Tracks | mittel: Messung, Methode nur teilweise beschrieben |
+| Trap | -8,4 | -9,4 bis -7,3 | Blog-Messungen und Mastering-Ratgeber | schwach: kein offener Datensatz |
+| Streaming | -14,0 | – | Spotify für Artists | gut: offizielle Angabe |
+
+TrackSensei weist ausdrücklich darauf hin, dass seine eigene Skala (Mono-Summe) etwa 3,3 LU tiefer liegt. Die Tabelle nimmt die Stereo-Werte. Für Spotify empfiehlt Spotify bei lauteren Masters als -14 LUFS einen True Peak unter -2 dB; `plan_master` setzt -1 dB, der Ceiling lässt sich mit `ceiling_db` ändern.
+
+Eine eigene Prüfung: Katoff – The Signal (Extended, VANDIT Alternative), ein Melodic-Track, misst -11,3 LUFS, also leiser als der Median, aber in der Breite veröffentlichter Tracks.
+
 **Quellen:**
+- TrackSensei, „563 Techno & House Tracks: Real LUFS Data“
+- WeFoundDNB, „How Loud Should Drum & Bass Be? LUFS From the Pros and 101 Measured Tracks“
+- Violet Recording (Hip-Hop-Mastering), TrackScore (Genre-Bänder)
+- Spotify für Artists, „Loudness normalization“
+
+## Quellen der Lautheitsmessung
+
 - ITU-R BS.1770-4 (K-Filter, Gating, Kalibrierung)
 - EBU R 128 und EBU Tech 3341 (Momentary, Short-term, Integrated)
 - libebur128 (Koeffizienten für beliebige Sampleraten)

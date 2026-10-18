@@ -465,6 +465,12 @@ MidiBakery can read and set Live parameters. It **hears nothing**. You make the 
   - **Reset** restarts Integrated and Peak. For a number to compare: reset, then play the whole song (or the drop).
   - In the chat: "How loud is the song?" MidiBakery reads the device with `measure_master`. Without the device on the Master, MidiBakery names no LUFS figure.
   - The values are a good approximation, not a calibrated meter: Max reads the blocks on its scheduler's 100 ms clock.
+- **Bringing the song to a target loudness:** "Make the song as loud as house" or "to -14 LUFS for Spotify". This needs the master chain and the Loudness Meter on the Master. It works in rounds:
+  1. Reset the meter, play the song (or at least 30 s of the loudest part).
+  2. MidiBakery proposes how many dB to change the Limiter's **Input Gain** (at most 6 dB per round) and writes it with **Apply**. One undo takes it back.
+  3. The meter starts again: play again, then the next round. Within 0.5 LU of the target, MidiBakery says so.
+  - Targets: house -8, melodic techno -8.8, peak-time techno -7.7, drum & bass -6.3, trap -8.4, streaming -14 LUFS. They are medians of released tracks ([GENRES.md](../GENRES.md#lautheitsziele-plan_loudness), German), not rules.
+  - Louder here means more limiting. Listen for pumping and flat drums; MidiBakery never gives the Limiter more than +12 dB.
 
 For ear questions ("sounds muddy") you get hints but no measurement. For accurate audio analysis use Live's own analyzers.
 
@@ -601,4 +607,4 @@ Chapter 3, "Uninstalling".
 
 ## 16. Using MidiBakery from Claude Desktop or Claude Code
 
-The MCP server brings the same 39 tools to Claude Desktop, Claude Code and other MCP apps. You then chat in their window instead of the Chat device. The setup, a plain-language explanation and the reference of every tool are in **[MCP_SERVER.md](MCP_SERVER.md)** (German: [MCP-SERVER.md](MCP-SERVER.md)).
+The MCP server brings the same 40 tools to Claude Desktop, Claude Code and other MCP apps. You then chat in their window instead of the Chat device. The setup, a plain-language explanation and the reference of every tool are in **[MCP_SERVER.md](MCP_SERVER.md)** (German: [MCP-SERVER.md](MCP-SERVER.md)).
