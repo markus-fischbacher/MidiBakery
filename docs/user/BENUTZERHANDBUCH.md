@@ -301,6 +301,7 @@ Du kannst Deutsch und Englisch mischen. Spuren und Clips kannst du beim Namen ne
 - „Füge einen Auto Filter auf dem Bass ein.“
 - „Fahre den Filter-Cutoff der Akkorde über vier Takte von unten nach oben auf.“ (Clip-Automation)
 - „Zeig mir die Parameter des Compressors auf Spur 3.“
+- „Leg eine Master-Kette für Peak-Time Techno an.“ / *Set up a master chain for house.* (Vorschau, dann Apply; siehe Kapitel 12)
 
 ### Hilfe und Lernen
 
@@ -450,6 +451,13 @@ MidiBakery kann Live-Parameter lesen und setzen. Es **hört nichts**. Zeitliche 
 - **Drum-Pads lesen:** Welches Pad hat welche Note?
 - **Automation:** Clip-Automation für Geräteparameter und den Mixer der Spur (Lautstärke, Pan, Sends): Rampen, Sinus, Dreieck u. a. „Fahre den Cutoff über 8 Takte auf.“ Im Arrangement baut MidiBakery dafür den Clip neu auf; die Noten bleiben, vorhandene Hüllkurven dieses Clips werden dabei ersetzt.
 - **Sidechain, Hall, Delay und Filter für ganze Songs:** übernimmt `plan_song` (Kapitel 8).
+- **Master-Kette:** „Leg eine Master-Kette für House an“ setzt EQ Eight, Glue Compressor und Limiter mit den Werten des Genres ans Ende der Master-Spur. Das ist ein **Startpunkt, kein fertiges Mastering**. Was die Geräte tun:
+  - Der EQ schneidet tiefes Rumpeln weg: 30 Hz, bei Drum & Bass und Trap 20 Hz.
+  - Der Glue Compressor „klebt“ den Mix sanft zusammen (2:1, Attack 30 ms, Release Auto). Spiel den lautesten Teil ab und dreh seinen **Threshold**, bis die Nadel 1–2 dB zeigt.
+  - Der Limiter fängt Spitzen bei -1 dB True Peak ab. Er macht den Song **nicht lauter**, und MidiBakery misst keine Lautheit (LUFS).
+  - Wie bei Songs siehst du erst eine Vorschau und schreibst mit **Apply**. Zweimal **Undo** entfernt die Kette wieder.
+  - Hat dein Master schon einen Limiter, EQ Eight oder Glue Compressor, lässt MidiBakery ihn in Ruhe.
+  - Woher die Werte stammen, steht in [GENRES.md](../GENRES.md#master-kette-plan_master).
 
 Bei Ohren-Fragen („klingt matschig“) bekommst du Hinweise, aber keine Messung. Für genaue Analysen von Audio benutze Lives eigene Analyzer.
 
@@ -579,7 +587,7 @@ Weil Rezepte Konventionen sind. Nutze sie als Gerüst: Tausche Klänge, ändere 
 MidiBakery steuert das Set, das gerade offen und aktiv ist.
 
 **Kann ich MidiBakery auch mit Claude Desktop oder Claude Code benutzen?**
-Ja: Der MCP-Server bringt dieselben 37 Werkzeuge dorthin, siehe [Kapitel 17](#17-midibakery-aus-claude-desktop-oder-claude-code-benutzen).
+Ja: Der MCP-Server bringt dieselben 38 Werkzeuge dorthin, siehe [Kapitel 17](#17-midibakery-aus-claude-desktop-oder-claude-code-benutzen).
 
 **Wie entferne ich es?**
 Kapitel 3, „Deinstallieren“.
@@ -608,4 +616,4 @@ Kapitel 3, „Deinstallieren“.
 
 ## 17. MidiBakery aus Claude Desktop oder Claude Code benutzen
 
-Der **MCP-Server** bringt dieselben 37 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP-SERVER.md](MCP-SERVER.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).
+Der **MCP-Server** bringt dieselben 38 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP-SERVER.md](MCP-SERVER.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).

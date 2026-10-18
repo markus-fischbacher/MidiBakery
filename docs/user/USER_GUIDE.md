@@ -300,6 +300,7 @@ You can mix English and German. Name tracks and clips ("Bass", "Intro Kick") or 
 - "Add an Auto Filter on the bass."
 - "Sweep the chords' filter cutoff upwards over four bars." (clip automation)
 - "Show me the compressor's parameters on track 3."
+- "Set up a master chain for house." (preview, then Apply; see chapter 12)
 
 ### Help and learning
 
@@ -449,6 +450,13 @@ MidiBakery can read and set Live parameters. It **hears nothing**. You make the 
 - **Reading drum pads:** which pad has which note?
 - **Automation:** clip automation for device parameters and the track mixer (volume, pan, sends): ramps, sine, triangle etc. "Sweep the cutoff up over 8 bars." In the Arrangement MidiBakery rebuilds the clip for this; the notes stay, existing envelopes of that clip are replaced.
 - **Sidechain, reverb, delay and filters for whole songs:** handled by `plan_song` (chapter 8).
+- **Master chain:** "Set up a master chain for house" puts EQ Eight, Glue Compressor and Limiter with the genre's settings at the end of the Master track. It is a **starting point, not a finished master**. What the devices do:
+  - The EQ cuts low rumble: 30 Hz, or 20 Hz for drum & bass and trap.
+  - The Glue Compressor gently "glues" the mix (2:1, attack 30 ms, release Auto). Play the loudest part and turn its **threshold** until the needle shows 1–2 dB.
+  - The Limiter catches peaks at -1 dB true peak. It does **not** make the song louder, and MidiBakery measures no loudness (LUFS).
+  - As with songs you get a preview first and write with **Apply**. Pressing **Undo** twice removes the chain.
+  - If your Master already has a Limiter, EQ Eight or Glue Compressor, MidiBakery leaves it alone.
+  - Where the settings come from: [GENRES.md](../GENRES.md#master-kette-plan_master) (German).
 
 For ear questions ("sounds muddy") you get hints but no measurement. For accurate audio analysis use Live's own analyzers.
 
@@ -585,4 +593,4 @@ Chapter 3, "Uninstalling".
 
 ## 16. Using MidiBakery from Claude Desktop or Claude Code
 
-The MCP server brings the same 37 tools to Claude Desktop, Claude Code and other MCP apps. You then chat in their window instead of the Chat device. The setup, a plain-language explanation and the reference of every tool are in **[MCP_SERVER.md](MCP_SERVER.md)** (German: [MCP-SERVER.md](MCP-SERVER.md)).
+The MCP server brings the same 38 tools to Claude Desktop, Claude Code and other MCP apps. You then chat in their window instead of the Chat device. The setup, a plain-language explanation and the reference of every tool are in **[MCP_SERVER.md](MCP_SERVER.md)** (German: [MCP-SERVER.md](MCP-SERVER.md)).

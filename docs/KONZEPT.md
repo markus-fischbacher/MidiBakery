@@ -25,6 +25,7 @@ Wichtige Erkenntnisse aus der Recherche:
   - `Track.insert_device` / `RackDevice.insert_chain` / `DrumChain.in_note` (12.3): native Devices lassen sich ohne Browser einfügen
   - `SimplerDevice.replace_sample` (12.4)
   - `Application.browser.load_item`: lädt Kits und Presets wie ein Doppelklick auf die gewählte Spur. Ein Instrument oder Kit ersetzt das Instrument, ein Effekt wird angehängt, und jeder Load ist ein eigener Undo-Schritt. In Live 12.4.6 stürzte Live ab, wenn ein frisch geladenes Rack sofort wieder ersetzt wurde. `browser.load` wartet deshalb, bis die Kette stabil ist, und lässt mindestens 1 s zwischen zwei Loads. `plan_song` lädt auf neue Spuren das Kit und die Presets des Genres aus der Core Library und legt die Drum-Noten auf die Pads des Kits.
+  - Ein Batch, der Geräte einfügt und danach ihre Parameter setzt, sind in Live 12.4 zwei Undo-Schritte; getrennte Batches sind je einer. `plan_master` schreibt deshalb zwei Batches.
   - `Song.create_return_track` schließt in Live 12.4.6 den offenen Undo-Schritt: Was ein Batch nach dem letzten neuen Return ändert, ist ein zweiter Schritt. `plan_song` zählt das beim Zurückrollen mit.
   - Notes-API mit IDs (`get_notes_extended`, `add_new_notes`, `apply_note_modifications`), dazu Probability und Velocity Deviation
 - **Max 9.1+:**
@@ -196,7 +197,7 @@ Die Roadmap ist bis auf Punkt 5 abgearbeitet; der Plan oben bleibt als Begründu
 
 | Roadmap | Stand |
 |---|---|
-| 1 Fundament | fertig: Katalog, Remote Script, Bridge-Client, MCP-Server über stdio. Der Katalog hat 37 MCP-Tools statt der geplanten 25–35; für lokale Modelle ist das Budget für Schemas fast ausgeschöpft (siehe ARCHITEKTUR.md) |
+| 1 Fundament | fertig: Katalog, Remote Script, Bridge-Client, MCP-Server über stdio. Der Katalog hat 38 MCP-Tools statt der geplanten 25–35; für lokale Modelle ist das Budget für Schemas fast ausgeschöpft (siehe ARCHITEKTUR.md) |
 | 2 Komposition | fertig: `compose` (Drums, Bass, Akkorde, Melodie), `transform_notes` (Humanize, Quantize, Invert, Arpeggiate, Variation, Transponieren; auch auf Teilen eines Clips), `plan_changes` und `apply_plan` mit Vorschau, MCP-Apps-Piano-Roll |
 | 3 Frontends | fertig: Chat-Gerät mit Anthropic, LM Studio und Ollama; Generator und Transform als MIDI Tools; dazu das Reference-Analyzer-Gerät |
 | 4 Abdeckung | fertig: Events und Statuszeile, Mixer und Routing, Racks, Arrangement (Clips auch per Name, verschieben, vertauschen, Locators), ganze Songs aus Genre-Vorlagen (`plan_song`, fünf Genres, optional nach einem analysierten Referenzsong), Take Lanes (`compose_takes`) |

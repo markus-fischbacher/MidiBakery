@@ -7,7 +7,7 @@ English version: [MCP_SERVER.md](MCP_SERVER.md) · Zurück zum [Benutzerhandbuch
 **Inhalt**
 
 - Teil A: [Kurz erklärt](#teil-a-kurz-erklärt) – was das ist, einrichten, was du sagen kannst
-- Teil B: [Referenz aller 37 Werkzeuge](#teil-b-referenz-aller-37-werkzeuge)
+- Teil B: [Referenz aller 38 Werkzeuge](#teil-b-referenz-aller-38-werkzeuge)
 
 ---
 
@@ -21,7 +21,7 @@ MidiBakery hat zwei Wege zur selben Fähigkeit:
 |---|---|---|
 | Wo du schreibst | in Live, im Gerät **MidiBakery Chat** | in Claude Desktop oder Claude Code |
 | Welche KI | Claude (eigener API-Schlüssel), LM Studio, Ollama | die KI des Programms, in dem du bist (z. B. dein Claude-Abo) |
-| Werkzeuge | dieselben 37 | dieselben 37 |
+| Werkzeuge | dieselben 38 | dieselben 38 |
 | Vorschau-Karten | im Chat-Gerät, mit **Apply** | als Piano Roll im Programm (wenn es „MCP Apps“ kann), sonst als Text |
 | Für wen | Einsteiger, alles in Live | wer ohnehin mit Claude arbeitet, oder die Programmierung mag |
 
@@ -58,7 +58,7 @@ claude mcp add midibakery -- uv --directory <Pfad zum Repository> run midibakery
 }
 ```
 
-Beende Claude Desktop vollständig und starte es neu. Dann zeigt das Werkzeug-Symbol im Chat „midibakery“ mit 37 Werkzeugen.
+Beende Claude Desktop vollständig und starte es neu. Dann zeigt das Werkzeug-Symbol im Chat „midibakery“ mit 38 Werkzeugen.
 
 **Hinweis zu Updates:** Das installierte Programm liegt in einem Ordner mit der Versionsnummer. Nach einem MidiBakery-Update zeigt der Pfad auf die neue Version: passe ihn an (Claude Code: `claude mcp remove midibakery`, dann neu hinzufügen).
 
@@ -90,7 +90,7 @@ Der Unterschied zum Chat-Gerät: Claude Desktop und Claude Code können **mehr**
 
 ---
 
-## Teil B: Referenz aller 37 Werkzeuge
+## Teil B: Referenz aller 38 Werkzeuge
 
 Konventionen, die Claude kennt (siehe die Anweisungen, die der Server mitschickt):
 
@@ -146,7 +146,7 @@ Die Spalte **Art** zeigt: **lesen** (ändert nichts), **schreiben**, **fragt nac
 |---|---|---|
 | `update_mixer` | schreiben | Lautstärke (`volume` normalisiert oder `volume_db`), Pan, Sends, Mute, Solo, Crossfader, Routing (`input_routing`, `input_channel`, `output_routing`, `output_channel`). Für Spuren, Returns und Master. |
 | `create_return_track` | schreiben | Return-Spur anlegen, optional mit einem Live-Gerät (`device`). |
-| `insert_device` | schreiben | Natives Live-Gerät einfügen (`name`, `index`). |
+| `insert_device` | schreiben | Natives Live-Gerät einfügen (`name`, `index`), auf einer Spur, einem Return (`return_track`) oder dem Master (`master`). |
 | `load_browser_item` | schreiben | Browser-Eintrag auf eine Spur laden (`path`); ein Instrument oder Kit ersetzt das vorhandene Instrument. |
 | `set_device_parameter` | schreiben | Einen Geräteparameter setzen (`parameter`, `value` oder `display`). |
 | `update_rack` | schreiben | Macros setzen, Ketten ändern oder eine Kette hinzufügen. |
@@ -160,6 +160,7 @@ Die Spalte **Art** zeigt: **lesen** (ändert nichts), **schreiben**, **fragt nac
 | `transform_notes` | **fragt nach** (beim Ersetzen) | Bearbeitet einen Clip **als Diff**: `humanize`, `quantize`, `invert` (diatonisch), `arpeggiate`, `variation`, `transpose` (`semitones` chromatisch **oder** `steps` in der Tonart). Nur ein Teil: `half` (`first`/`second`) oder `from_bar`/`to_bar` (Takte **des Clips**), oder `note_ids`. `preview` zeigt vorher, was passiert. |
 | `plan_changes` | lesen | Plant mehrere Schritte (Drums, Bass, Akkorde, Melodie, Transform) **ohne etwas zu ändern**. Spätere Schritte sehen frühere (der Bass kann der geplanten Kick folgen; Akkorde werden geteilt). Liefert eine Vorschau und eine `plan_id`. |
 | `plan_song` | lesen | Plant einen **ganzen Song** nach Genre (`house`, `melodic_techno`, `peak_time_techno`, `drum_and_bass`, `trap`): Abschnitte, Locators, Spuren (fehlende werden angelegt), optional Mix, Automation, Sidechain, FX. Felder: `length` (`radio`/`standard`/`extended`) oder `minutes`, `start_bar`, `roles`, `clips`, `create_missing`, `sounds`, `mix`, `fx`, `sidechain`, `progression`, `set_tempo`, `reference`, `seed`. Liefert Vorschau und `plan_id`; **bis `apply_plan` ändert sich nichts**. |
+| `plan_master` | lesen | Plant eine **Master-Kette** (EQ Eight mit Low Cut, Glue Compressor, Limiter mit -1 dB True Peak) mit den Werten des Genres (`genre`, optional; `ceiling_db`). Ein Startpunkt: Sie hört nichts und macht nicht lauter. Liefert Vorschau und `plan_id`; `apply_plan` schreibt sie in zwei Undo-Schritten. Ein Master mit Limiter, EQ Eight oder Glue Compressor bleibt unberührt. |
 | `apply_plan` | **fragt nach** (beim Ersetzen von Noten) | Schreibt einen Plan als **einen Undo-Schritt** nach Live. Schlägt mit `CONFLICT` fehl, wenn sich ein Ziel-Clip seit der Planung geändert hat; dann neu planen. |
 | `compose_takes` | schreiben | Mehrere **Varianten** eines Teils (`kind`: Hook, Melodie, Bass, Akkorde, Drums; `count`) über denselben Akkorden, jede auf einer **Take Lane** im Arrangement (Live 12.2+), zum Comping in Live. Ein Undo-Schritt. |
 
