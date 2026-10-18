@@ -7,7 +7,7 @@ Deutsche Version: [MCP-SERVER.md](MCP-SERVER.md) · Back to the [User Guide](USE
 **Contents**
 
 - Part A: [In short](#part-a-in-short) – what it is, setup, what you can say
-- Part B: [Reference of all 38 tools](#part-b-reference-of-all-38-tools)
+- Part B: [Reference of all 39 tools](#part-b-reference-of-all-38-tools)
 
 ---
 
@@ -58,7 +58,7 @@ claude mcp add midibakery -- uv --directory <path to the repository> run midibak
 }
 ```
 
-Quit Claude Desktop completely and start it again. The tools icon in the chat then lists "midibakery" with 38 tools.
+Quit Claude Desktop completely and start it again. The tools icon in the chat then lists "midibakery" with 39 tools.
 
 **Note on updates:** the installed program lives in a folder named after its version. After a MidiBakery update the path points to the new version: adjust it (Claude Code: `claude mcp remove midibakery`, then add it again).
 
@@ -90,7 +90,7 @@ The difference from the Chat device: Claude Desktop and Claude Code can do **mor
 
 ---
 
-## Part B: Reference of all 38 tools
+## Part B: Reference of all 39 tools
 
 Conventions Claude knows (from the instructions the server sends along):
 
@@ -160,6 +160,7 @@ The **Kind** column says: **read** (changes nothing), **write**, **asks first** 
 | `transform_notes` | **asks first** (when replacing) | Edits a clip **as a diff**: `humanize`, `quantize`, `invert` (diatonic), `arpeggiate`, `variation`, `transpose` (`semitones` chromatic **or** `steps` in key). Only part of it: `half` (`first`/`second`) or `from_bar`/`to_bar` (bars **of the clip**), or `note_ids`. `preview` shows what would happen first. |
 | `plan_changes` | read | Plans several steps (drums, bass, chords, melody, transform) **without changing anything**. Later steps see earlier ones (the bass can follow a planned kick; chords are shared). Returns a preview and a `plan_id`. |
 | `plan_song` | read | Plans a **whole song** from a genre (`house`, `melodic_techno`, `peak_time_techno`, `drum_and_bass`, `trap`): sections, locators, tracks (missing ones are created), optionally mix, automation, sidechain, FX. Fields: `length` (`radio`/`standard`/`extended`) or `minutes`, `start_bar`, `roles`, `clips`, `create_missing`, `sounds`, `mix`, `fx`, `sidechain`, `progression`, `set_tempo`, `reference`, `seed`. Returns a preview and a `plan_id`; **nothing changes until `apply_plan`**. |
+| `measure_master` | read | Reads the **Master's loudness** from the MidiBakery Loudness Meter device (last device on the Master): momentary, short-term and integrated LUFS (BS.1770), sample peak, seconds measured, whether Live is playing. `reset=true` restarts integrated and peak. Without the device: an error saying where it is in the browser. |
 | `plan_master` | read | Plans a **master chain** (EQ Eight low cut, Glue Compressor, Limiter at -1 dB true peak) with the genre's settings (`genre`, optional; `ceiling_db`). A starting point: it hears nothing and makes nothing louder. Returns a preview and a `plan_id`; `apply_plan` writes it in two undo steps. A Master that has a Limiter, EQ Eight or Glue Compressor is left alone. |
 | `apply_plan` | **asks first** (when replacing notes) | Writes a plan to Live as **one undo step**. Fails with `CONFLICT` if a target clip changed since planning; then plan again. |
 | `compose_takes` | write | Several **variations** of one part (`kind`: hook, melody, bass, chords, drums; `count`) over the same chords, each on its own **take lane** in the Arrangement (Live 12.2+), to comp in Live. One undo step. |

@@ -197,7 +197,7 @@ Die Roadmap ist bis auf Punkt 5 abgearbeitet; der Plan oben bleibt als Begründu
 
 | Roadmap | Stand |
 |---|---|
-| 1 Fundament | fertig: Katalog, Remote Script, Bridge-Client, MCP-Server über stdio. Der Katalog hat 38 MCP-Tools statt der geplanten 25–35; für lokale Modelle ist das Budget für Schemas fast ausgeschöpft (siehe ARCHITEKTUR.md) |
+| 1 Fundament | fertig: Katalog, Remote Script, Bridge-Client, MCP-Server über stdio. Der Katalog hat 39 MCP-Tools statt der geplanten 25–35; für lokale Modelle ist das Budget für Schemas fast ausgeschöpft (siehe ARCHITEKTUR.md) |
 | 2 Komposition | fertig: `compose` (Drums, Bass, Akkorde, Melodie), `transform_notes` (Humanize, Quantize, Invert, Arpeggiate, Variation, Transponieren; auch auf Teilen eines Clips), `plan_changes` und `apply_plan` mit Vorschau, MCP-Apps-Piano-Roll |
 | 3 Frontends | fertig: Chat-Gerät mit Anthropic, LM Studio und Ollama; Generator und Transform als MIDI Tools; dazu das Reference-Analyzer-Gerät |
 | 4 Abdeckung | fertig: Events und Statuszeile, Mixer und Routing, Racks, Arrangement (Clips auch per Name, verschieben, vertauschen, Locators), ganze Songs aus Genre-Vorlagen (`plan_song`, fünf Genres, optional nach einem analysierten Referenzsong), Take Lanes (`compose_takes`) |

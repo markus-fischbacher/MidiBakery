@@ -48,6 +48,7 @@ MidiBakery besteht aus vier Teilen, die du in Live siehst:
 | **MidiBakery Chat** | das Chat-Gerät: hier sprichst du mit der KI |
 | **MidiBakery Generator** und **MidiBakery Transform** | zwei Werkzeuge in der Clip-Ansicht, ohne KI und ohne Chat |
 | **MidiBakery Reference Analyzer** | analysiert einen Referenzsong |
+| **MidiBakery Loudness Meter** | misst die Lautheit des Masters (LUFS) |
 
 ## 2. Was du brauchst
 
@@ -111,6 +112,7 @@ Die Geräte liegen in der **User Library** im Live-Browser (links, oder mit der 
 |---|---|---|
 | MidiBakery Chat | Presets > MIDI Effects > Max MIDI Effect > MidiBakery | MIDI-Effekt |
 | MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery | Audio-Effekt |
+| MidiBakery Loudness Meter | Presets > Audio Effects > Max Audio Effect > MidiBakery | Audio-Effekt |
 | MidiBakery Generator | MIDI Tools > Max Generators | MIDI Tool |
 | MidiBakery Transform | MIDI Tools > Max Transformations | MIDI Tool |
 
@@ -454,10 +456,16 @@ MidiBakery kann Live-Parameter lesen und setzen. Es **hört nichts**. Zeitliche 
 - **Master-Kette:** „Leg eine Master-Kette für House an“ setzt EQ Eight, Glue Compressor und Limiter mit den Werten des Genres ans Ende der Master-Spur. Das ist ein **Startpunkt, kein fertiges Mastering**. Was die Geräte tun:
   - Der EQ schneidet tiefes Rumpeln weg: 30 Hz, bei Drum & Bass und Trap 20 Hz.
   - Der Glue Compressor „klebt“ den Mix sanft zusammen (2:1, Attack 30 ms, Release Auto). Spiel den lautesten Teil ab und dreh seinen **Threshold**, bis die Nadel 1–2 dB zeigt.
-  - Der Limiter fängt Spitzen bei -1 dB True Peak ab. Er macht den Song **nicht lauter**, und MidiBakery misst keine Lautheit (LUFS).
+  - Der Limiter fängt Spitzen bei -1 dB True Peak ab. Er macht den Song **nicht lauter**.
   - Wie bei Songs siehst du erst eine Vorschau und schreibst mit **Apply**. Zweimal **Undo** entfernt die Kette wieder.
   - Hat dein Master schon einen Limiter, EQ Eight oder Glue Compressor, lässt MidiBakery ihn in Ruhe.
   - Woher die Werte stammen, steht in [GENRES.md](../GENRES.md#master-kette-plan_master).
+- **Lautheit messen:** Zieh das Gerät **MidiBakery Loudness Meter** (Browser: Audio Effects › Max Audio Effect › MidiBakery) als **letztes Gerät** auf die Master-Spur, nach dem Limiter. Während Live spielt, zeigt es:
+  - **Momentary** (die letzten 0,4 s), **Short-term** (die letzten 3 s) und **Integrated** (alles seit dem Start oder Reset) in LUFS, nach ITU-R BS.1770 / EBU R 128.
+  - **Peak**: die höchste Sample-Spitze seit dem Reset in dB. Eine echte True-Peak-Spitze kann bis etwa 0,5 dB höher liegen.
+  - **Reset** startet Integrated und Peak neu. Für eine Zahl zum Vergleichen: Reset, dann den ganzen Song (oder den Drop) abspielen.
+  - Im Chat: „Wie laut ist der Song?“ MidiBakery liest das Gerät mit `measure_master`. Ohne das Gerät auf dem Master nennt MidiBakery keine LUFS-Zahl.
+  - Die Werte sind eine gute Näherung, kein geeichtes Messgerät: Max liest die Blöcke im 100-ms-Takt seines Schedulers.
 
 Bei Ohren-Fragen („klingt matschig“) bekommst du Hinweise, aber keine Messung. Für genaue Analysen von Audio benutze Lives eigene Analyzer.
 
@@ -587,7 +595,7 @@ Weil Rezepte Konventionen sind. Nutze sie als Gerüst: Tausche Klänge, ändere 
 MidiBakery steuert das Set, das gerade offen und aktiv ist.
 
 **Kann ich MidiBakery auch mit Claude Desktop oder Claude Code benutzen?**
-Ja: Der MCP-Server bringt dieselben 38 Werkzeuge dorthin, siehe [Kapitel 17](#17-midibakery-aus-claude-desktop-oder-claude-code-benutzen).
+Ja: Der MCP-Server bringt dieselben 39 Werkzeuge dorthin, siehe [Kapitel 17](#17-midibakery-aus-claude-desktop-oder-claude-code-benutzen).
 
 **Wie entferne ich es?**
 Kapitel 3, „Deinstallieren“.
@@ -616,4 +624,4 @@ Kapitel 3, „Deinstallieren“.
 
 ## 17. MidiBakery aus Claude Desktop oder Claude Code benutzen
 
-Der **MCP-Server** bringt dieselben 38 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP-SERVER.md](MCP-SERVER.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).
+Der **MCP-Server** bringt dieselben 39 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP-SERVER.md](MCP-SERVER.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).
