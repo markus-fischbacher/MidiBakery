@@ -12,13 +12,20 @@ Modes (rhythm and placement, then pitch):
 - harmonic_notes: follows the main's onsets (or an eighth late) on another consonant note, never the same pitch class.
 - note_layering: the main's own pitch classes an octave away, same time or delayed.
 
+Fixed figures (their rhythm does not follow the main's; the main only sets register, gaps and clashes):
+- dotted_eighth_pulse: the 3-3-3-3-3-1 pulse, one chord tone per bar (`roll` rhythm).
+- scale_staircase: the same pulse climbing one scale step every one or two bars, one step back before the restart.
+- trance_dotted_eighth_staircase: the Trance video's 8-bar figure in scale degrees 0 0 1 1 2 2 4 4
+  (`described` pitches, `roll` rhythm).
+- echo_gap_answer: 3-4 short stepwise notes inside a long main note, then one longer note that sustains under
+  the main's re-entry (needs held notes of 1.25 beats or more; a busy main gets nothing).
+
 Rules every mode keeps: the register is clear of the main's range (above/below: a whole octave; same only
 with onsets that never meet the main's); on strong beats (meter accent >= 0.8) the interval to the sounding
 main note is a third, sixth, fifth or octave (a unison only in note_layering); no parallel fifths or octaves
 between consecutive notes; chord tones first, then scale tones. A note that fits nowhere is shortened,
-then dropped: a gap is better than a clash. Same seed, same notes.
-
-Fixed figures (staircase, dotted-eighth pulse, echo answer) are not here: they plug in later as patterns.
+then dropped: a gap is better than a clash. Same seed, same notes. A figure note whose pitch would clash
+on a strong beat moves to the nearest scale tone (a fifth at most) that is consonant there.
 """
 
 from __future__ import annotations
@@ -33,7 +40,9 @@ from midibakery.compose.notes import Note, dedupe
 from midibakery.compose.rhythm import Grid, Meter
 from midibakery.compose.theory import Scale
 
-MODES = ("fill_the_gaps", "call_and_response", "passive_over_active", "contrasting_rhythm", "harmonic_notes", "note_layering")
+RULE_MODES = ("fill_the_gaps", "call_and_response", "passive_over_active", "contrasting_rhythm", "harmonic_notes", "note_layering")
+FIGURES = ("dotted_eighth_pulse", "scale_staircase", "trance_dotted_eighth_staircase", "echo_gap_answer")
+MODES = RULE_MODES + FIGURES
 REGISTERS = ("above", "below", "same")
 
 STEP = 0.25  # one 16th, in beats
@@ -41,6 +50,10 @@ EPS = 1e-6
 WINDOW = 14  # semitones the counter line may span above/below the main's range
 CONSONANT = frozenset({3, 4, 7, 8, 9})  # thirds, fifths, sixths (octaves and unisons are handled apart)
 PARALLEL = frozenset({0, 7})
+PULSE = (0, 3, 6, 9, 12, 15)  # 16th steps of the 3-3-3-3-3-1 figure (the lead templates' TUMBLE, counted from 0)
+TRANCE_DEGREES = (0, 0, 1, 1, 2, 2, 4, 4)  # scale degree per bar, tonic 0 (`described`)
+MIN_ECHO_HOLD = 1.25  # beats a main note must last to be answered by echo_gap_answer
+MAX_SHIFT = 7  # semitones a clashing figure note may move
 MAX_BEATS = {"passive_over_active": 4.0}  # longest note per mode, default 2 beats
 
 
@@ -335,6 +348,138 @@ class _Voice:
         return None
 
 
+def _note(meter: Meter, rng: random.Random, pitch: int, start: float, stop: float) -> Note:
+    velocity = 62 + 28 * meter.accent(start % meter.beats_per_bar) + rng.uniform(-5, 5)
+    return Note(pitch, start, max(STEP * 0.9, (stop - start) * 0.92), velocity, 1.0, velocity_deviation=8)
+
+
+def _fit(voice: _Voice, start: float, stops: list[float], target: int) -> tuple[int, float] | None:
+    """The scale pitch nearest `target` (chord tones first on a tie) that is valid for the longest of `stops`.
+
+    A figure's pitch is fixed by its shape; where it clashes on a strong beat it moves to the nearest
+    consonant tone instead, and when nothing within a fifth fits the note is shortened, then dropped.
+    """
+    chord = voice.harmony.at(start).chord
+    pool = [p for p in range(voice.low, voice.high + 1) if voice.scale.contains(p) and abs(p - target) <= MAX_SHIFT]
+    ranked = sorted(pool, key=lambda p: (abs(p - target), not chord.contains(p)))
+    for stop in stops:
+        for pitch in ranked:
+            if voice.valid(pitch, start, stop):
+                return pitch, stop
+    return None
+
+
+def _stair_base(voice: _Voice, top: int) -> int:
+    """Absolute scale degree of the tonic the staircase starts on: one that keeps `top` steps above it in the window."""
+    size = len(voice.scale)
+    tonic = next(p for p in range(voice.low, voice.low + 12) if p % 12 == voice.scale.root % 12)
+    base = voice.scale.degree_of(tonic) or 0
+    if voice.scale.pitch_of_degree(base + top) > voice.high and tonic - 12 >= voice.low:
+        base -= size
+    return base
+
+
+def _pulse_figure(voice: _Voice, grid: Grid, bar_pitches: list[int]) -> list[Note]:
+    """The 3-3-3-3-3-1 pulse, one target pitch per bar."""
+    line, meter = voice.line, voice.line.meter
+    spb = grid.steps_per_bar
+    steps = [s for s in PULSE if s < spb]
+    notes: list[Note] = []
+    for bar, target in enumerate(bar_pitches):
+        times = [grid.position(bar, s) for s in steps] + [(bar + 1) * meter.beats_per_bar]
+        for i, s in enumerate(steps):
+            if voice.register == "same" and bar * spb + s in line.onset_steps:
+                continue  # the same octave never starts with the main
+            start, end = times[i], times[i + 1]
+            stops = [end] + ([start + 2 * STEP] if end - start > 2 * STEP + EPS else [])
+            fit = _fit(voice, start, stops, target)
+            if fit:
+                note = _note(meter, voice.rng, fit[0], start, fit[1])
+                notes.append(note)
+                voice.previous = note
+    return notes
+
+
+def _dotted_eighth_pulse(voice: _Voice, grid: Grid) -> list[Note]:
+    pool = [p for p in range(voice.low, voice.high + 1) if voice.scale.contains(p)]
+    pitches: list[int] = []
+    for bar in range(voice.line.bars):
+        chord = voice.harmony.at(bar * voice.line.meter.beats_per_bar).chord
+        tones = [p for p in pool if chord.contains(p)] or pool
+        target = pitches[-1] if pitches else (voice.low + voice.high) // 2
+        pitches.append(min(tones, key=lambda p: abs(p - target) + voice.rng.random() * 3))
+    return _pulse_figure(voice, grid, pitches)
+
+
+def _scale_staircase(voice: _Voice, grid: Grid) -> list[Note]:
+    """Up one scale step every one or two bars (the first three stairs), hold the top, one step back for bar 8."""
+    top = 3
+    base = _stair_base(voice, top)
+    offsets: list[int] = []
+    while len(offsets) < voice.line.bars:
+        cycle = [k for k in range(top) for _ in range(voice.rng.choice((1, 2)))]
+        cycle += [top] * (7 - len(cycle)) + [top - 1]
+        offsets += cycle
+    return _pulse_figure(voice, grid, [voice.scale.pitch_of_degree(base + o) for o in offsets[: voice.line.bars]])
+
+
+def _trance_dotted_eighth_staircase(voice: _Voice, grid: Grid) -> list[Note]:
+    """The Trance video's counter melody: degrees `described`, rhythm `roll`. Not seed-dependent."""
+    base = _stair_base(voice, max(TRANCE_DEGREES))
+    degrees = [TRANCE_DEGREES[bar % len(TRANCE_DEGREES)] for bar in range(voice.line.bars)]
+    return _pulse_figure(voice, grid, [voice.scale.pitch_of_degree(base + d) for d in degrees])
+
+
+def _echo_gap_answer(voice: _Voice, grid: Grid) -> list[Note]:
+    """In each long main note: 3-4 short notes moving by a step, then a longer one that sustains under the re-entry."""
+    line, meter, rng = voice.line, voice.line.meter, voice.rng
+    spb = grid.steps_per_bar
+    spans = sorted({(s, e) for s, e in line.held() if e - s >= MIN_ECHO_HOLD - EPS})
+    pool = [p for p in range(voice.low, voice.high + 1) if voice.scale.contains(p)]
+    plans = []
+    for s, e in spans:
+        first = round(s / STEP) + 1  # the main's onset is never shared
+        count = min(rng.choice((3, 4)), int((e - s - 0.5) / STEP + EPS))
+        if count >= 3 and first + count < line.length / STEP and first not in line.onset_steps:
+            plans.append((first, count, e))
+    notes: list[Note] = []
+    for k, (first, count, end) in enumerate(plans):
+        times = [grid.position((first + i) // spb, (first + i) % spb) for i in range(count + 1)]
+        chord = voice.harmony.at(times[0]).chord
+        tones = [p for p in pool if chord.contains(p)] or pool
+        centre = (voice.low + voice.high) / 2
+        target = min(tones, key=lambda p: abs(p - centre) + rng.random() * 4)
+        direction = rng.choice((1, -1))
+        for i in range(count):
+            if not voice.low <= voice.scale.step(target, direction) <= voice.high:
+                direction = -direction
+            fit = _fit(voice, times[i], [times[i + 1]], target)
+            if fit:
+                note = _note(meter, rng, fit[0], times[i], fit[1])
+                notes.append(note)
+                voice.previous, target = note, fit[0]
+            target = voice.scale.step(target, direction)
+        cap = grid.position(plans[k + 1][0] // spb, plans[k + 1][0] % spb) if k + 1 < len(plans) else line.length
+        start = times[count]
+        chord = voice.harmony.at(start).chord
+        final = min((p for p in pool if chord.contains(p)), key=lambda p: abs(p - target), default=target)
+        stops = [s for s in (min(end + 1.0, cap), min(end, cap)) if s - start >= 2 * STEP]
+        fit = _fit(voice, start, stops, final) if stops else None
+        if fit:
+            note = _note(meter, rng, fit[0], start, fit[1])
+            notes.append(note)
+            voice.previous = note
+    return notes
+
+
+FIGURE_BUILDERS = {
+    "dotted_eighth_pulse": _dotted_eighth_pulse,
+    "scale_staircase": _scale_staircase,
+    "trance_dotted_eighth_staircase": _trance_dotted_eighth_staircase,
+    "echo_gap_answer": _echo_gap_answer,
+}
+
+
 def generate_counter(
     main: list[Note],
     harmony: Harmony,
@@ -354,6 +499,8 @@ def generate_counter(
     line = analyze(main, meter, bars)
     grid = Grid(meter, STEP, swing)
     spb = grid.steps_per_bar
+    if mode in FIGURE_BUILDERS:
+        return dedupe(FIGURE_BUILDERS[mode](_Voice(line, harmony, scale, mode, register, rng), grid))
     onsets = RHYTHMS[mode](line, rng, density)
     if register == "same":  # the same octave needs a different rhythm: never start with the main
         onsets = [o if o.step not in line.onset_steps else Onset(o.step + 1, o.end, o.source) for o in onsets]
@@ -376,9 +523,7 @@ def generate_counter(
         for stop in ends:
             pitch = voice.choose(start, stop, onset.source)
             if pitch is not None:
-                accent = meter.accent(start % meter.beats_per_bar)
-                velocity = 62 + 28 * accent + rng.uniform(-5, 5)
-                note = Note(pitch, start, max(STEP * 0.9, (stop - start) * 0.92), velocity, 1.0, velocity_deviation=8)
+                note = _note(meter, rng, pitch, start, stop)
                 notes.append(note)
                 voice.previous = note
                 break

@@ -6,11 +6,11 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from fake_song import DrumRackDevice
+from midibakery.compose.counter import FIGURES, MODES
 from midibakery.mcp import build_server
 
 # C major lead, bar by bar: long notes with rests the counter can answer in
 LEAD = [(76, 0.0, 1.5), (74, 2.0, 1.0), (72, 4.0, 2.0), (79, 7.0, 0.5), (77, 8.0, 1.5), (76, 10.0, 1.0), (74, 12.0, 3.0)]
-MODES = ("fill_the_gaps", "call_and_response", "passive_over_active", "contrasting_rhythm", "harmonic_notes", "note_layering")
 
 
 def _payload(result):
@@ -59,6 +59,8 @@ async def test_every_mode_and_register_is_reachable(client, live, mode):
     change = result["changes"][0]
     assert change["counter_mode"] == mode and change["counter_register"] == "below"
     assert all(n["pitch"] < 76 for n in change["notes"]) or not change["notes"]
+    if mode in FIGURES:
+        assert change["notes"] and _clip_notes(live, 0, 0)
 
 
 async def test_chords_are_derived_from_the_lead_when_none_are_given(client, live):
