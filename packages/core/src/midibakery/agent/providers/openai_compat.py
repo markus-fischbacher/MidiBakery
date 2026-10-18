@@ -67,7 +67,7 @@ class OpenAICompatProvider(Provider):
             async with self._client.stream("POST", f"{self.base_url}/v1/chat/completions", json=body) as response:
                 if response.status_code >= 400:
                     detail = (await response.aread()).decode(errors="replace")
-                    return Turn("error", error=f"LM Studio returned {response.status_code}: {detail[:300]}")
+                    return Turn("error", error=_context_hint(detail, self.model) or f"LM Studio returned {response.status_code}: {detail[:300]}")
                 async for line in response.aiter_lines():
                     if not line.startswith("data:"):
                         continue
@@ -79,7 +79,8 @@ class OpenAICompatProvider(Provider):
                     chunk = json.loads(data)
                     if chunk.get("error"):
                         error = chunk["error"]
-                        return Turn("error", error=f"LM Studio: {error.get('message', error) if isinstance(error, dict) else error}")
+                        message = str(error.get("message", error) if isinstance(error, dict) else error)
+                        return Turn("error", error=_context_hint(message, self.model) or f"LM Studio: {message}")
                     if chunk.get("usage"):
                         u = chunk["usage"]
                         usage = {"input_tokens": u.get("prompt_tokens"), "output_tokens": u.get("completion_tokens"), "model": self.model}
@@ -130,3 +131,13 @@ class OpenAICompatProvider(Provider):
         for r in results:
             content = ("ERROR: " + r.content) if r.is_error else r.content
             self.messages.append({"role": "tool", "tool_call_id": r.call_id, "content": content})
+
+
+def _context_hint(message: str, model: str) -> str | None:
+    """LM Studio loads a model on first use with its default context (often 4k or 8k), too small for
+    the tool guide: "The number of tokens to keep from the initial prompt is greater than the context length"."""
+    if "context length" not in message.lower():
+        return None
+    return (f"{model} is loaded in LM Studio with too small a context for MidiBakery's tools. Load it with a "
+            f"context length of at least 32768 (LM Studio: My Models > the model's settings, or "
+            f"`lms load {model} -c 32768`), then send the message again.")

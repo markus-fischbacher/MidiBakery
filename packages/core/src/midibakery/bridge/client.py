@@ -235,7 +235,9 @@ def _validate(op: str, params: dict[str, Any]) -> dict[str, Any]:
                 try:
                     item.params = _validate(item.op, item.params)
                 except KeyError as exc:
-                    raise BridgeError("UNKNOWN_OP", str(exc), {"index": i}) from None
+                    # qwen batched transform_notes calls: tools are not ops
+                    raise BridgeError("UNKNOWN_OP", f"{exc}; batch ops are Live ops such as clip.set or notes.apply, "
+                                      "not tools: call a tool like transform_notes on its own", {"index": i}) from None
     except ValidationError as exc:
         raise BridgeError(
             "INVALID_PARAMS",
