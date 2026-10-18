@@ -205,6 +205,83 @@ def _delete_clip(ctx, action):
     return {"track": action["track"], "deleted": {"start": span[0], "end": span[1]}}
 
 
+def _lift(ctx, track_index, index):
+    """Take an arrangement clip off the timeline, keeping what a move needs to rebuild it."""
+    from .notes import _all_notes, _note_dict
+
+    clip = ctx.clip_at({"track": track_index, "arrangement_clip": index})
+    start, length = clip.start_time, clip.end_time - clip.start_time
+    if not clip.is_midi_clip:
+        raise OpError(ErrorCode.UNSUPPORTED, "Moving arrangement audio clips is not supported", track=track_index, arrangement_clip=index)
+    if abs(clip.loop_start) > EPSILON or abs(clip.start_marker) > EPSILON or abs(clip.length - length) > EPSILON:
+        raise OpError(ErrorCode.UNSUPPORTED, "'%s' is trimmed or repeats its loop; only clips that play their notes once from the start can be moved"
+                      % (clip.name or "The clip"), track=track_index, arrangement_clip=index)
+    lifted = {"start": start, "length": length, "name": clip.name, "color_index": clip.color_index,
+              "notes": [_note_dict(n) for n in _all_notes(clip)]}
+    ctx.track(track_index).delete_clip(clip)
+    return lifted
+
+
+def _place(ctx, track_index, lifted, start):
+    _check_free(ctx, track_index, start, start + lifted["length"])
+    track = ctx.track(track_index)
+    clip = track.create_midi_clip(start, lifted["length"])
+    if clip is None:
+        clip = _find_clip(ctx, track_index, start)
+    clip.name = lifted["name"]
+    clip.color_index = lifted["color_index"]
+    if lifted["notes"]:
+        clip.add_new_notes(tuple(_make_spec(n) for n in lifted["notes"]))
+
+
+def _check_layout(ctx, track_index, moving, spans):
+    """Before anything is lifted: the new spans overlap neither each other nor the clips that stay."""
+    clips = ctx.arrangement_clips(track_index)
+    for index in moving:
+        if not 0 <= index < len(clips):
+            ctx.clip_at({"track": track_index, "arrangement_clip": index})  # NOT_FOUND with the count
+    for n, (start, end) in enumerate(spans):
+        for other_start, other_end in spans[n + 1:]:
+            if start < other_end - EPSILON and other_start < end - EPSILON:
+                raise OpError(ErrorCode.CONFLICT, "The clips would overlap at their new places (beats %g-%g and %g-%g)"
+                              % (start, end, other_start, other_end), track=track_index)
+        for i, clip in enumerate(clips):
+            if i not in moving and clip.start_time < end - EPSILON and start < clip.end_time - EPSILON:
+                raise OpError(ErrorCode.CONFLICT, "There is already '%s' (arrangement_clip index %d) at beats %g-%g on %s"
+                              % (clip.name or "a clip", i, clip.start_time, clip.end_time, ctx.where(track_index)),
+                              track=track_index, arrangement_clip=i)
+    return clips
+
+
+def _move_clip(ctx, action):
+    track_index = action["track"]
+    start = float(action["start"])
+    clips = ctx.arrangement_clips(track_index)
+    if 0 <= action["clip"] < len(clips):
+        length = clips[action["clip"]].end_time - clips[action["clip"]].start_time
+        _check_layout(ctx, track_index, {action["clip"]}, [(start, start + length)])
+    lifted = _lift(ctx, track_index, action["clip"])
+    _place(ctx, track_index, lifted, start)
+    return {"track": track_index, "moved": lifted["name"], "from": lifted["start"], "start": start, "end": start + lifted["length"]}
+
+
+def _swap_clips(ctx, action):
+    track_index, a, b = action["track"], action["clip"], action["with_clip"]
+    if a == b:
+        raise OpError(ErrorCode.INVALID_PARAMS, "swap_clips needs two different clips")
+    first, second = sorted((a, b))
+    clips = ctx.arrangement_clips(track_index)
+    if second < len(clips):
+        x, y = clips[first], clips[second]
+        _check_layout(ctx, track_index, {a, b}, [(y.start_time, y.start_time + x.end_time - x.start_time),
+                                                 (x.start_time, x.start_time + y.end_time - y.start_time)])
+    later = _lift(ctx, track_index, second)  # the later one first: the earlier index stays valid
+    earlier = _lift(ctx, track_index, first)
+    _place(ctx, track_index, earlier, later["start"])
+    _place(ctx, track_index, later, earlier["start"])
+    return {"track": track_index, "swapped": [earlier["name"], later["name"]], "starts": [later["start"], earlier["start"]]}
+
+
 def _cue_at(song, time):
     for cue in song.cue_points:
         if abs(cue.time - time) < EPSILON:
@@ -216,6 +293,8 @@ ACTIONS = {
     "add_clip": _add_clip,
     "copy_session_clip": _copy_session_clip,
     "delete_clip": _delete_clip,
+    "move_clip": _move_clip,
+    "swap_clips": _swap_clips,
 }
 
 

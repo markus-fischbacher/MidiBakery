@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from midibakery.catalog.registry import OpSpec, register
 
@@ -108,7 +108,8 @@ class ClipRef(Params):
 
     track: TrackIndex
     slot: SlotIndex | None = None
-    arrangement_clip: Annotated[int, Field(ge=0, description="Arrangement clip index on the track, in time order")] | None = None
+    arrangement_clip: (Annotated[int, Field(ge=0)] | Annotated[str, Field(min_length=1)] | None) = Field(
+        None, description="Arrangement clip index (time order) or name")
 
     @model_validator(mode="after")
     def _one_clip(self):
@@ -394,12 +395,38 @@ class CopySessionClip(BaseModel):
     start: Beats
 
 
+# Every other tool calls it arrangement_clip, so models send that here too
+ArrangementClipIndex = Annotated[Annotated[int, Field(ge=0)] | Annotated[str, Field(min_length=1)],
+                                 Field(description="arrangement_clip index or name",
+                                       validation_alias=AliasChoices("clip", "arrangement_clip"))]
+
+
 class DeleteArrangementClip(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: Literal["delete_clip"]
     track: TrackIndex
-    clip: Annotated[int, Field(ge=0, description="arrangement_clip index from arrangement.get")]
+    clip: ArrangementClipIndex
+
+
+class MoveArrangementClip(BaseModel):
+    # Notes, name and color move along; a trimmed or looping clip cannot be moved.
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["move_clip"]
+    track: TrackIndex
+    clip: ArrangementClipIndex
+    start: Annotated[float, Field(ge=0)]  # beats; descriptions here cost every local model context
+
+
+class SwapArrangementClips(BaseModel):
+    # Each clip takes the other's start: "swap Intro Bass and Drop Bass".
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["swap_clips"]
+    track: TrackIndex
+    clip: ArrangementClipIndex
+    with_clip: Annotated[int, Field(ge=0)] | Annotated[str, Field(min_length=1)]
 
 
 class AddTakeLane(BaseModel):
@@ -437,7 +464,10 @@ class DeleteLocator(BaseModel):
     time: Beats
 
 
-ClipAction = Annotated[AddClip | CopySessionClip | DeleteArrangementClip | AddTakeLane | AddTakeClip, Field(discriminator="action")]
+ClipAction = Annotated[
+    AddClip | CopySessionClip | DeleteArrangementClip | MoveArrangementClip | SwapArrangementClips | AddTakeLane | AddTakeClip,
+    Field(discriminator="action"),
+]
 LocatorAction = Annotated[SetLocator | DeleteLocator, Field(discriminator="action")]
 
 
@@ -462,7 +492,8 @@ class ArrangementTool(Params):
     For take lanes use compose_takes."""
 
     actions: list[
-        Annotated[AddClip | CopySessionClip | DeleteArrangementClip | SetLocator | DeleteLocator, Field(discriminator="action")]
+        Annotated[AddClip | CopySessionClip | DeleteArrangementClip | MoveArrangementClip | SwapArrangementClips | SetLocator | DeleteLocator,
+                  Field(discriminator="action")]
     ] = Field(min_length=1, max_length=256)
 
 
@@ -479,11 +510,22 @@ class History(Params):
     action: Literal["undo", "redo"]
 
 
+_CLIP_ACTIONS = frozenset({"add_clip", "copy_session_clip", "delete_clip", "move_clip", "swap_clips"})
+
+
 class BatchItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     op: str
     params: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _arrangement_action(cls, data: Any) -> Any:
+        # Models put edit_arrangement actions ({"action": "move_clip", ...}) into ops and retried that five times
+        if isinstance(data, dict) and "op" not in data and data.get("action") in _CLIP_ACTIONS:
+            return {"op": "arrangement.edit", "params": {"actions": [data]}}
+        return data
 
 
 class Batch(Params):
@@ -527,7 +569,7 @@ for spec in [
     OpSpec("rack.set", RackSet, "Set macros, edit chains, or add a chain to a rack", read_only=False),
     OpSpec("clip.envelope", ClipEnvelope, "Write clip automation (points or shapes) onto an existing clip", read_only=False),
     OpSpec("arrangement.get", ArrangementGet, "Arrangement clips per track (start, end), locators, song length", read_only=True),
-    OpSpec("arrangement.edit", ArrangementEdit, "Add MIDI clips with notes, copy session clips or delete arrangement clips", read_only=False, timeout=15.0, min_live=(12, 1, 10)),
+    OpSpec("arrangement.edit", ArrangementEdit, "Add MIDI clips with notes, copy session clips, move, swap or delete arrangement clips", read_only=False, timeout=15.0, min_live=(12, 1, 10)),
     OpSpec("arrangement.locators", ArrangementLocators, "Set, name or delete arrangement locators", read_only=False, timeout=30.0),
     OpSpec("song.position", SongPosition, "Move the play position and wait until Live applied it", read_only=False, timeout=5.0),
     OpSpec("scene.create", SceneCreate, "Create a scene", read_only=False),
