@@ -33,3 +33,22 @@ async def test_load_names_what_the_folder_holds(client):
     with pytest.raises(BridgeError) as exc:
         await client.call("browser.load", {"track": 1, "path": ["instruments", "Drift", "Bass"]})
     assert "cannot be loaded" in str(exc.value)
+
+
+async def test_search_falls_back_to_some_of_the_words(client):
+    # a model asked for "organ pad" and gave up: nothing has both words, "106 Organ" has one
+    found = await client.call("browser.search", {"query": "organ pad"})
+    assert found["matched"] == "some words"
+    assert found["items"][0]["name"] == "106 Organ.adg"
+    assert "matched" not in await client.call("browser.search", {"query": "organ"})
+
+
+async def test_load_by_name_without_a_path(client, live):
+    # models send ['Operator'] instead of a path from browser.search
+    await client.call("device.insert", {"track": 0, "name": "Drift"})
+    loaded = await client.call("browser.load", {"track": 0, "path": ["Operator"]})
+    assert [d["class_name"] for d in loaded["devices"]] == ["Operator"]
+    preset = await client.call("browser.load", {"track": 0, "path": ["Basic Pluck Keys"]})
+    assert preset["loaded"] == "Basic Pluck Keys.adg"
+    with pytest.raises(BridgeError, match="No browser item named 'Moog'"):
+        await client.call("browser.load", {"track": 0, "path": ["Moog"]})

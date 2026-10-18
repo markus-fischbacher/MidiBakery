@@ -49,18 +49,46 @@ def browser_search(ctx, params):
     limit = params.get("limit", 20)
     loadable = params.get("loadable_only", True)
     queue = [([name], item) for name, item in _roots(_browser(), params.get("category", "all"))]
-    found, visited = [], 0
+    found, partial, visited = [], [], 0
     while queue and len(found) < limit and visited < MAX_NODES:
         path, item = queue.pop(0)
         visited += 1
-        if len(path) > 1:
+        if len(path) > 1 and (item.is_loadable or not loadable):
             name = item.name.lower()
-            if all(t in name for t in terms) and (item.is_loadable or not loadable):
+            hits = sum(t in name for t in terms)
+            if hits == len(terms):
                 found.append(_entry(path, item))
+            elif hits and len(partial) < 4 * limit:
+                partial.append((hits, len(partial), _entry(path, item)))
         queue.extend((path + [child.name], child) for child in _children(item))
         if visited % NODES_PER_TICK == 0:
             yield
+    if not found and partial:
+        # "organ pad" found nothing named both: offer what has some of the words ("106 Organ")
+        best = sorted(partial, key=lambda p: (-p[0], p[1]))[:limit]
+        return {"items": [e for _, _, e in best], "visited": visited, "complete": not queue, "matched": "some words"}
     return {"items": found, "visited": visited, "complete": not queue}
+
+
+def _stem(name):
+    return name.rsplit(".", 1)[0].lower() if "." in name[-5:] else name.lower()
+
+
+def _named(name):
+    """The loadable item called `name` (extension optional), breadth first: a model sends
+    ['Operator'] or ['Basic Pluck Keys'] instead of a path from browser.search."""
+    wanted = _stem(name)
+    queue = [([cat], item) for cat, item in _roots(_browser(), "all")]
+    visited = 0
+    while queue and visited < MAX_NODES:
+        path, item = queue.pop(0)
+        visited += 1
+        if len(path) > 1 and item.is_loadable and _stem(item.name) == wanted:
+            return path
+        queue.extend((path + [child.name], child) for child in _children(item))
+        if visited % NODES_PER_TICK == 0:
+            yield
+    raise OpError(ErrorCode.NOT_FOUND, "No browser item named '%s'; find it with browser.search (find_browser_items)" % name)
 
 
 def _item_at(path):
@@ -87,7 +115,10 @@ def browser_load(ctx, params):
     """Load the item like a double-click in the browser with the track selected: an
     instrument or kit replaces the track's instrument, an effect is appended."""
     track = ctx.track(params["track"])
-    item = _item_at(params["path"])
+    path = params["path"]
+    if len(path) == 1 or path[0] not in CATEGORIES:
+        path = yield from _named(path[-1])
+    item = _item_at(path)
     before = _chain(track)
     while time.monotonic() - _last_load[0] < COOLDOWN_SECONDS:
         yield
