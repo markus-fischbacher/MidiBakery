@@ -348,7 +348,14 @@ Modes (say them in words, default is the first):
 - **harmonic_notes**: moves with the lead's rhythm on a fitting other note.
 - **note_layering**: the lead's own notes an octave away, same time or delayed.
 
-Register (`counter_register`): **above** the lead (default), **below** it, or **same** (then it never starts together with the lead). On strong beats it plays thirds, fifths, sixths or octaves to the lead. Fixed figures such as the staircase come later.
+Four fixed figures (the lead only sets register and clashes; they ignore its rhythm):
+
+- **dotted_eighth_pulse**: a steady dotted-eighth pulse (3-3-3-3-3-1) on one chord tone per bar.
+- **scale_staircase**: the same pulse climbing one scale step every one or two bars, one step back before the loop restarts.
+- **trance_dotted_eighth_staircase**: the Trance tutorial's 8-bar figure: the pulse on scale degrees 1, 2, 3 and 5, two bars each.
+- **echo_gap_answer**: in long notes of the lead (1.25 beats or more) three or four short notes moving by a step, then one longer note that keeps sounding when the lead comes back. Over a lead without long notes it writes nothing.
+
+Register (`counter_register`): **above** the lead (default), **below** it, or **same** (then it never starts together with the lead). On strong beats it plays thirds, fifths, sixths or octaves to the lead.  A figure note that would clash on a strong beat moves to the nearest fitting scale tone.
 
 ### Whole songs by genre
 
