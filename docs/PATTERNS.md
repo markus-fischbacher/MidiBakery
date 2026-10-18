@@ -68,6 +68,25 @@ A chords pattern sets the progression and the voicing (roots doubled, thirds up,
 | `ambience_root_five_six` | Ambience: root, fifth, sixth, fifth. Count from the root to the fifth, hop to the sixth and back to the fifth, loop it: a quiet ambience for a dry techno track. |
 | `ambience_chord_semitone` | Melancholic ambience: minor chord with a top semitone. Root, fifth of the minor chord, both doubled an octave up and the third on top: the melancholic ambience under a kick-only track. |
 
+## Counter melody modes
+
+`counter_mode` of a melody that has `counter_to` (a main melody clip). Ten values, six read the main melody's rhythm, four are figures. Provenance as in [COUNTER_MELODY.md](COUNTER_MELODY.md): `roll` = seen in the tutorials' piano roll, `described` = said in the voice-over or inferred.
+
+| Mode | What it does | Provenance |
+|---|---|---|
+| `fill_the_gaps` | Plays inside the main's held notes and rests, sustains or stops when it returns. | `roll` |
+| `call_and_response` | Answers in the silent beats and bars of the main. | `described` |
+| `passive_over_active` | A third to half of a busy main's onsets, longer notes; more notes over a sparse one. | `described` + `roll` |
+| `contrasting_rhythm` | An onset pattern that differs from the main's per bar. | `described` |
+| `harmonic_notes` | Follows the main's onsets on another consonant note, never the same pitch class. | `roll` + `described` |
+| `note_layering` | The main's own pitch classes an octave away, same time or delayed. | `roll` + `described` |
+| `dotted_eighth_pulse` | Fixed 3-3-3-3-3-1 pulse, one chord tone per bar. | `roll` rhythm |
+| `scale_staircase` | The pulse climbing one scale step every one or two bars, one step back before the restart. | `roll` + `described` |
+| `trance_dotted_eighth_staircase` | The Trance video's 8-bar figure, scale degrees 0 0 1 1 2 2 4 4, then the loop restarts. | `roll` rhythm, `described` pitches |
+| `echo_gap_answer` | In a main note of 1.25 beats or more: 3-4 short stepwise notes, then one longer note that sustains under the re-entry. | `roll` |
+
+All keep the register window (`counter_register`: above, below, same), never cross the main and keep thirds, fifths, sixths or octaves to it on strong beats; a figure note that would clash moves to the nearest consonant scale tone. Not built: `bass_mimic`, `timbre_split` (hint only), `octave_separation` (that is `counter_register`).
+
 ## Drum patterns (techno)
 
 | `pattern` | What it is |

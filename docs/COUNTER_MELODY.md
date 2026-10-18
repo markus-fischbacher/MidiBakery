@@ -90,4 +90,19 @@ Which patterns are rule-based and which are fixed:
 | Mixed (a fixed rhythm, pitches from a rule) | `dotted_eighth_pulse`, `scale_staircase` |
 | Hint only | `timbre_split` |
 
+## In MidiBakery
+
+`counter_mode` on a melody with `counter_to` (see [PATTERNS.md](PATTERNS.md#counter-melody-modes)):
+
+| Technique | In MidiBakery |
+|---|---|
+| `contrasting_rhythm`, `passive_over_active`, `fill_the_gaps`, `call_and_response`, `note_layering`, `harmonic_notes` | `counter_mode` of the same name |
+| `octave_separation` | `counter_register` (`above`, `below`; `same` only with onsets that never meet the main's) |
+| `dotted_eighth_pulse` | `counter_mode` `dotted_eighth_pulse` |
+| `scale_staircase` | `counter_mode` `scale_staircase` |
+| `trance_dotted_eighth_staircase` | `counter_mode` `trance_dotted_eighth_staircase` |
+| `echo_gap_answer` | `counter_mode` `echo_gap_answer` |
+| `bass_mimic` | not built |
+| `timbre_split` | not built (hint only) |
+
 A first generator needs only one input beyond what `compose` has today: the main melody read from a clip. With that, `fill_the_gaps`, `harmonic_notes` and `octave_separation` cover most of what both videos show; the fixed figures are cheap to add as templates.

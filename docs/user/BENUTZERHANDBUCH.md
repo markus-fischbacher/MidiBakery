@@ -349,7 +349,14 @@ Modi (in Worten sagen, Standard ist der erste):
 - **harmonic_notes**: geht im Rhythmus des Leads mit, auf einer passenden anderen Note.
 - **note_layering**: die Noten des Leads eine Oktave entfernt, gleichzeitig oder verzögert.
 
-Lage (`counter_register`): **above** über dem Lead (Standard), **below** darunter oder **same** (dann beginnt sie nie gleichzeitig mit dem Lead). Auf betonten Zählzeiten spielt sie Terzen, Quinten, Sexten oder Oktaven zum Lead. Feste Figuren wie die Treppe kommen später.
+Vier feste Figuren (der Lead bestimmt nur Lage und Reibungen; sie folgen nicht seinem Rhythmus):
+
+- **dotted_eighth_pulse**: ein gleichmäßiger punktierter Achtelpuls (3-3-3-3-3-1) auf einem Akkordton pro Takt.
+- **scale_staircase**: derselbe Puls, der alle ein bis zwei Takte eine Tonleiterstufe steigt und vor dem Neustart eine Stufe zurückgeht.
+- **trance_dotted_eighth_staircase**: die 8-Takt-Figur aus dem Trance-Tutorial: der Puls auf den Stufen 1, 2, 3 und 5, je zwei Takte.
+- **echo_gap_answer**: in langen Noten des Leads (ab 1,25 Schlägen) drei bis vier kurze Noten in Schritten, dann eine längere Note, die beim Wiedereinsatz des Leads weiterklingt. Über einem Lead ohne lange Noten schreibt sie nichts.
+
+Lage (`counter_register`): **above** über dem Lead (Standard), **below** darunter oder **same** (dann beginnt sie nie gleichzeitig mit dem Lead). Auf betonten Zählzeiten spielt sie Terzen, Quinten, Sexten oder Oktaven zum Lead. Eine Figurennote, die auf einer betonten Zählzeit reiben würde, rückt auf den nächsten passenden Tonleiterton.
 
 ### Ganze Songs nach Genre
 
