@@ -96,9 +96,9 @@ _VOCALS = re.compile(r"\b(vocals?|gesang|stimme|sänger\w*|singer|vox)\b", re.I)
 _LESS = re.compile(r"\b(leiser|quieter|softer|lower|decrease|reduce|senk\w*|runter)\b", re.I)
 _MUTE = re.compile(r"\b(stumm\w*|mute\w*|silen\w*)\b", re.I)
 _MORE = re.compile(r"\b(lauter|louder|higher|increase|erhöh\w*|hoch)\b", re.I)
-NO_MASTERING = ("NOT DONE: no tool masters to a loudness target, so do not touch the master fader. Say so plainly; "
-                "plan_master can put a starting chain (EQ Eight, Glue Compressor, Limiter) on the Master, and "
-                "measure_master reads the LUFS from the Loudness Meter device on it.")
+NO_MASTERING = ("NOT DONE: do not touch the master fader. plan_master puts a chain (EQ Eight, Glue Compressor, "
+                "Limiter) on the Master; measure_master reads the Loudness Meter on it; plan_loudness + apply_plan "
+                "move the Limiter toward a LUFS target.")
 NO_VOCALS = ("NOT DONE: this set has no vocal track, and no other track is the vocals. "
              "Tell the user there is no vocal track; change nothing.")
 

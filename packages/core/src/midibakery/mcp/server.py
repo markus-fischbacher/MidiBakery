@@ -37,6 +37,7 @@ from midibakery.compose import (
 from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
 from midibakery.compose.plan import Plan, new_seed
 from midibakery.compose.references import find_reference, load_references
+from midibakery.compose.loudness import LoudnessPlan, LoudnessRequest, apply_loudness, build_loudness
 from midibakery.compose.master import MasterPlan, MasterRequest, apply_master, build_master
 from midibakery.compose.meter import MeterQuery, measure_master
 from midibakery.compose.song import SongPlan, SongRequest, apply_song, build_song
@@ -63,7 +64,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
 - A whole song: plan_song, then apply_plan; say which tracks it used and created.
   compose_takes puts variations of a part on take lanes to comp in Live.
 - plan_master + apply_plan: a master chain as a starting point; it cannot hear the song.
-- measure_master: the Master's LUFS; quote loudness only from it.
+- measure_master: Master LUFS (quote loudness only from it); plan_loudness + apply_plan: a round toward a target.
 - compose writes one part into the track's first free slot (if_exists for occupied ones),
   reproducible by seed. Make parts fit: bass and melody chords_from the chord clip, the bass
   follow_kick the drum clip; or plan_changes, where later steps share the first step's chords.
@@ -491,6 +492,13 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         plans.put(master)  # type: ignore[arg-type]  # apply_plan tells master plans apart too
         return master.preview()
 
+    async def plan_loudness(args: dict[str, Any], ctx: Context | None) -> Any:
+        loudness = await build_loudness(bridge.call, LoudnessRequest.model_validate(args))
+        if not isinstance(loudness, LoudnessPlan):
+            return loudness  # on target: nothing to plan
+        plans.put(loudness)  # type: ignore[arg-type]
+        return loudness.preview()
+
     async def run_plan(args: dict[str, Any], ctx: Context | None) -> Any:
         plan = plans.get(args["plan_id"])
         if plan is None and plans.was_applied(args["plan_id"]):
@@ -504,9 +512,9 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             result = await apply_song(bridge.call, plan)
             plans.applied(plan.id)
             return result
-        if isinstance(plan, MasterPlan):
+        if isinstance(plan, (MasterPlan, LoudnessPlan)):
             plans.pop(plan.id)
-            result = await apply_master(bridge.call, plan)
+            result = await (apply_master(bridge.call, plan) if isinstance(plan, MasterPlan) else apply_loudness(bridge.call, plan))
             plans.applied(plan.id)
             return result
         asked = await ask_before_replacing(plan, ctx)
@@ -549,10 +557,10 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         _make_tool(SongRequest, plan_song),
         name="plan_song",
         title="Plan a whole song in the Arrangement View",
-        description="Full song from a genre template (house, melodic_techno, peak_time_techno, drum_and_bass, trap): intro, builds, drops, breaks, outro "
+        description="Full song from a genre template: intro, builds, drops, breaks, outro "
         "with locators, on the drum/bass/chords/lead tracks (found by Drum Rack or name; missing ones are created). "
         "Length radio/standard/extended or minutes; starts after the last arrangement clip unless start_bar. "
-        "Returns a preview and a plan_id for apply_plan; nothing changes before that.",
+        "Preview and plan_id for apply_plan; nothing changes before that.",
         annotations=read_only,
         meta=UI_META,
     )
@@ -561,9 +569,17 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         name="plan_master",
         title="Plan a master chain",
         description="Master chain for the genre (EQ Eight low cut, Glue Compressor, Limiter), a starting point. "
-        "Returns a preview and a plan_id for apply_plan.",
+        "Preview and plan_id for apply_plan.",
         annotations=read_only,
     )
+    server.add_tool(
+        _make_tool(LoudnessRequest, plan_loudness),
+        name="plan_loudness",
+        title="Plan a loudness round",
+        description=inspect.cleandoc(LoudnessRequest.__doc__ or "") + " plan_id for apply_plan.",
+        annotations=read_only,
+    )
+
     async def run_measure_master(args: dict[str, Any], ctx: Context | None) -> Any:
         return await measure_master(bridge.call, MeterQuery.model_validate(args))
 

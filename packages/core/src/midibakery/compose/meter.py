@@ -24,48 +24,64 @@ WHERE = "Audio Effects > Max Audio Effect > MidiBakery"
 
 
 class MeterQuery(BaseModel):
-    """Master loudness (LUFS) and peak from the MidiBakery Loudness Meter device while Live plays.
-    reset=true restarts the integrated value and peak."""
+    """Master LUFS and peak from the Loudness Meter device. reset=true restarts them."""
 
     model_config = ConfigDict(extra="forbid")
 
     reset: bool = False
 
 
-async def measure_master(call: Call, query: MeterQuery) -> dict[str, Any]:
-    devices = master_devices(await call("mixer.get", {}))
+def find_meter(devices: tuple[str, ...]) -> tuple[int, list[str]]:
+    """The meter's index on the Master and warnings; NOT_FOUND without one."""
     meter = next((i for i, d in enumerate(devices) if is_meter(d)), None)
     if meter is None:
         raise BridgeError("NOT_FOUND", f"No {METER} on the Master. Drag it from Live's browser ({WHERE}) onto the "
                           "Master as its last device, then play the song.", {"master_devices": list(devices)})
-    warnings = []
-    if after := devices[meter + 1:]:
-        warnings.append(f"The meter is not the Master's last device: it does not hear {', '.join(after)}")
-    if query.reset:
-        config_dir().mkdir(parents=True, exist_ok=True)
-        (config_dir() / "meter-reset").write_text("measure_master\n", encoding="utf-8")
-        return {"ok": True, "reset": True, "warnings": warnings,
-                "next": "Play the song (or the part to measure), then call measure_master again"}
+    after = devices[meter + 1:]
+    return meter, [f"The meter is not the Master's last device: it does not hear {', '.join(after)}"] if after else []
 
+
+def request_reset() -> None:
+    """The device deletes this file on its next block and starts again."""
+    config_dir().mkdir(parents=True, exist_ok=True)
+    (config_dir() / "meter-reset").write_text("midibakery\n", encoding="utf-8")
+
+
+def reset_pending() -> bool:
+    return (config_dir() / "meter-reset").exists()
+
+
+def read_meter() -> tuple[dict[str, Any], list[str]]:
+    """The meter's last reading plus "measuring" (written in the last STALE_SECONDS), and warnings."""
     path = config_dir() / "meter.json"
     try:
         reading = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         raise BridgeError("NOT_FOUND", f"The {METER} has not measured anything yet: play the song in Live.") from None
     age = _age(reading.get("updated"), path)
-    playing = age <= STALE_SECONDS
     result = {k: reading.get(k) for k in ("integrated_lufs", "short_term_lufs", "momentary_lufs", "peak_db",
                                           "short_term_peak_db", "measured_seconds")}
-    result["measuring"] = playing
-    if not playing:
+    result["measuring"] = age <= STALE_SECONDS
+    warnings = []
+    if not result["measuring"]:
         warnings.append(f"The meter stopped {age:.0f} s ago (the device is off or was removed, or Live is closed): "
                         "these are its last values")
     if reading.get("integrated_lufs") is None:
         warnings.append("Nothing above -70 LUFS measured yet: play the song")
+    return result, warnings
+
+
+async def measure_master(call: Call, query: MeterQuery) -> dict[str, Any]:
+    _, warnings = find_meter(master_devices(await call("mixer.get", {})))
+    if query.reset:
+        request_reset()
+        return {"ok": True, "reset": True, "warnings": warnings,
+                "next": "Play the song (or the part to measure), then call measure_master again"}
+    result, more = read_meter()
     result["notes"] = ["Integrated loudness covers everything played since the last reset: reset, then play the whole "
                        "song (or the drop) for a number to compare.",
                        "peak_db is the sample peak since the reset; a true peak can be up to ~0.5 dB higher."]
-    result["warnings"] = warnings
+    result["warnings"] = warnings + more
     return result
 
 

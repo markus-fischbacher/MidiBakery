@@ -99,7 +99,7 @@ async def test_apply_detects_conflicts(client, live):
 
 async def test_compose_tools_are_listed_and_annotated():
     tools = {t.name: t for t in await build_server().list_tools()}
-    assert len(tools) <= 39  # the real guard is the character budget in test_agent (local models)
+    assert len(tools) <= 40  # the real guard is the character budget in test_agent (local models)
     for name in ("compose", "transform_notes", "apply_plan"):
         assert tools[name].annotations.read_only_hint is False
         assert tools[name].annotations.destructive_hint is True
