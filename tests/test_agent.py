@@ -663,6 +663,53 @@ def test_claims_a_change():
 
     assert claims_a_change("Tempo auf 128 BPM gesetzt.") and claims_a_change("I renamed the clip.")
     assert not claims_a_change("OK. What would you like me to do?") and not claims_a_change("Soll ich es löschen?")
+    # gemma: "Tempo auf 128 BPM eingestellt." and "Ich lade den Organ-Preset" without a call
+    assert claims_a_change("Tempo auf 128 BPM eingestellt.") and claims_a_change("Ich lade den Organ-Preset auf die Spur.")
+    assert claims_a_change("I'll load the organ preset.")
+    assert not claims_a_change("I cannot set a loudness target; Live has no mastering tool.")
+
+
+async def _compact_send(client, provider, text):
+    events = []
+
+    async def emit(event):
+        events.append(event)
+
+    async def yes(message):
+        return True
+
+    async with ToolHost(build_server(client), yes) as host:
+        await Agent(provider, host, compact=True).send(text, emit)
+    return events
+
+
+async def test_a_vague_wish_changes_the_clip_instead_of_composing_a_new_one(client, live):
+    # gemma: "Mach den Bass spannender" -> compose into a free slot, every time
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 8.0, "name": "Bass Loop"})
+    compose = ("compose", {"kind": "bass", "track": 1})
+    provider = ScriptedProvider([tool_turn(compose), tool_turn(("transform_notes", {"track": 1, "slot": 0, "operation": "variation"})),
+                                 Turn("end_turn", text="Variiert.")])
+    events = await _compact_send(client, provider, "Mach den Bass spannender.")
+    refusal = next(e for e in events if e["type"] == "tool_result" and e["name"] == "compose")
+    assert refusal["is_error"] and "slot 0 'Bass Loop'" in refusal["result"] and "did not ask for a new clip" in refusal["result"]
+    assert live.on_main(lambda: [s.clip is not None for s in live.song.tracks[1].clip_slots][:2]) == [True, False]
+
+
+async def test_a_new_clip_is_composed_when_the_user_asks_for_one(client, live):
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 8.0, "name": "Bass Loop"})
+    provider = ScriptedProvider([tool_turn(("compose", {"kind": "bass", "track": 1})), Turn("end_turn", text="Neue Bassline.")])
+    events = await _compact_send(client, provider, "Schreib eine neue Bassline.")
+    assert not any(e["type"] == "tool_result" and e["is_error"] for e in events)
+    assert live.on_main(lambda: [s.clip is not None for s in live.song.tracks[1].clip_slots][:2]) == [True, True]
+
+
+async def test_the_new_clip_guard_lets_a_repeated_call_through(client, live):
+    # once per message: a model that insists gets its clip
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 8.0, "name": "Bass Loop"})
+    compose = ("compose", {"kind": "bass", "track": 1})
+    provider = ScriptedProvider([tool_turn(compose), tool_turn(compose), Turn("end_turn", text="Neu.")])
+    await _compact_send(client, provider, "Mach den Bass spannender.")
+    assert live.on_main(lambda: [s.clip is not None for s in live.song.tracks[1].clip_slots][:2]) == [True, True]
 
 
 async def test_deleting_an_arrangement_clip_by_name_asks_with_its_name(client, live):
@@ -679,3 +726,18 @@ async def test_deleting_an_arrangement_clip_by_name_asks_with_its_name(client, l
     assert {"type": "confirm", "message": "Delete arrangement clip 'Intro Kick' (index 0) of track 1 '1-MIDI'?"} in events
     assert not any(e.get("is_error") for e in events if e["type"] == "tool_result")
     assert [c["name"] for c in (await client.call("arrangement.get", {}))["tracks"][0]["clips"]] == ["Drop Kick"]
+
+
+async def test_deleting_a_clip_is_not_answered_with_delete_track(client, live):
+    # gemma: "Delete the clip 'Intro Kick'" -> delete_track {"track": 0}
+    provider = ScriptedProvider([tool_turn(("delete_track", {"track": 0})), Turn("end_turn", text="Could not.")])
+    before = live.on_main(lambda: len(live.song.tracks))
+    events = await _compact_send(client, provider, "Delete the clip 'Intro Kick'.")
+    refusal = next(e for e in events if e["type"] == "tool_result")
+    assert refusal["is_error"] and "not a track" in refusal["result"]
+    assert live.on_main(lambda: len(live.song.tracks)) == before
+    # naming the track as well keeps delete_track available
+    from midibakery.agent.loop import deletes_wrong_thing
+
+    assert not deletes_wrong_thing("Lösch die Spur und den Clip", "delete_track")
+    assert deletes_wrong_thing("Lösch den Clip 'Intro Kick'", "delete_track")
