@@ -5,7 +5,7 @@ import random
 import pytest
 
 from midibakery.compose import harmony as harmony_mod
-from midibakery.compose.counter import MODES, analyze, consonant, generate_counter
+from midibakery.compose.counter import MODES, PULSE, analyze, consonant, generate_counter
 from midibakery.compose.notes import Note
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.theory import Scale
@@ -80,7 +80,7 @@ def test_register_above_and_below_stay_an_octave_clear_and_never_cross(mode, nam
     top, bottom = max(n.pitch for n in main), min(n.pitch for n in main)
     above = counter(main, mode, register="above")
     below = counter(main, mode, register="below")
-    if name == "busy" and mode in ("fill_the_gaps", "call_and_response"):
+    if name == "busy" and mode in ("fill_the_gaps", "call_and_response", "echo_gap_answer"):
         assert not above and not below  # no gap to answer in
         return
     assert above and below
@@ -166,6 +166,10 @@ def test_note_layering_uses_the_mains_pitch_classes_an_octave_away():
 
 @pytest.mark.parametrize("mode", MODES)
 def test_same_seed_same_notes_and_another_seed_other_notes(mode):
+    if mode == "trance_dotted_eighth_staircase":  # a fixed figure: only clashes with the main change a note
+        shape = lambda seed: [(n.pitch, n.start_time) for n in counter(SPARSE, mode, seed=seed)]  # noqa: E731
+        assert shape(7) == shape(8)
+        return
     main = PHRASE if mode == "call_and_response" else SPARSE
     assert counter(main, mode, seed=7) == counter(main, mode, seed=7)
     assert any(counter(main, mode, seed=s) != counter(main, mode, seed=7) for s in range(8, 14))
@@ -196,3 +200,97 @@ def test_modes_and_arguments_are_checked():
         counter(SPARSE, "fill_the_gaps", register="left")
     with pytest.raises(ValueError, match="no notes"):
         counter([], "fill_the_gaps")
+
+
+def bar_notes(notes, bar):
+    return [n for n in notes if bar * 4 <= n.start_time < bar * 4 + 4 - 1e-6]
+
+
+def held_bars(bars=8):
+    """A main that only ticks on the off-beat 16th before each bar ends: no strong beat to clash with."""
+    return line(*[[(67, 14, 1)]] * bars)
+
+
+def test_pulse_onsets_fall_on_the_3_3_3_3_3_1_steps():
+    assert PULSE == (0, 3, 6, 9, 12, 15)
+    for mode in ("dotted_eighth_pulse", "scale_staircase", "trance_dotted_eighth_staircase"):
+        notes = counter(held_bars(BARS), mode)
+        assert len(bar_notes(notes, 0)) == 6
+        for n in notes:
+            assert round(n.start_time * 4) % 16 in PULSE, (mode, n)
+        assert {round(n.start_time * 4) % 16 for n in bar_notes(notes, 1)} == set(PULSE)
+
+
+def test_dotted_eighth_pulse_is_one_chord_tone_per_bar():
+    notes = counter(held_bars(BARS), "dotted_eighth_pulse")
+    for bar in range(BARS):
+        mine = bar_notes(notes, bar)
+        assert len({n.pitch for n in mine}) == 1
+        assert HARMONY.at(bar * 4).chord.contains(mine[0].pitch)
+    clashing = counter(SPARSE, "dotted_eighth_pulse")  # over held notes a few notes move to a consonant tone
+    assert all(SCALE.contains(n.pitch) for n in clashing)
+
+
+def test_scale_staircase_rises_by_scale_steps_over_the_cycle():
+    harmony = harmony_mod.from_progression("i", SCALE, METER, 8, 1)
+    notes = generate_counter(held_bars(), harmony, SCALE, METER, 8, random.Random(3), "scale_staircase")
+    per_bar = []
+    for bar in range(8):
+        pitches = {n.pitch for n in bar_notes(notes, bar)}
+        assert len(pitches) == 1
+        per_bar.append(SCALE.degree_of(pitches.pop()))
+    assert set(b - a for a, b in zip(per_bar, per_bar[1:])) <= {-1, 0, 1}
+    assert per_bar[:7] == sorted(per_bar[:7])
+    assert max(per_bar) == per_bar[0] + 3 and per_bar[7] == per_bar[0] + 2  # top reached, one step back for bar 8
+    assert SCALE.pitch_of_degree(per_bar[0]) % 12 == SCALE.root
+
+
+def test_trance_figure_follows_the_described_degrees_per_bar():
+    harmony = harmony_mod.from_progression("i", SCALE, METER, 8, 1)
+    notes = generate_counter(held_bars(), harmony, SCALE, METER, 8, random.Random(1), "trance_dotted_eighth_staircase")
+    base = SCALE.degree_of(min(n.pitch for n in notes))
+    degrees = []
+    for bar in range(8):
+        pitches = {n.pitch for n in bar_notes(notes, bar)}
+        assert len(pitches) == 1
+        degrees.append(SCALE.degree_of(pitches.pop()) - base)
+    assert degrees == [0, 0, 1, 1, 2, 2, 4, 4]
+
+
+def test_a_pulse_note_that_clashes_on_a_strong_beat_moves_to_a_consonant_tone():
+    main = line(*[[(67, 0, 8), (68, 8, 8)]] * BARS)  # held G, then A flat, every bar
+    for mode in ("dotted_eighth_pulse", "scale_staircase", "trance_dotted_eighth_staircase"):
+        notes = counter(main, mode)
+        assert notes
+        for t in strong_beats():
+            c, m = sounding(notes, t), sounding(main, t)
+            if c and m:
+                assert consonant(c.pitch - m.pitch), (mode, t)
+
+
+def test_echo_gap_answer_sits_in_held_notes_and_ends_on_a_longer_note():
+    notes = counter(SPARSE, "echo_gap_answer")
+    assert notes
+    held = [(m.start_time, m.end_time) for m in SPARSE if m.duration >= 1.25]
+    groups = {}
+    for n in notes:
+        span = next((h for h in held if h[0] < n.start_time < h[1]), None)
+        assert span, n  # every answer note starts inside a long main note, never on its onset
+        groups.setdefault(span, []).append(n)
+    for group in groups.values():
+        *short, last = group
+        assert 3 <= len(short) <= 4
+        assert last.duration > max(n.duration for n in short)
+        assert last.start_time >= max(n.start_time for n in short)
+    assert min(n.pitch for n in notes) >= max(m.pitch for m in SPARSE) + 12
+
+
+def test_echo_gap_answer_moves_by_steps():
+    notes = counter(SPARSE, "echo_gap_answer")
+    for a, b in zip(notes, notes[1:]):
+        if b.start_time - a.start_time <= 0.25 + 1e-6 and b.duration < 0.3:
+            assert abs(b.pitch - a.pitch) <= 4, (a, b)  # a scale step; a clash shift may add a little
+
+
+def test_echo_gap_answer_has_nothing_to_add_to_a_line_of_short_notes():
+    assert counter(BUSY, "echo_gap_answer") == []
