@@ -47,7 +47,7 @@ from midibakery.mcp.confirm import confirm, request_state
 INSTRUCTIONS = """\
 MidiBakery controls the Ableton Live 12 set that is open right now.
 - Call get_session first (tempo, signature, scale with root_note 0=C..11=B, tracks with
-  devices and clips). Tracks, slots, devices and scenes are zero-based indices that shift
+  devices and clips). Tracks, slots (= scenes), devices, returns (A = 0) and scenes are zero-based indices that shift
   when tracks or scenes are created or deleted; users count from 1 ("track 1" = index 0).
 - Times are beats (quarter notes); pitch 60 = C3. Prefer notes from the song scale.
 - edit_notes and transform_notes are diffs by note_id from get_clip; never rewrite a whole
