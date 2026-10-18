@@ -350,8 +350,9 @@ class Agent:
                     if not outcome.is_error and not self.host.read_only(call.name):
                         unresolved.clear()
                         wrote = True
-                    if not outcome.is_error and outcome.roll:
-                        wrote = True  # a preview the user applies: "plan created" is no false claim
+                    if not outcome.is_error and (outcome.roll or call.name.startswith("plan_")):
+                        # a preview the user applies: "plan created" is no false claim, and no nudge may apply it
+                        wrote = True
                     # declined by the user (CANCELLED): the model only has to say so
                     if outcome.is_error and not self.host.read_only(call.name) and "CANCELLED" not in outcome.text:
                         unresolved[call.name] = outcome.text

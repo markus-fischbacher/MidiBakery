@@ -802,3 +802,14 @@ async def test_the_agent_refuses_a_write_for_a_missing_vocal_track(client, live)
     events = await _compact_send(client, provider, "Make the vocals louder.")
     result = next(e for e in events if e["type"] == "tool_result" and e["name"] == "update_track")
     assert result["is_error"] and "no vocal track" in result["result"]
+
+
+async def test_a_plan_waits_for_apply_without_a_nudge(client, live):
+    # gemma: plan_song, "You can apply this plan with apply_plan(...)", then the nudge made it apply the song unasked
+    provider = ScriptedProvider([
+        Turn("tool_use", tool_calls=[ToolCall("t1", "plan_master", {"genre": "house"})]),
+        Turn("end_turn", text="Here is the master chain. Apply it when you like."),
+    ])
+    await _compact_send(client, provider, "Leg eine Master-Kette für House an.")
+    assert not provider.turns and not any(u.startswith("[No tool ran") for u in provider.users)
+    assert live.on_main(lambda: len(live.song.master_track.devices)) == 0

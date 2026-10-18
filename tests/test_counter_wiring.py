@@ -125,3 +125,33 @@ async def test_errors(client, live):
         await server.call_tool("compose", {"kind": "bass", "track": 0, "slot": 0, "counter_to": {"track": 1, "slot": 0}})
     with pytest.raises(ToolError, match="counter_mode"):
         await call(counter_to={"track": 1, "slot": 0}, counter_mode="polka")
+
+
+async def test_the_lead_track_alone_finds_its_clip(client, live):
+    # gemma: counter_to {"track": 5} for "the lead track", rejected four times for a missing slot
+    await _lead(client, track=1, slot=2)
+    change = _payload(await build_server(client).call_tool("compose", {
+        "kind": "melody", "track": 0, "slot": 0, "bars": 4, "seed": 1, "counter_to": {"track": 1}}))["changes"][0]
+    assert change["counter_to"] == "slot index 2 on track index 1"
+
+
+async def test_an_arrangement_lead_by_track_or_by_its_listed_name(client, live):
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 1, "start": 0, "length": 16, "name": "Lift Lead",
+         "notes": [{"pitch": p, "start_time": s, "duration": d} for p, s, d in LEAD]},
+        {"action": "add_clip", "track": 1, "start": 16, "length": 16, "name": "Peak Lead",
+         "notes": [{"pitch": p, "start_time": s, "duration": d} for p, s, d in LEAD]}]})
+    server = build_server(client)
+    first = _payload(await server.call_tool("compose", {
+        "kind": "melody", "track": 0, "slot": 0, "bars": 4, "seed": 1, "counter_to": {"track": 1}}))["changes"][0]
+    assert first["counter_to"] == "arrangement clip index 0 on track index 1"
+    # gemma copied the listing "1 'Peak Lead'" as the name
+    listed = _payload(await server.call_tool("compose", {
+        "kind": "melody", "track": 0, "slot": 1, "bars": 4, "seed": 1,
+        "counter_to": {"track": 1, "arrangement_clip": "1 Peak Lead"}}))["changes"][0]
+    assert listed["counter_to"] == "arrangement clip index 1 on track index 1"
+
+
+async def test_a_track_without_clips_says_so(client, live):
+    with pytest.raises(ToolError, match="has no MIDI clip to read"):
+        await build_server(client).call_tool("compose", {"kind": "melody", "track": 0, "slot": 0, "counter_to": {"track": 1}})

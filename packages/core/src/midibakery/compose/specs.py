@@ -64,13 +64,16 @@ def _one_place(spec: Any, required: bool) -> None:
 
 
 class ClipLocation(Spec):
+    """A clip to read. The track alone means its clip: a planned one, else its first Session View clip, else its
+    first arrangement clip (small models send just the track: "the lead track")."""
+
     track: TrackIndex
     slot: SlotIndex | None = None
     arrangement_clip: ArrangementClip = None
 
     @model_validator(mode="after")
     def _place(self) -> ClipLocation:
-        _one_place(self, required=True)
+        _one_place(self, required=False)
         return self
 
 
