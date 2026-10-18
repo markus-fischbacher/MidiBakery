@@ -27,6 +27,7 @@ CHAIN = ("EQ Eight", "Glue Compressor", "Limiter")
 GLUE_ATTACK_MS = (0.01, 0.1, 0.3, 1, 3, 10, 30)
 GLUE_RATIO = (2, 4, 10)
 GLUE_RELEASE = (0.1, 0.2, 0.4, 0.6, 0.8, 1.2, "auto")
+METER = "MidiBakery Loudness Meter"  # measures what reaches it: the chain goes in before it
 # A limiter or a chain of its own already on the master: MidiBakery leaves that master alone
 _LIMITERS = ("limit", "maxim", "clipper", "ozone", "pro-l", "l2")
 
@@ -75,7 +76,8 @@ class MasterPlan:
 
     @property
     def first(self) -> int:
-        return len(self.existing)
+        """Where the chain goes: before the Loudness Meter, else at the end."""
+        return next((i for i, d in enumerate(self.existing) if is_meter(d)), len(self.existing))
 
     def settings(self) -> list[tuple[str, list[tuple[str, dict[str, Any]]]]]:
         """(device, [(parameter, value or display)]) as device.set_param takes them."""
@@ -93,7 +95,8 @@ class MasterPlan:
         ]
 
     def insert_ops(self) -> list[dict[str, Any]]:
-        return [{"op": "device.insert", "params": {"master": True, "name": name}} for name in CHAIN]
+        return [{"op": "device.insert", "params": {"master": True, "name": name, "index": self.first + i}}
+                for i, name in enumerate(CHAIN)]
 
     def param_ops(self) -> list[dict[str, Any]]:
         return [{"op": "device.set_param", "params": {"master": True, "device": self.first + i, "parameter": p, **v}}
@@ -129,6 +132,10 @@ def master_devices(mixer: dict[str, Any]) -> tuple[str, ...]:
     return tuple(mixer.get("master", {}).get("devices") or ())
 
 
+def is_meter(device: str) -> bool:
+    return "loudness meter" in device.lower()
+
+
 async def build_master(call: Call, request: MasterRequest) -> MasterPlan:
     existing = master_devices(await call("mixer.get", {}))
     taken = [d for d in existing if d in CHAIN or any(w in d.lower() for w in _LIMITERS)]
@@ -137,8 +144,10 @@ async def build_master(call: Call, request: MasterRequest) -> MasterPlan:
                           "on a Master without one. Delete those devices in Live first, or adjust them yourself.",
                           {"master_devices": list(existing)})
     style = STYLES[request.genre] if request.genre else GENERIC
-    warnings = [f"The Master's {', '.join(existing)} stay(s) before the new chain"] if existing else []
-    return MasterPlan(secrets.token_hex(4), style, request.ceiling_db, existing, warnings)
+    plan = MasterPlan(secrets.token_hex(4), style, request.ceiling_db, existing)
+    if before := existing[:plan.first]:
+        plan.warnings.append(f"The Master's {', '.join(before)} stay(s) before the new chain")
+    return plan
 
 
 async def apply_master(call: Call, plan: MasterPlan) -> dict[str, Any]:

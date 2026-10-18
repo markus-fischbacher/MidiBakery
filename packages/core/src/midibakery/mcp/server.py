@@ -38,6 +38,7 @@ from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood
 from midibakery.compose.plan import Plan, new_seed
 from midibakery.compose.references import find_reference, load_references
 from midibakery.compose.master import MasterPlan, MasterRequest, apply_master, build_master
+from midibakery.compose.meter import MeterQuery, measure_master
 from midibakery.compose.song import SongPlan, SongRequest, apply_song, build_song
 from midibakery.compose.takes import TakesRequest, build_takes
 from midibakery.mcp.confirm import confirm, request_state
@@ -61,7 +62,8 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   its whole length.
 - A whole song: plan_song, then apply_plan; say which tracks it used and created.
   compose_takes puts variations of a part on take lanes to comp in Live.
-- plan_master + apply_plan: a master chain as a starting point; it cannot hear the song: claim no loudness.
+- plan_master + apply_plan: a master chain as a starting point; it cannot hear the song.
+- measure_master: the Master's LUFS; quote loudness only from it.
 - compose writes one part into the track's first free slot (if_exists for occupied ones),
   reproducible by seed. Make parts fit: bass and melody chords_from the chord clip, the bass
   follow_kick the drum clip; or plan_changes, where later steps share the first step's chords.
@@ -561,6 +563,16 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         description="Master chain for the genre (EQ Eight low cut, Glue Compressor, Limiter), a starting point. "
         "Returns a preview and a plan_id for apply_plan.",
         annotations=read_only,
+    )
+    async def run_measure_master(args: dict[str, Any], ctx: Context | None) -> Any:
+        return await measure_master(bridge.call, MeterQuery.model_validate(args))
+
+    server.add_tool(
+        _make_tool(MeterQuery, run_measure_master, free=True),
+        name="measure_master",
+        title="Measure the Master's loudness",
+        description=inspect.cleandoc(MeterQuery.__doc__ or ""),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     )
     server.add_tool(
         _make_tool(ApplyPlan, run_plan),
