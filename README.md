@@ -2,7 +2,16 @@
 
 By Klirrwerk. AI composition and session control for Ableton Live 12 Suite.
 
-See [docs/KONZEPT.md](docs/KONZEPT.md) for the concept and roadmap, and [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) for how the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together.
+## Documentation
+
+| For | Document |
+|---|---|
+| Musicians (German): install, set up, use | [docs/user/BENUTZERHANDBUCH.md](docs/user/BENUTZERHANDBUCH.md) |
+| Musicians (English) | [docs/user/USER_GUIDE.md](docs/user/USER_GUIDE.md) |
+| Concept, roadmap and what is done (German) | [docs/KONZEPT.md](docs/KONZEPT.md) |
+| How the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together (German) | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) |
+| Genre recipes behind `plan_song` (German) | [docs/GENRES.md](docs/GENRES.md) |
+| Update and license service | [services/updates/README.md](services/updates/README.md) |
 
 ## Layout
 
@@ -80,6 +89,8 @@ uv run midibakery chat --provider lmstudio --model google/gemma-4-e4b  # LM Stud
 uv run midibakery api                                   # HTTP/WebSocket API for the Max for Live devices
 ```
 
+Local models get all 37 tools too, in compact form (short schemas and results; `--small` for 8k context keeps 12 tools). LM Studio loads a model with its default context, which is too small for the tools: load it with at least 32768, `lms load <model> -c 32768`; the chat says so when the context is too small. The Chat device's model menu lists Claude and the local models it finds.
+
 Claude needs an API key: click **Key** in the chat (device or browser) or run `uv run midibakery auth set-key`. It is checked with the Claude API and stored in the macOS Keychain (service "MidiBakery") or the Windows Credential Manager, so the API that Live starts finds it too; `auth status` / `auth remove` show or delete it. `ANTHROPIC_API_KEY` and an `ant auth login` profile work as well. The API listens on
 127.0.0.1:8766 and writes its port and token to `api.json` in the MidiBakery config folder.
 
@@ -127,7 +138,7 @@ Each device's *About* button shows its version next to the API's and the Remote 
 ### Claude Code / Claude Desktop
 
 ```bash
-claude mcp add midibakery -- uv --directory /Users/maxx/Development/Ableton/MidiBakery run midibakery mcp
+claude mcp add midibakery -- uv --directory <path to this repository> run midibakery mcp
 ```
 
 ## License
