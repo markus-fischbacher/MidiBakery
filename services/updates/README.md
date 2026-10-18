@@ -18,6 +18,12 @@ their own: whoever could change files there still cannot get an installer run.
 Requests carry the installed version, the system, the architecture and the channel, and the
 installation's license token when it has one (`Authorization: License <token>`).
 
+## Status
+
+- Updates are live: `UPDATE_KEYS` in `updates.py` holds the release signing key's public half, and the Worker, the R2 bucket `midibakery-releases` and the D1 database `midibakery` exist.
+- Licensing is built but **off**: the license public key is in `wrangler.toml` (`LICENSE_PUBLIC_KEYS`), but `LICENSE_KEYS` in `license.py` is empty, so the app allows everything and shows no trial. It turns on with the first release that fills `LICENSE_KEYS` (step 3 under "One-time setup"). Still open: price, number of computers (2 is the default), merchant of record; until then keys are issued by hand (`issue_license.py`).
+- The installers are not signed yet (no certificates); the manifest signature protects the update path regardless.
+
 ## Licensing
 
 A trial (30 days) or a license key becomes a token the Worker signs (`src/tokens.js`, Ed25519) and the
