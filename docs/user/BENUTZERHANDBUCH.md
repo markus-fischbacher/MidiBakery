@@ -466,6 +466,12 @@ MidiBakery kann Live-Parameter lesen und setzen. Es **hört nichts**. Zeitliche 
   - **Reset** startet Integrated und Peak neu. Für eine Zahl zum Vergleichen: Reset, dann den ganzen Song (oder den Drop) abspielen.
   - Im Chat: „Wie laut ist der Song?“ MidiBakery liest das Gerät mit `measure_master`. Ohne das Gerät auf dem Master nennt MidiBakery keine LUFS-Zahl.
   - Die Werte sind eine gute Näherung, kein geeichtes Messgerät: Max liest die Blöcke im 100-ms-Takt seines Schedulers.
+- **Auf eine Ziel-Lautheit bringen:** „Mach den Song so laut wie House“ oder „auf -14 LUFS für Spotify“. Das braucht die Master-Kette und das Loudness Meter auf dem Master. Dann geht es in Runden:
+  1. Reset am Meter, den Song (oder mindestens 30 s vom lautesten Teil) abspielen.
+  2. MidiBakery schlägt vor, um wie viel dB es den **Input Gain** des Limiters ändert (höchstens 6 dB pro Runde), und schreibt es mit **Apply**. Ein Undo nimmt es zurück.
+  3. Das Meter fängt neu an: noch einmal abspielen, dann die nächste Runde. Liegt der Song innerhalb von 0,5 LU am Ziel, sagt MidiBakery das.
+  - Ziele: House -8, Melodic Techno -8,8, Peak-Time Techno -7,7, Drum & Bass -6,3, Trap -8,4, Streaming -14 LUFS. Es sind Mediane veröffentlichter Tracks ([GENRES.md](../GENRES.md#lautheitsziele-plan_loudness)), keine Pflicht.
+  - Lauter heißt hier: mehr Limiting. Hör auf Pumpen und flache Drums; mehr als +12 dB gibt MidiBakery dem Limiter nicht.
 
 Bei Ohren-Fragen („klingt matschig“) bekommst du Hinweise, aber keine Messung. Für genaue Analysen von Audio benutze Lives eigene Analyzer.
 
@@ -595,7 +601,7 @@ Weil Rezepte Konventionen sind. Nutze sie als Gerüst: Tausche Klänge, ändere 
 MidiBakery steuert das Set, das gerade offen und aktiv ist.
 
 **Kann ich MidiBakery auch mit Claude Desktop oder Claude Code benutzen?**
-Ja: Der MCP-Server bringt dieselben 39 Werkzeuge dorthin, siehe [Kapitel 17](#17-midibakery-aus-claude-desktop-oder-claude-code-benutzen).
+Ja: Der MCP-Server bringt dieselben 40 Werkzeuge dorthin, siehe [Kapitel 17](#17-midibakery-aus-claude-desktop-oder-claude-code-benutzen).
 
 **Wie entferne ich es?**
 Kapitel 3, „Deinstallieren“.
@@ -624,4 +630,4 @@ Kapitel 3, „Deinstallieren“.
 
 ## 17. MidiBakery aus Claude Desktop oder Claude Code benutzen
 
-Der **MCP-Server** bringt dieselben 39 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP-SERVER.md](MCP-SERVER.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).
+Der **MCP-Server** bringt dieselben 40 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP-SERVER.md](MCP-SERVER.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).
