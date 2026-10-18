@@ -74,7 +74,7 @@ class NoteIO(_Model):
 
 GENERATORS = PART_SPECS
 # Fields that only make sense against a live set.
-_SET_ONLY = {"track", "slot", "arrangement_clip", "bars", "seed", "if_exists", "clip_name", "chords_from", "follow_kick", "device", "kind", "note_ids"}
+_SET_ONLY = {"track", "slot", "arrangement_clip", "bars", "seed", "if_exists", "clip_name", "chords_from", "follow_kick", "counter_to", "device", "kind", "note_ids"}
 
 
 class GenerateRequest(_Model):

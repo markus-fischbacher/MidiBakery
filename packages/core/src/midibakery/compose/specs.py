@@ -8,9 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from midibakery.compose.bass import BassStyle, KickRelation
 from midibakery.compose.chords import ChordRhythm
+from midibakery.compose.counter import MODES as COUNTER_MODES
 from midibakery.compose.drums import DrumStyle
 from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
 from midibakery.compose.transform import ArpDirection, Operation
+
+CounterMode = Literal[COUNTER_MODES]  # type: ignore[valid-type]
+CounterRegister = Literal["above", "below", "same"]
 
 TrackIndex = Annotated[int, Field(ge=0, description="Zero-based track index")]
 SlotIndex = Annotated[int, Field(ge=0, description="0-based slot (= scene) index")]
@@ -173,10 +177,22 @@ class MelodySpec(Harmonic):
     swing: Swing = 0.0
     swing_unit: SwingUnit = "1/16"
     pattern: str | None = None
+    counter_to: ClipLocation | None = Field(None, description="Main melody clip to write a counter melody against")
+    counter_mode: CounterMode | None = None
+    counter_register: CounterRegister | None = None
 
     @model_validator(mode="after")
     def _pattern(self) -> MelodySpec:
         _check_pattern(self.pattern, lead_names(), "melody")
+        return self
+
+    @model_validator(mode="after")
+    def _counter(self) -> MelodySpec:
+        if self.counter_to is None:
+            if self.counter_mode is not None or self.counter_register is not None:
+                raise ValueError("counter_mode and counter_register need counter_to (the main melody clip)")
+        elif self.pattern:
+            raise ValueError("counter_to and pattern cannot be combined yet; omit pattern")
         return self
 
     @model_validator(mode="after")
@@ -269,6 +285,9 @@ class ComposeRequest(Generate):
     rhythm: ChordRhythm | None = Field(None, description="(chords) sustain (default), pulse, offbeat, stabs")
     voices: Literal[3, 4] | None = Field(None, description="(chords) 3 (default) or 4")
     sevenths: bool | None = Field(None, description="(chords) Seventh chords for a generated progression")
+    counter_to: ClipLocation | None = Field(None, description="(melody) Main melody clip to write a counter melody against")
+    counter_mode: CounterMode | None = Field(None, description="(melody) With counter_to: " + ", ".join(COUNTER_MODES) + "; default fill_the_gaps")
+    counter_register: CounterRegister | None = Field(None, description="(melody) With counter_to: above (default), below or same")
     low: Pitch | None = Field(None, description="(chords, melody) Lowest pitch; default 52 chords, 60 melody")
     high: Pitch | None = Field(None, description="(chords, melody) Highest pitch; default 76 chords, 84 melody")
 

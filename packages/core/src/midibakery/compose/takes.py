@@ -20,9 +20,9 @@ from midibakery.compose.harmony import Harmony
 from midibakery.compose.hook import generate_hook, make_hook
 from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.parts import generate_part
-from midibakery.compose.plan import Call, Session, new_seed
+from midibakery.compose.plan import Call, Session, _counter_main, _main_notes, new_seed
 from midibakery.compose.song import ROLE_WORDS
-from midibakery.compose.specs import PART_SPECS
+from midibakery.compose.specs import PART_SPECS, MelodySpec
 
 
 
@@ -90,7 +90,7 @@ async def _harmony(call: Call, session: Session, request: TakesRequest, start: f
         return harmony_mod.auto(scale, meter, bars, 1.0, rng), "generated"
 
 
-def _notes(request: TakesRequest, session: Session, harmony: Harmony, seed: int, pads: list[dict] | None) -> list[Note]:
+def _notes(request: TakesRequest, session: Session, harmony: Harmony, seed: int, pads: list[dict] | None, main: list[Note] | None = None) -> list[Note]:
     meter, scale, bars = session.meter, session.scale, request.bars
     rng = random.Random(seed)
     try:
@@ -102,7 +102,27 @@ def _notes(request: TakesRequest, session: Session, harmony: Harmony, seed: int,
         spec = PART_SPECS[request.kind].model_validate({"track": 0, "slot": 0, **request.params})
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", f"params: {exc}") from None
-    return generate_part(spec, harmony, scale, meter, bars, rng, map_pads(pads) if request.kind == "drums" else None)
+    try:
+        return generate_part(spec, harmony, scale, meter, bars, rng, map_pads(pads) if request.kind == "drums" else None, main=main)
+    except ValueError as exc:
+        raise BridgeError("INVALID_PARAMS", str(exc)) from None
+
+
+async def _counter(session: Session, request: TakesRequest) -> list[dict[str, Any]] | None:
+    """Notes of the main melody when params has counter_to (kind melody), else None."""
+    if request.kind != "melody" or request.params.get("counter_to") is None:
+        return None
+    params = dict(request.params)
+    location = dict(params["counter_to"]) if isinstance(params["counter_to"], dict) else params["counter_to"]
+    if isinstance(location, dict) and isinstance(location.get("arrangement_clip"), str):
+        location["arrangement_clip"] = await session.arrangement_index(int(location["track"]), location["arrangement_clip"])
+    params["counter_to"] = location
+    try:  # a clip index no real clip has: takes write no clip of their own, so "the clip itself" cannot occur
+        spec = MelodySpec.model_validate({"track": request.track, "arrangement_clip": 10**6, **params})
+    except ValueError as exc:
+        raise BridgeError("INVALID_PARAMS", f"params: {exc}") from None
+    notes, _ = await _counter_main(session, spec)
+    return notes
 
 
 async def build_takes(call: Call, request: TakesRequest) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -116,11 +136,19 @@ async def build_takes(call: Call, request: TakesRequest) -> tuple[list[dict[str,
     base = request.seed if request.seed is not None else new_seed()
     harmony, harmony_source = await _harmony(call, session, request, start, length, random.Random(f"{base}:harmony"))
     pads = await session.drum_pads(request.track) if request.kind == "drums" else None
+    main_dicts = await _counter(session, request)
+    main = _main_notes(main_dicts) if main_dicts else None
+    if main_dicts and harmony_source == "generated":  # no chords anywhere: the ones the lead implies, not a clashing loop
+        try:
+            harmony = harmony_mod.detect(main_dicts, session.scale, session.meter, request.bars, 1.0)
+            harmony_source = "derived from the main melody"
+        except ValueError:
+            pass
     actions: list[dict[str, Any]] = []
     takes = []
     for k in range(request.count):
         seed = base + k
-        notes = fit_to_length(_notes(request, session, harmony, seed, pads), length)
+        notes = fit_to_length(_notes(request, session, harmony, seed, pads, main), length)
         name = f"Take {k + 1} · {request.kind} · seed {seed}"
         actions.append({"action": "add_take_lane", "track": request.track, "name": name})
         actions.append({"action": "add_take_clip", "track": request.track, "lane": -1, "start": start, "length": length, "name": name, "notes": [n.to_spec() for n in notes]})

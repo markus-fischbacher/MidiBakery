@@ -437,7 +437,7 @@ def is_drum_track(track: dict[str, Any]) -> bool:
     return any(d.get("class_name") == "DrumGroupDevice" for d in track.get("devices", []))
 
 
-def _not_drums(session: Session, index: int) -> None:
+def _not_drums(session: Session, index: int, field: str = "chords_from", wanted: str = "the chord clip's") -> None:
     """chords_from on a drum clip detects nonsense chords; small models pick it by mistake."""
     track = session.track(index)
     if not is_drum_track(track):
@@ -449,12 +449,12 @@ def _not_drums(session: Session, index: int) -> None:
     hint = f"; MIDI tracks with clips: {', '.join(candidates)}" if candidates else ""
     raise BridgeError(
         "INVALID_PARAMS",
-        f"chords_from points to track index {index} '{track.get('name')}', a drum track (Drum Rack) without chords. "
-        f"Use the chord clip's track and slot, or omit chords_from{hint}",
+        f"{field} points to track index {index} '{track.get('name')}', a drum track (Drum Rack) without "
+        f"{'chords' if field == 'chords_from' else 'a melody'}. Use {wanted} track and slot, or omit {field}{hint}",
     )
 
 
-async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harmony:
+async def _harmony(session: Session, spec: Harmonic, rng: random.Random, main: list[dict[str, Any]] | None = None) -> Harmony:
     meter, scale = session.meter, session.scale
     try:
         if spec.progression:
@@ -474,6 +474,9 @@ async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harm
             result = result.for_length(meter, spec.bars)
         elif session.harmony is not None:
             result = session.harmony.for_length(meter, spec.bars)
+        elif main:  # a counter melody over a lead with no chords given: the chords the lead implies
+            main_bars = max(1, math.ceil(max(n["start_time"] + n["duration"] for n in main) / meter.beats_per_bar - 1e-6))
+            result = harmony_mod.detect(main, scale, meter, main_bars, spec.chords_per_bar).for_length(meter, spec.bars)
         else:
             sevenths = isinstance(spec, ChordsSpec) and spec.sevenths
             result = harmony_mod.auto(scale, meter, spec.bars, spec.chords_per_bar, rng, sevenths)
@@ -496,6 +499,29 @@ async def _kick(session: Session, location: ClipLocation, length: float) -> tupl
     onsets = kick_times(source.notes or [], kick_pitch)
     times = sorted({round(t + k * loop, 6) for k in range(int(length // loop) + 1) for t in onsets if t + k * loop < length})
     return times, {"kick_pitch": kick_pitch, "kick_hits": len(times)}
+
+
+async def _counter_main(session: Session, spec: MelodySpec) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """The main melody a counter melody answers: its notes (as Live lists them) and what the preview says about it."""
+    location = spec.counter_to
+    assert location is not None
+    where = Place.of(location)
+    if where == Place.of(spec):
+        raise BridgeError("INVALID_PARAMS", f"counter_to points to the clip being written ({where}); "
+                          "give the lead's clip and put the counter melody in another slot or track")
+    _not_drums(session, location.track, "counter_to", "the lead melody's")
+    source = await session.clip(where, include_planned=True)
+    if not source.exists or not source.is_midi:
+        raise BridgeError("NOT_FOUND", f"counter_to: no MIDI clip in {where}; give the lead's track and slot "
+                          "(or plan the lead in an earlier step)")
+    notes = [n for n in source.notes or [] if not n.get("mute")]
+    if not notes:
+        raise BridgeError("NOT_FOUND", f"counter_to: the clip in {where} has no notes to answer")
+    return notes, {"counter_to": str(where), "main_notes": len(notes)}
+
+
+def _main_notes(notes: list[dict[str, Any]]) -> list[Note]:
+    return [Note(n["pitch"], n["start_time"], n["duration"], n.get("velocity", 100.0)) for n in notes]
 
 
 def _finish(session: Session, spec: Generate, kind: str, seed: int, notes: list[Note], target: tuple, info: dict) -> ClipChange:
@@ -571,9 +597,20 @@ async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
     target = await _target(session, spec)
     seed = spec.seed if spec.seed is not None else new_seed()
     rng = random.Random(seed)
-    harmony = await _harmony(session, spec, rng)
-    notes = generate_part(spec, harmony, session.scale, session.meter, spec.bars, rng)
-    info = {"chords": harmony.describe(), "chords_source": harmony.source}
+    main, counter = (await _counter_main(session, spec)) if spec.counter_to is not None else (None, {})
+    had_chords = session.harmony is not None
+    harmony = await _harmony(session, spec, rng, main)
+    try:
+        notes = generate_part(spec, harmony, session.scale, session.meter, spec.bars, rng,
+                              main=_main_notes(main) if main else None)
+    except ValueError as exc:
+        raise BridgeError("INVALID_PARAMS", str(exc)) from None
+    info = {"chords": harmony.describe(), "chords_source": harmony.source, **counter}
+    if counter:
+        info["counter_mode"] = spec.counter_mode or "fill_the_gaps"
+        info["counter_register"] = spec.counter_register or "above"
+        if harmony.source == "clip" and main and spec.chords_from is None and not spec.progression and not had_chords:
+            info["chords_note"] = "No chords given: derived from the main melody's notes"
     if spec.pattern:
         info["pattern"] = spec.pattern
     return _finish(session, spec, "melody", seed, notes, target, info)
