@@ -47,6 +47,7 @@ You see four parts in Live:
 | **MidiBakery Chat** | the chat device: this is where you talk to the AI |
 | **MidiBakery Generator** and **MidiBakery Transform** | two tools in the clip view, without AI and without chat |
 | **MidiBakery Reference Analyzer** | analyzes a reference song |
+| **MidiBakery Loudness Meter** | measures the Master's loudness (LUFS) |
 
 ## 2. What you need
 
@@ -110,6 +111,7 @@ The devices are in the **User Library** in Live's browser (left, or search for "
 |---|---|---|
 | MidiBakery Chat | Presets > MIDI Effects > Max MIDI Effect > MidiBakery | MIDI effect |
 | MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery | audio effect |
+| MidiBakery Loudness Meter | Presets > Audio Effects > Max Audio Effect > MidiBakery | audio effect |
 | MidiBakery Generator | MIDI Tools > Max Generators | MIDI Tool |
 | MidiBakery Transform | MIDI Tools > Max Transformations | MIDI Tool |
 
@@ -453,10 +455,16 @@ MidiBakery can read and set Live parameters. It **hears nothing**. You make the 
 - **Master chain:** "Set up a master chain for house" puts EQ Eight, Glue Compressor and Limiter with the genre's settings at the end of the Master track. It is a **starting point, not a finished master**. What the devices do:
   - The EQ cuts low rumble: 30 Hz, or 20 Hz for drum & bass and trap.
   - The Glue Compressor gently "glues" the mix (2:1, attack 30 ms, release Auto). Play the loudest part and turn its **threshold** until the needle shows 1–2 dB.
-  - The Limiter catches peaks at -1 dB true peak. It does **not** make the song louder, and MidiBakery measures no loudness (LUFS).
+  - The Limiter catches peaks at -1 dB true peak. It does **not** make the song louder.
   - As with songs you get a preview first and write with **Apply**. Pressing **Undo** twice removes the chain.
   - If your Master already has a Limiter, EQ Eight or Glue Compressor, MidiBakery leaves it alone.
   - Where the settings come from: [GENRES.md](../GENRES.md#master-kette-plan_master) (German).
+- **Measuring loudness:** drag the **MidiBakery Loudness Meter** device (browser: Audio Effects › Max Audio Effect › MidiBakery) onto the Master track as its **last device**, after the Limiter. While Live plays it shows:
+  - **Momentary** (the last 0.4 s), **Short-term** (the last 3 s) and **Integrated** (everything since the start or a reset) in LUFS, after ITU-R BS.1770 / EBU R 128.
+  - **Peak**: the highest sample peak since the reset in dB. A true peak can be up to about 0.5 dB higher.
+  - **Reset** restarts Integrated and Peak. For a number to compare: reset, then play the whole song (or the drop).
+  - In the chat: "How loud is the song?" MidiBakery reads the device with `measure_master`. Without the device on the Master, MidiBakery names no LUFS figure.
+  - The values are a good approximation, not a calibrated meter: Max reads the blocks on its scheduler's 100 ms clock.
 
 For ear questions ("sounds muddy") you get hints but no measurement. For accurate audio analysis use Live's own analyzers.
 
@@ -593,4 +601,4 @@ Chapter 3, "Uninstalling".
 
 ## 16. Using MidiBakery from Claude Desktop or Claude Code
 
-The MCP server brings the same 38 tools to Claude Desktop, Claude Code and other MCP apps. You then chat in their window instead of the Chat device. The setup, a plain-language explanation and the reference of every tool are in **[MCP_SERVER.md](MCP_SERVER.md)** (German: [MCP-SERVER.md](MCP-SERVER.md)).
+The MCP server brings the same 39 tools to Claude Desktop, Claude Code and other MCP apps. You then chat in their window instead of the Chat device. The setup, a plain-language explanation and the reference of every tool are in **[MCP_SERVER.md](MCP_SERVER.md)** (German: [MCP-SERVER.md](MCP-SERVER.md)).

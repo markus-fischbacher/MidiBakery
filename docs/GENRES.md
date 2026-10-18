@@ -488,7 +488,7 @@ Gemessen in Live 12.4:
 - Glue Attack, Ratio und Release sind Stufen (roh 0–6, 0–2, 0–6).
 - Ein Batch, der Geräte einfügt und danach ihre Parameter setzt, hinterlässt zwei Undo-Schritte. `apply_plan` schreibt die Kette deshalb in zwei Batches; zwei Undo-Schritte entfernen sie.
 
-`plan_master` setzt keine Kette auf einen Master, der schon einen Limiter, einen EQ Eight oder einen Glue Compressor hat. Andere Geräte dort bleiben vor der Kette.
+`plan_master` setzt keine Kette auf einen Master, der schon einen Limiter, einen EQ Eight oder einen Glue Compressor hat. Andere Geräte dort bleiben vor der Kette; das MidiBakery Loudness Meter bleibt dahinter.
 
 **Quellen:**
 - Violet Recording (Bus-Kompressoren, Mastering-Kompressoren)
@@ -500,6 +500,22 @@ Gemessen in Live 12.4:
 - Soundbridge (Sub-Bass)
 - Richie ZXY (Mastering Drum & Bass)
 - Gearspace, schwächer belegt (808, High-Pass-Filter, Master-Bus-Kompression)
+
+
+## Lautheit messen (`measure_master`)
+
+Das Max-for-Live-Gerät **MidiBakery Loudness Meter** sitzt als letztes Gerät auf dem Master und misst nach ITU-R BS.1770-4. `measure_master` liest seine Werte.
+
+- **K-Filter:** pro Kanal zwei biquad~ (Pre-Filter als High Shelf, dann RLB-Hochpass). Die Koeffizienten berechnet `loudness.js` für die aktuelle Samplerate nach den Formeln von libebur128; bei 48 kHz sind es die Tabellenwerte aus BS.1770 (Test prüft das).
+- **Blöcke:** average~ rms über 100 ms pro Kanal, alle 100 ms gelesen. Momentary = die letzten 4 Blöcke (400 ms), Short-term = die letzten 30 (3 s), wie EBU Tech 3341 sie festlegt.
+- **Integrated:** jeder 400-ms-Block (75 % Überlappung) seit dem Reset; Gates bei -70 LUFS absolut und 10 LU unter dem ungegateten Mittel.
+- **Kalibrierung:** ein 997-Hz-Sinus mit 0 dBFS in einem Kanal ergibt -3,01 LUFS (Test mit derselben Filterkette in Node).
+- **Grenzen:** Sample-Peak statt True Peak (bis ~0,5 dB darunter). Max liest die Blöcke im Scheduler-Takt, nicht samplegenau: eine Näherung, kein geeichtes Messgerät.
+
+**Quellen:**
+- ITU-R BS.1770-4 (K-Filter, Gating, Kalibrierung)
+- EBU R 128 und EBU Tech 3341 (Momentary, Short-term, Integrated)
+- libebur128 (Koeffizienten für beliebige Sampleraten)
 
 ## Lücken
 
