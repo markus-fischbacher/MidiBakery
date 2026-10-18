@@ -510,6 +510,7 @@ Das Max-for-Live-Gerät **MidiBakery Loudness Meter** sitzt als letztes Gerät a
 - **Blöcke:** average~ rms über 100 ms pro Kanal, alle 100 ms gelesen. Momentary = die letzten 4 Blöcke (400 ms), Short-term = die letzten 30 (3 s), wie EBU Tech 3341 sie festlegt.
 - **Integrated:** jeder 400-ms-Block (75 % Überlappung) seit dem Reset; Gates bei -70 LUFS absolut und 10 LU unter dem ungegateten Mittel.
 - **Kalibrierung:** ein 997-Hz-Sinus mit 0 dBFS in einem Kanal ergibt -3,01 LUFS (Test mit derselben Filterkette in Node).
+- **In Live geprüft (Live 12.4, 48 kHz):** ein gemasterter Referenzsong (5 min, MP3) zeigte integriert -11,3 LUFS; pyloudnorm misst dieselbe Datei offline mit -11,34 LUFS.
 - **Grenzen:** Sample-Peak statt True Peak (bis ~0,5 dB darunter). Max liest die Blöcke im Scheduler-Takt, nicht samplegenau: eine Näherung, kein geeichtes Messgerät.
 
 **Quellen:**

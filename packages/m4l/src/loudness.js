@@ -86,12 +86,14 @@ class Meter {
     return lufs(mean(gated));
   }
 
-  /** Rounded readings; null where there is nothing to measure yet (or only silence). */
+  /** Rounded readings; null where there is nothing to measure yet, or only silence (below the -70 LUFS gate:
+   * the filters' tails would read as -130 LUFS). */
   reading() {
     const round = (x) => (Number.isFinite(x) ? Math.round(x * 10) / 10 : null);
+    const audible = (x) => (x > ABSOLUTE_GATE ? round(x) : null);
     return {
-      momentary_lufs: this.blocks.length >= MOMENTARY_BLOCKS ? round(lufs(mean(this.blocks.slice(-MOMENTARY_BLOCKS)))) : null,
-      short_term_lufs: this.blocks.length >= SHORT_BLOCKS ? round(lufs(mean(this.blocks))) : null,
+      momentary_lufs: this.blocks.length >= MOMENTARY_BLOCKS ? audible(lufs(mean(this.blocks.slice(-MOMENTARY_BLOCKS)))) : null,
+      short_term_lufs: this.blocks.length >= SHORT_BLOCKS ? audible(lufs(mean(this.blocks))) : null,
       integrated_lufs: round(this.integrated()),
       peak_db: round(db(this.peak)),
       short_term_peak_db: round(db(Math.max(0, ...this.peaks))),

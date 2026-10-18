@@ -1,8 +1,8 @@
 /**
  * Node for Max side of the MidiBakery Loudness Meter device (on the Master, after the Limiter).
  *
- *   samplerate <hz>         from dspstate~: answers "coeff pre|rlb a0 a1 a2 b1 b2" for the biquad~ filters
- *                           and "window <samples>" (100 ms) for average~
+ *   samplerate <hz>         from dspstate~: answers "coeff pre|rlb a0 a1 a2 b1 b2" for the biquad~ filters,
+ *                           "window <samples>" (100 ms) for average~ and "status Measuring at ..."
  *   block <rmsL> <rmsR> <peakL> <peakR>   every 100 ms (loudness.js); before the sample rate is known it
  *                           answers "needrate" (the device bangs dspstate~) and measures nothing
  *   reset                   the Reset button: integrated loudness and peak start again
@@ -93,6 +93,7 @@ async function onSampleRate(Max, rate) {
   await Max.outlet("coeff", "pre", ...pre);
   await Max.outlet("coeff", "rlb", ...rlb);
   await Max.outlet("window", Math.round(sampleRate / 10));
+  await Max.outlet("status", `Measuring at ${sampleRate / 1000} kHz. Reset, then play the song.`);
 }
 
 let Max = null;

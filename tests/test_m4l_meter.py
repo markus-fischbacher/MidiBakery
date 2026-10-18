@@ -117,7 +117,7 @@ def test_the_node_script_hands_out_coefficients_and_writes_the_reading(tmp_path)
     assert result["asked"]
     sent = result["sent"]
     assert [m[:2] for m in sent if m[0] == "coeff"] == [["coeff", "pre"], ["coeff", "rlb"]]
-    assert ["window", 4800] in sent
+    assert ["window", 4800] in sent and ["status", "Measuring at 48 kHz. Reset, then play the song."] in sent
     assert ["i", "-17.7"] in sent and ["p", "-6.0"] in sent  # 0.1 RMS in both channels: -0.691 + 10 log10(0.02)
     first = result["first"]
     assert first["sample_rate"] == 48000 and first["measured_seconds"] == 4.1 and first["integrated_lufs"] == -17.7
