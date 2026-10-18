@@ -116,6 +116,8 @@ async def _counter(session: Session, request: TakesRequest) -> list[dict[str, An
     location = dict(params["counter_to"]) if isinstance(params["counter_to"], dict) else params["counter_to"]
     if isinstance(location, dict) and isinstance(location.get("arrangement_clip"), str):
         location["arrangement_clip"] = await session.arrangement_index(int(location["track"]), location["arrangement_clip"])
+    if isinstance(location, dict) and location.get("slot") is None and location.get("arrangement_clip") is None and "track" in location:
+        location["slot"], location["arrangement_clip"] = await session.default_clip(int(location["track"]))
     params["counter_to"] = location
     try:  # a clip index no real clip has: takes write no clip of their own, so "the clip itself" cannot occur
         spec = MelodySpec.model_validate({"track": request.track, "arrangement_clip": 10**6, **params})

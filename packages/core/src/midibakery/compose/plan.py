@@ -18,6 +18,7 @@ import hashlib
 import json
 import math
 import random
+import re
 import secrets
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
@@ -166,15 +167,34 @@ class Session:
             self._arrangement[track] = found[0]["clips"] if found else []
         return self._arrangement[track]
 
+    async def default_clip(self, track: int) -> tuple[int | None, int | None]:
+        """(slot, arrangement_clip) of the clip a location with only a track means: a clip planned on it, else its
+        first Session View MIDI clip, else its first arrangement clip."""
+        planned = sorted((p for p in self.planned if p.track == track), key=lambda p: (p.in_arrangement, p.slot or 0, p.arrangement_clip or 0))
+        if planned:
+            return planned[0].slot, planned[0].arrangement_clip
+        info = self.track(track)
+        session = sorted(c["slot"] for c in info.get("clips", []) if c.get("is_midi"))
+        if session:
+            return session[0], None
+        arranged = await self._arrangement_clips(track)
+        if arranged:
+            return None, int(arranged[0]["index"])
+        raise BridgeError("NOT_FOUND", f"Track index {track} '{info.get('name')}' has no MIDI clip to read", {"track": track})
+
     async def arrangement_index(self, track: int, ref: int | str) -> int:
         """An arrangement clip given by index or by name: the exact name (any case), else the one clip whose
-        name contains it."""
+        name contains it. A name as clip listings show it ("1 'Peak Lead'", "1 Peak Lead") works too."""
         if isinstance(ref, int):
             return ref
         if ref.strip().isdigit():
             return int(ref.strip())
         clips = await self._arrangement_clips(track)
-        wanted = ref.strip().casefold()
+        listed = re.fullmatch(r"\s*(\d+)\s+['\"]?(.+?)['\"]?\s*", ref)
+        if listed and any(int(c["index"]) == int(listed[1]) and str(c.get("name", "")).strip().casefold() == listed[2].casefold()
+                          for c in clips):
+            return int(listed[1])
+        wanted = ref.strip().strip("'\"").casefold()
         exact = [c for c in clips if str(c.get("name", "")).strip().casefold() == wanted]
         found = exact or [c for c in clips if wanted in str(c.get("name", "")).casefold()]
         if len(found) == 1 or (exact and found):
@@ -698,6 +718,8 @@ async def _by_index(session: Session, spec: Any) -> Any:
     ref = getattr(spec, "arrangement_clip", None)
     if isinstance(ref, str):
         update["arrangement_clip"] = await session.arrangement_index(spec.track, ref)
+    if isinstance(spec, ClipLocation) and spec.slot is None and ref is None:
+        update["slot"], update["arrangement_clip"] = await session.default_clip(spec.track)
     return spec.model_copy(update=update) if update else spec
 
 
