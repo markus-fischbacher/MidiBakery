@@ -96,15 +96,15 @@ _VOCALS = re.compile(r"\b(vocals?|gesang|stimme|sänger\w*|singer|vox)\b", re.I)
 _LESS = re.compile(r"\b(leiser|quieter|softer|lower|decrease|reduce|senk\w*|runter)\b", re.I)
 _MUTE = re.compile(r"\b(stumm\w*|mute\w*|silen\w*)\b", re.I)
 _MORE = re.compile(r"\b(lauter|louder|higher|increase|erhöh\w*|hoch)\b", re.I)
-NO_MASTERING = ("NOT DONE: no tool masters or measures loudness (LUFS), so do not touch the master fader. "
-                "Tell the user plainly that this cannot be done with these tools; change nothing.")
+NO_MASTERING = ("NOT DONE: no tool measures loudness (LUFS) or masters to a target, so do not touch the master fader. "
+                "Say so plainly; plan_master can put a starting chain (EQ Eight, Glue Compressor, Limiter) on the Master.")
 NO_VOCALS = ("NOT DONE: this set has no vocal track, and no other track is the vocals. "
              "Tell the user there is no vocal track; change nothing.")
 
 
-def missing_thing(user_text: str, session: dict[str, Any]) -> str | None:
+def missing_thing(user_text: str, session: dict[str, Any], tool: str = "") -> str | None:
     """The refusal for a write when the user asks for mastering or for a vocal track the set lacks."""
-    if _MASTERING.search(user_text):
+    if _MASTERING.search(user_text) and tool != "apply_plan":  # plan_master's chain: the one way to master
         return NO_MASTERING
     if _VOCALS.search(user_text) and not any(
             re.search(_VOCALS, str(t.get("name", ""))) for t in session.get("tracks", [])):
@@ -217,7 +217,7 @@ class Agent:
         outcome = await self.host.call("get_session", {})
         if not outcome.structured:
             return None
-        return missing_thing(user_text, outcome.structured) or unchanged_volume(user_text, outcome.structured, call.name, call.input)
+        return missing_thing(user_text, outcome.structured, call.name) or unchanged_volume(user_text, outcome.structured, call.name, call.input)
 
     async def _new_clip_hint(self, call: ToolCall) -> str | None:
         """compose (or a plan_changes part step) that would add a clip without slot or arrangement_clip

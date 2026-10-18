@@ -106,6 +106,9 @@
   .song .names span { color: var(--dim); overflow: hidden; white-space: nowrap; text-overflow: clip; font-size: 9px; }
   .song .meta { color: var(--dim); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .song .warn { color: var(--accent); font-size: 10px; }
+  .master .clip { white-space: normal; }
+  .master .meta { color: var(--dim); font-size: 10px; }
+  .master .warn { color: var(--accent); font-size: 10px; }
   .plan .n-keep { fill: #6a6a6a; }
   .plan .n-add { fill: var(--ok); }
   .plan .n-mod { fill: var(--accent); }
@@ -331,6 +334,7 @@ function handle(ev) {
       if (ev.is_error) add("tool err", `✗ ${ev.name === "undo" && ev.source === "user" ? "Undo: " : ""}${brief(ev.result, 220)}`);
       if (ev.name === "apply_plan") planApplied(call.input.plan_id, ev.is_error);
       if (ev.name === "plan_song" && !ev.is_error && ev.result && ev.result.sections) showSong(ev.result);
+      if (ev.name === "plan_master" && !ev.is_error && ev.result && ev.result.master_chain) showMaster(ev.result);
       if (ev.name === "undo" && ev.source === "user" && !ev.is_error) add("note", "↶ Undone in Live");
       if (ev.source !== "user") showPending("Thinking");
       break;
@@ -565,6 +569,47 @@ function showSong(song) {
   };
   head.append(apply);
   plans.set(song.plan_id, { card, state, apply, done: "✓ in the Arrangement · Undo a few times to remove it" });
+}
+
+// A master chain (plan_master): one line per device with its settings, the notes, Apply.
+function showMaster(master) {
+  const card = add("plan master open", "");
+  const head = document.createElement("div");
+  head.className = "head";
+  const title = document.createElement("span");
+  title.className = "title";
+  title.textContent = `▤ Master chain · ${master.genre}`;
+  const state = document.createElement("span");
+  state.className = "state";
+  state.textContent = "preview";
+  head.append(title, state);
+  card.append(head);
+  for (const d of master.master_chain) {
+    const line = document.createElement("div");
+    line.className = "clip";
+    line.textContent = `${d.device} · ${d.settings}`;
+    card.append(line);
+  }
+  for (const text of [...(master.notes || []), ...(master.warnings || []).map((w) => `⚠ ${w}`)]) {
+    const el = document.createElement("div");
+    el.className = text.startsWith("⚠") ? "warn" : "meta";
+    el.textContent = text;
+    card.append(el);
+  }
+  const apply = document.createElement("button");
+  apply.className = "primary";
+  apply.textContent = "Apply";
+  apply.title = "Put the chain on the Master (two undo steps)";
+  apply.onclick = () => {
+    if (busy) { add("note", "Still answering - press Stop first."); return; }
+    if (!ws || ws.readyState !== 1) { add("note", "Not connected yet."); return; }
+    apply.disabled = true;
+    ws.send(JSON.stringify({ type: "tool", name: "apply_plan", input: { plan_id: master.plan_id } }));
+    setBusy(true);
+    showPending("Applying");
+  };
+  head.append(apply);
+  plans.set(master.plan_id, { card, state, apply, done: "✓ on the Master · Undo twice removes it" });
 }
 
 // One line: ▶/■ tempo · signature · scale · what plays (or starts / stops).

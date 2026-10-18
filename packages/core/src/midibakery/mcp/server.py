@@ -37,6 +37,7 @@ from midibakery.compose import (
 from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
 from midibakery.compose.plan import Plan, new_seed
 from midibakery.compose.references import find_reference, load_references
+from midibakery.compose.master import MasterPlan, MasterRequest, apply_master, build_master
 from midibakery.compose.song import SongPlan, SongRequest, apply_song, build_song
 from midibakery.compose.takes import TakesRequest, build_takes
 from midibakery.mcp.confirm import confirm, request_state
@@ -60,6 +61,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   its whole length.
 - A whole song: plan_song, then apply_plan; say which tracks it used and created.
   compose_takes puts variations of a part on take lanes to comp in Live.
+- plan_master + apply_plan: a master chain as a starting point; it cannot hear the song: claim no loudness.
 - compose writes one part into the track's first free slot (if_exists for occupied ones),
   reproducible by seed. Make parts fit: bass and melody chords_from the chord clip, the bass
   follow_kick the drum clip; or plan_changes, where later steps share the first step's chords.
@@ -482,6 +484,11 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         plans.put(song)  # type: ignore[arg-type]  # apply_plan tells songs and clip plans apart
         return song.preview()
 
+    async def plan_master(args: dict[str, Any], ctx: Context | None) -> Any:
+        master = await build_master(bridge.call, MasterRequest.model_validate(args))
+        plans.put(master)  # type: ignore[arg-type]  # apply_plan tells master plans apart too
+        return master.preview()
+
     async def run_plan(args: dict[str, Any], ctx: Context | None) -> Any:
         plan = plans.get(args["plan_id"])
         if plan is None and plans.was_applied(args["plan_id"]):
@@ -493,6 +500,11 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         if isinstance(plan, SongPlan):
             plans.pop(plan.id)
             result = await apply_song(bridge.call, plan)
+            plans.applied(plan.id)
+            return result
+        if isinstance(plan, MasterPlan):
+            plans.pop(plan.id)
+            result = await apply_master(bridge.call, plan)
             plans.applied(plan.id)
             return result
         asked = await ask_before_replacing(plan, ctx)
@@ -541,6 +553,14 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         "Returns a preview and a plan_id for apply_plan; nothing changes before that.",
         annotations=read_only,
         meta=UI_META,
+    )
+    server.add_tool(
+        _make_tool(MasterRequest, plan_master),
+        name="plan_master",
+        title="Plan a master chain",
+        description="Master chain for the genre (EQ Eight low cut, Glue Compressor, Limiter), a starting point. "
+        "Returns a preview and a plan_id for apply_plan.",
+        annotations=read_only,
     )
     server.add_tool(
         _make_tool(ApplyPlan, run_plan),
