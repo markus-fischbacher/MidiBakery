@@ -19,7 +19,7 @@ described style, so ``source`` says "described". The tutorial's sound design is 
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 from midibakery.compose.harmony import Harmony
