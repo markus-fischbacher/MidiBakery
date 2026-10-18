@@ -28,6 +28,9 @@
   .msg.user { background: var(--user); align-self: flex-end; }
   .msg.assistant { background: var(--panel); align-self: flex-start; }
   .msg.thinking { color: var(--dim); font-style: italic; align-self: flex-start; }
+  /* Click a thinking or answer to copy it (jweb in Live passes no Cmd+C). */
+  .msg.thinking, .msg.assistant { cursor: copy; }
+  .msg.copied { outline: 1px solid var(--ok); }
   .tool { color: var(--dim); font-family: Menlo, monospace; font-size: 11px; align-self: flex-start; }
   .tool.err { color: var(--err); }
   .error { color: var(--err); align-self: flex-start; }
@@ -122,6 +125,7 @@
   <button id="undo" type="button" title="Undo the last change in Live" disabled>Undo</button>
   <!-- Only while a Claude model is chosen; "Key ✓" once one is stored. -->
   <button id="keyButton" type="button" title="Claude API key" hidden>Key</button>
+  <button id="copyAll" type="button" title="Copy the whole conversation (thinking, tool calls, answers) to the clipboard">Copy</button>
   <button id="reset" type="button" title="Forget the conversation">New</button>
 </header>
 <div id="live" hidden title="What Live is doing"></div>
@@ -705,6 +709,53 @@ $("undo").onclick = () => {
   setBusy(true);
   showPending("Undoing");
 };
+// Copying: jweb gets no keystrokes, so Cmd+C cannot copy a selection inside Live.
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) {  // no Clipboard API (or no permission): the old way through a selected textarea
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) {}
+    area.remove();
+    return ok;
+  }
+}
+
+const TRANSCRIPT_LABELS = [[".msg.user", "User"], [".msg.thinking", "Thinking"], [".msg.assistant", "Assistant"], [".error", "Error"]];
+
+function transcript() {
+  const lines = [];
+  for (const el of log.children) {
+    if (el === pending.el) continue;
+    const label = TRANSCRIPT_LABELS.find(([selector]) => el.matches(selector));
+    const text = el.innerText.trim();
+    if (text) lines.push(label ? `${label[1]}: ${text}` : text);
+  }
+  return lines.join("\n\n");
+}
+
+$("copyAll").onclick = async () => {
+  const ok = await copyText(transcript());
+  $("copyAll").textContent = ok ? "Copied ✓" : "Copy failed";
+  setTimeout(() => { $("copyAll").textContent = "Copy"; }, 1500);
+};
+
+log.addEventListener("click", async (event) => {
+  const msg = event.target.closest(".msg.thinking, .msg.assistant");
+  if (!msg || String(window.getSelection())) return;  // leave a browser text selection alone
+  if (await copyText(msg.textContent)) {
+    msg.classList.add("copied");
+    setTimeout(() => msg.classList.remove("copied"), 800);
+  }
+});
+
 $("reset").onclick = () => ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "reset" }));
 function setChoice(next) {
   if (!next || sameChoice(next, choice)) return;
