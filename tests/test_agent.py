@@ -790,6 +790,7 @@ def test_mastering_and_a_missing_vocal_track_are_refused():
     assert missing_thing("Master den Song auf -14 LUFS.", SET_WITH_HATS) == NO_MASTERING
     # plan_master's chain is the way to master: its apply_plan goes through
     assert missing_thing("Master den Song.", SET_WITH_HATS, "apply_plan") is None
+    assert missing_thing("Wie viele LUFS hat der Song?", SET_WITH_HATS, "measure_master") is None
     assert missing_thing("Make the vocals louder.", SET_WITH_HATS) == NO_VOCALS
     assert missing_thing("Make the vocals louder.", {"tracks": [{"name": "Lead Vocals"}]}) is None
     assert missing_thing("Mach die Hats leiser.", SET_WITH_HATS) is None

@@ -13,7 +13,7 @@ def _payload(result):
 async def test_tool_list_is_small_and_annotated():
     server = build_server()
     tools = {t.name: t for t in await server.list_tools()}
-    assert len(tools) <= 38  # the real guard is the character budget in test_agent (local models)
+    assert len(tools) <= 39  # the real guard is the character budget in test_agent (local models)
     assert tools["get_session"].annotations.read_only_hint is True
     assert tools["delete_track"].annotations.destructive_hint is True
     assert "note_id" in json.dumps(tools["edit_notes"].input_schema)

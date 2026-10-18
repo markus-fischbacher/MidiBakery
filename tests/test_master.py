@@ -105,3 +105,53 @@ async def test_device_ops_take_the_master(client, live):
 def test_every_genre_has_a_master_style_on_glue_steps():
     assert set(STYLES) == {"house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"}
     assert all(s.glue_attack_ms in GLUE_ATTACK_MS and s.ceiling_db == -1.0 for s in STYLES.values())
+
+
+def _drag_meter(live):
+    """The user drags the Max device onto the Master (device.insert takes only Live's own devices)."""
+    from fake_live.fake_song import Device
+    live.on_main(lambda: live.song.master_track.devices.append(Device("MidiBakery Loudness Meter")))
+
+
+async def test_the_chain_goes_in_before_the_loudness_meter(client, live):
+    server = build_server(client)
+    _drag_meter(live)
+    preview = _payload(await server.call_tool("plan_master", {"genre": "house"}))
+    assert not preview["warnings"]
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    assert _master_names(live) == ["EQ Eight", "Glue Compressor", "Limiter", "MidiBakery Loudness Meter"]
+    assert _shown(live, 2)["Mode"] == "True Peak"
+
+
+def _reading(home, seconds_ago=0.0, **values):
+    from datetime import datetime, timedelta, timezone
+    updated = datetime.now(timezone.utc) - timedelta(seconds=seconds_ago)
+    reading = {"momentary_lufs": -8.2, "short_term_lufs": -8.9, "integrated_lufs": -9.4, "peak_db": -1.1,
+               "short_term_peak_db": -1.3, "measured_seconds": 182.5, "sample_rate": 48000,
+               "updated": updated.isoformat().replace("+00:00", "Z"), **values}
+    (home / "meter.json").write_text(json.dumps(reading))
+
+
+async def test_measure_master_reads_the_meter(client, live, bridge_env):
+    server = build_server(client)
+    with pytest.raises(ToolError, match="No MidiBakery Loudness Meter on the Master"):
+        await server.call_tool("measure_master", {})
+    _drag_meter(live)
+    with pytest.raises(ToolError, match="has not measured"):
+        await server.call_tool("measure_master", {})
+    _reading(bridge_env)
+    measured = _payload(await server.call_tool("measure_master", {}))
+    assert measured["integrated_lufs"] == -9.4 and measured["peak_db"] == -1.1 and measured["measuring"]
+    assert not measured["warnings"]
+    _reading(bridge_env, seconds_ago=20)
+    stopped = _payload(await server.call_tool("measure_master", {}))
+    assert not stopped["measuring"] and "stopped 20 s ago" in stopped["warnings"][0]
+
+
+async def test_measure_master_reset_and_a_meter_that_is_not_last(client, live, bridge_env):
+    server = build_server(client)
+    _drag_meter(live)
+    await client.call("device.insert", {"master": True, "name": "Limiter"})
+    reset = _payload(await server.call_tool("measure_master", {"reset": True}))
+    assert reset["reset"] and (bridge_env / "meter-reset").exists()
+    assert "does not hear Limiter" in reset["warnings"][0]
