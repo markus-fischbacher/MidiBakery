@@ -61,26 +61,35 @@ def new_seed() -> int:
 
 @dataclass(frozen=True)
 class Place:
-    """A clip a step reads or writes: a Session View slot or an Arrangement clip (by index on its track)."""
+    """A clip a step reads or writes: a Session View slot, an Arrangement clip (by index on its track), or a new
+    Arrangement clip at a beat (a counter melody next to an arrangement lead)."""
 
     track: int
     slot: int | None = None
     arrangement_clip: int | None = None
+    start: float | None = None
 
     @classmethod
     def of(cls, spec: Any) -> Place:
+        at = getattr(spec, "_at", None)
+        if at is not None:
+            return cls(spec.track, start=at[0])
         return cls(spec.track, spec.slot, getattr(spec, "arrangement_clip", None))
 
     @property
     def in_arrangement(self) -> bool:
-        return self.arrangement_clip is not None
+        return self.arrangement_clip is not None or self.start is not None
 
     def params(self) -> dict[str, Any]:
+        if self.start is not None:
+            return {"track": self.track, "start": self.start}
         if self.in_arrangement:
             return {"track": self.track, "arrangement_clip": self.arrangement_clip}
         return {"track": self.track, "slot": self.slot}
 
     def __str__(self) -> str:
+        if self.start is not None:
+            return f"a new arrangement clip at beat {self.start:g} on track index {self.track}"
         if self.in_arrangement:
             return f"arrangement clip index {self.arrangement_clip} on track index {self.track}"
         return f"slot index {self.slot} on track index {self.track}"
@@ -139,6 +148,9 @@ class Session:
             return self.planned[key]
         if key in self._clips:
             return self._clips[key]
+        if place.start is not None:  # build_plan checked that nothing lies there
+            info = self.track(place.track)
+            return ClipState(False, track=(info.get("id"), info.get("name"), info.get("kind")))
         if place.in_arrangement:
             state = await self._arrangement_clip(place)
             self._clips[key] = state
@@ -166,6 +178,13 @@ class Session:
             found = (await self._call("arrangement.get", {"track": track}))["tracks"]
             self._arrangement[track] = found[0]["clips"] if found else []
         return self._arrangement[track]
+
+    async def arrangement_tracks(self) -> list[dict[str, Any]]:
+        """Every track's arrangement clips, in one read."""
+        tracks = (await self._call("arrangement.get", {}))["tracks"]
+        for t in tracks:
+            self._arrangement.setdefault(t["index"], t["clips"])
+        return tracks
 
     async def default_clip(self, track: int) -> tuple[int | None, int | None]:
         """(slot, arrangement_clip) of the clip a location with only a track means: a clip planned on it, else its
@@ -284,6 +303,7 @@ class ClipChange:
         """Everything a piano-roll view needs to draw before and after, untruncated."""
         return {
             **self.place.params(),
+            **({"bar": self.info["bar"]} if "bar" in self.info else {}),
             "kind": self.kind,
             "length": self.length,
             "existing": [
@@ -301,6 +321,9 @@ class ClipChange:
 
     def ops(self) -> list[dict[str, Any]]:
         ops: list[dict[str, Any]] = []
+        if self.create and self.place.start is not None:
+            clip = {"action": "add_clip", **self.create, "notes": [n.to_spec() for n in self.add]}
+            return [{"op": "arrangement.edit", "params": {"actions": [clip]}}]
         if self.create:
             ops.append({"op": "clip.create", "params": self.create})
         if self.edits_notes:
@@ -434,6 +457,8 @@ async def _target(session: Session, spec: Generate) -> tuple[ClipState, float, d
     state = await session.clip(place)
     assert spec.bars is not None  # build_plan fills it in
     length = session.meter.beats_per_bar * spec.bars
+    if spec._at is not None:
+        length = spec._at[1]
     if state.planned:
         raise BridgeError("INVALID_PARAMS", f"The clip in {place} is already written by an earlier step of this plan")
     if not state.exists:
@@ -613,13 +638,51 @@ async def _plan_chords(session: Session, spec: ChordsSpec) -> ClipChange:
     return _finish(session, spec, "chords", seed, notes, target, info)
 
 
+async def _arranged_harmony(session: Session, spec: MelodySpec, main: list[dict[str, Any]]) -> tuple[Harmony, str]:
+    """The chords under a counter clip in the Arrangement: those of the chord/pad/keys clip playing there, else the
+    ones the lead clip implies. Each counter clip gets its own (a song's sections change chords)."""
+    from midibakery.compose.song import ROLE_WORDS  # song imports this module
+
+    assert spec._at is not None and spec.bars is not None and spec.counter_to is not None
+    start, length = spec._at
+    meter, scale = session.meter, session.scale
+    for track in await session.arrangement_tracks():
+        info = session.track(track["index"])
+        if (track["index"] in (spec.track, spec.counter_to.track) or is_drum_track(info)
+                or not any(w in str(info.get("name", "")).lower() for w in ROLE_WORDS["chords"])):
+            continue
+        for clip in track["clips"]:
+            if not clip.get("is_midi") or not (clip["start"] < start + length - 1e-6 and start < clip["end"] - 1e-6):
+                continue
+            notes = (await session._call("notes.get", {"track": track["index"], "arrangement_clip": clip["index"]}))["notes"]
+            offset = start - clip["start"]
+            window = [{**n, "start_time": n["start_time"] - offset} for n in notes
+                      if not n.get("mute") and n["start_time"] + n["duration"] > offset and n["start_time"] < offset + length]
+            try:
+                harmony = harmony_mod.detect(window, scale, meter, spec.bars, spec.chords_per_bar)
+            except ValueError:
+                continue
+            return harmony, f"'{clip.get('name') or 'clip'}' on track index {track['index']}"
+    main_bars = max(1, math.ceil(max(n["start_time"] + n["duration"] for n in main) / meter.beats_per_bar - 1e-6))
+    try:
+        harmony = harmony_mod.detect(main, scale, meter, main_bars, spec.chords_per_bar).for_length(meter, spec.bars)
+    except ValueError as exc:
+        raise BridgeError("INVALID_PARAMS", str(exc)) from None
+    return harmony, "derived from the lead clip's notes"
+
+
 async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
     target = await _target(session, spec)
     seed = spec.seed if spec.seed is not None else new_seed()
     rng = random.Random(seed)
     main, counter = (await _counter_main(session, spec)) if spec.counter_to is not None else (None, {})
     had_chords = session.harmony is not None
-    harmony = await _harmony(session, spec, rng, main)
+    arranged = main and spec._at is not None and not spec.progression and spec.chords_from is None
+    if arranged:
+        harmony, counter["chords_from"] = await _arranged_harmony(session, spec, main)
+        counter["bar"] = round(spec._at[0] / session.meter.beats_per_bar + 1, 2)
+    else:
+        harmony = await _harmony(session, spec, rng, main)
     try:
         notes = generate_part(spec, harmony, session.scale, session.meter, spec.bars, rng,
                               main=_main_notes(main) if main else None)
@@ -629,7 +692,7 @@ async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
     if counter:
         info["counter_mode"] = spec.counter_mode or "fill_the_gaps"
         info["counter_register"] = spec.counter_register or "above"
-        if harmony.source == "clip" and main and spec.chords_from is None and not spec.progression and not had_chords:
+        if harmony.source == "clip" and main and spec.chords_from is None and not spec.progression and not had_chords and not arranged:
             info["chords_note"] = "No chords given: derived from the main melody's notes"
     if spec.pattern:
         info["pattern"] = spec.pattern
@@ -692,7 +755,7 @@ _PLANNERS = {
 async def _resolve(session: Session, step: Generate, targets: set[Place]) -> Generate:
     """The defaults that depend on Live: the first free slot, and the length (4 bars, or the arrangement clip's)."""
     update: dict[str, Any] = {}
-    if step.slot is None and step.arrangement_clip is None:
+    if step.slot is None and step.arrangement_clip is None and step._at is None:
         update["slot"] = session.free_slot(step.track, targets)
     if step.bars is None:
         bars = 4
@@ -723,13 +786,82 @@ async def _by_index(session: Session, spec: Any) -> Any:
     return spec.model_copy(update=update) if update else spec
 
 
+def _counter_name(lead: str) -> str:
+    """'Breakdown Lead' -> 'Breakdown Counter'."""
+    for word in ("Lead", "lead", "Melody", "melody"):
+        if word in lead:
+            return lead.replace(word, "Counter", 1)
+    return f"{lead} Counter".strip()
+
+
+async def _arranged_counter(session: Session, step: Spec) -> list[Spec]:
+    """A counter melody to a lead in the Arrangement, without a slot or arrangement clip to write to: one new clip
+    per lead clip, at the same beat and length on the step's track ("a counter melody to the Breakdown Lead clips,
+    in a new track"). A clip name means every clip of that name; the track alone, all its clips. Other steps as they are."""
+    if (not isinstance(step, MelodySpec) or step.counter_to is None or step.slot is not None
+            or step.arrangement_clip is not None or step.counter_to.slot is not None):
+        return [step]
+    lead = step.counter_to
+    ref = lead.arrangement_clip
+    clips = [c for c in await session._arrangement_clips(lead.track) if c.get("is_midi")]
+    if ref is None:
+        if not clips or any(p.track == lead.track for p in session.planned) or any(
+                c.get("is_midi") for c in session.track(lead.track).get("clips", [])):
+            return [step]  # a Session View lead: answered in a slot
+        chosen = clips
+    elif isinstance(ref, str) and not ref.strip().isdigit() and not re.fullmatch(r"\s*\d+\s+.+", ref):
+        wanted = ref.strip().strip("'\"").casefold()
+        chosen = ([c for c in clips if str(c.get("name", "")).strip().casefold() == wanted]
+                  or [c for c in clips if wanted in str(c.get("name", "")).casefold()])
+        if not chosen:
+            await session.arrangement_index(lead.track, ref)  # says which clips there are
+    else:
+        index = await session.arrangement_index(lead.track, ref)
+        chosen = [c for c in clips if int(c["index"]) == index]
+        if not chosen:
+            return [step]  # an audio clip or none: _counter_main says so
+    if step.track == lead.track:
+        raise BridgeError("INVALID_PARAMS", "The counter melody needs its own track: the lead's clips lie at those "
+                          "bars. Create a MIDI track (or name another one) and give its index as track")
+    bpb = session.meter.beats_per_bar
+    existing = await session._arrangement_clips(step.track)
+    steps: list[Spec] = []
+    for k, clip in enumerate(chosen):
+        start, end = float(clip["start"]), float(clip["end"])
+        bars = max(1, math.ceil(round((end - start) / bpb, 6)))
+        if bars > 64:
+            raise BridgeError("INVALID_PARAMS", f"The lead clip '{clip.get('name')}' is {bars} bars long; a counter "
+                              "melody answers at most 64 bars at a time")
+        update: dict[str, Any] = {
+            "counter_to": ClipLocation(track=lead.track, arrangement_clip=int(clip["index"])),
+            "bars": bars,
+            "clip_name": step.clip_name or _counter_name(str(clip.get("name") or "Lead")),
+            "seed": None if step.seed is None else step.seed + k,
+        }
+        same = next((c for c in existing if abs(c["start"] - start) < 1e-6 and abs(c["end"] - end) < 1e-6
+                     and c.get("name") == update["clip_name"]), None)
+        overlap = [c for c in existing if c["start"] < end - 1e-6 and start < c["end"] - 1e-6]
+        if same is not None and len(overlap) == 1:  # this counter clip, written before: new notes (asks first)
+            steps.append(step.model_copy(update={**update, "arrangement_clip": int(same["index"])}))
+            continue
+        if overlap:
+            names = ", ".join(f"'{c.get('name', '')}' at bar {c['start'] / bpb + 1:g}" for c in overlap[:4])
+            raise BridgeError("CONFLICT", f"Track index {step.track} already has clips at bars {start / bpb + 1:g}-"
+                              f"{end / bpb + 1:g} ({names}); use an empty track for the counter melody")
+        new = step.model_copy(update=update)
+        new._at = (start, end - start)
+        steps.append(new)
+    return steps
+
+
 async def build_plan(call: Call, steps: list[Spec]) -> Plan:
     if not steps:
         raise BridgeError("INVALID_PARAMS", "A plan needs at least one step")
     session = await Session(call).load()
     changes = []
     targets: set[Place] = set()
-    for step in steps:
+    expanded = [part for step in steps for part in await _arranged_counter(session, step)]
+    for step in expanded:
         step = await _by_index(session, step)
         if isinstance(step, Generate):
             step = await _resolve(session, step, targets)

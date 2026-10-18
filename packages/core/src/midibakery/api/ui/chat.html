@@ -446,7 +446,7 @@ function showPlan(ev) {
     const change = summary[i] || {};
     const line = document.createElement("div");
     line.className = "clip";
-    const where = clip.arrangement_clip != null ? `arrangement clip ${clip.arrangement_clip + 1}` : `slot ${clip.slot + 1}`;
+    const where = clip.start != null ? `Arrangement bar ${clip.bar ?? clip.start}` : clip.arrangement_clip != null ? `arrangement clip ${clip.arrangement_clip + 1}` : `slot ${clip.slot + 1}`;
     const bits = [`Track ${clip.track + 1} · ${where} · ${clip.kind}`, change.action,
       `+${(clip.add || []).length} ~${(clip.modify || []).length} −${(clip.remove || []).length}`];
     if (change.chords) bits.push(change.chords.join(" – "));

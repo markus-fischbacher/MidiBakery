@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from midibakery.compose.bass import BassStyle, KickRelation
 from midibakery.compose.chords import ChordRhythm
@@ -94,6 +94,8 @@ class Generate(Spec):
         "An arrangement clip always exists: its notes are replaced unless 'merge'",
     )
     clip_name: str | None = None
+    # (start beat, length) of a new arrangement clip this step creates: counter melodies to arrangement leads
+    _at: tuple[float, float] | None = PrivateAttr(None)
 
     @model_validator(mode="after")
     def _place(self) -> Generate:
@@ -180,7 +182,7 @@ class MelodySpec(Harmonic):
     swing: Swing = 0.0
     swing_unit: SwingUnit = "1/16"
     pattern: str | None = None
-    counter_to: ClipLocation | None = Field(None, description="Main melody clip to write a counter melody against")
+    counter_to: ClipLocation | None = Field(None, description="Main melody clip to answer; a lead in the Arrangement (arrangement_clip: a name like 'Breakdown Lead' means all such clips) gets counter clips at the same bars on track")
     counter_mode: CounterMode | None = None
     counter_register: CounterRegister | None = None
 
@@ -288,7 +290,7 @@ class ComposeRequest(Generate):
     rhythm: ChordRhythm | None = Field(None, description="(chords) sustain (default), pulse, offbeat, stabs")
     voices: Literal[3, 4] | None = Field(None, description="(chords) 3 (default) or 4")
     sevenths: bool | None = Field(None, description="(chords) Seventh chords for a generated progression")
-    counter_to: ClipLocation | None = Field(None, description="(melody) Main melody clip to write a counter melody against")
+    counter_to: ClipLocation | None = Field(None, description="(melody) Main melody clip to answer; a lead in the Arrangement (arrangement_clip: a name like 'Breakdown Lead' means all such clips) gets counter clips at the same bars on track")
     counter_mode: CounterMode | None = Field(None, description="(melody) With counter_to: " + ", ".join(COUNTER_MODES) + "; default fill_the_gaps")
     counter_register: CounterRegister | None = Field(None, description="(melody) With counter_to: above (default), below or same")
     low: Pitch | None = Field(None, description="(chords, melody) Lowest pitch; default 52 chords, 60 melody")

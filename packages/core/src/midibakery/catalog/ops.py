@@ -68,7 +68,7 @@ class SongSet(Params):
     tempo: Annotated[float, Field(ge=20, le=999)] | None = None
     signature_numerator: Annotated[int, Field(ge=1, le=99)] | None = None
     signature_denominator: Literal[1, 2, 4, 8, 16] | None = None
-    root_note: Annotated[int, Field(ge=0, le=11, description="0 = C ... 11 = B")] | None = None
+    root_note: Annotated[int, Field(ge=0, le=11, description="0 = C ... 11 = B; a minor key also needs scale_name 'Minor' (E minor: 4 + 'Minor')")] | None = None
     scale_name: str | None = Field(None, description="Live scale name, e.g. 'Major', 'Minor', 'Dorian'")
     scale_mode: bool | None = Field(None, description="Enable Live's Scale Mode highlighting/folding")
     metronome: bool | None = None

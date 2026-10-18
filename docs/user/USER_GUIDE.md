@@ -339,6 +339,8 @@ Everything is **in the key and time signature of your set**. So set key (*Scale*
 
 A second melody that answers a lead you already have. Ask: *"Write a counter melody to the lead in slot 1 of track 2"*. It goes into a new clip, the lead stays as it is. Without chords given, they are taken from the lead's notes. The lead can also be a clip planned earlier in the same request.
 
+A lead in the Arrangement, as `plan_song` writes it: ask *"Write a counter melody to the Breakdown Lead clips on a new MIDI track"*. Every clip of that name gets a counter clip at the same bars and length on the other track (named *Breakdown Counter*), each over the chords of the chord or pad clip playing there. The lead track alone answers the whole song. Asking again gives those clips new notes instead of a second layer.
+
 Modes (say them in words, default is the first):
 
 - **fill_the_gaps**: plays only where the lead holds a note or rests.
