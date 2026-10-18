@@ -34,6 +34,7 @@ from midibakery.compose import (
     apply_plan,
     build_plan,
 )
+from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
 from midibakery.compose.plan import Plan, new_seed
 from midibakery.compose.references import find_reference, load_references
 from midibakery.compose.song import SongPlan, SongRequest, apply_song, build_song
@@ -116,7 +117,9 @@ COMPOSE_TOOLS: list[tuple[str, type[BaseModel], str, str]] = [
         "Write one part as a new MIDI clip in the song scale and time signature. kind drums: pattern on the track's "
         "Drum Rack pads (found by name, General MIDI fallback); bass: follows the chords and can lock to or avoid a "
         "drum clip's kick (follow_kick); chords: voice-led, a functional progression unless given one; melody: motifs "
-        "(A A' A B), chord tones on strong beats. Fields tagged (kind) are only for those kinds.",
+        "(A A' A B), chord tones on strong beats. Fields tagged (kind) are only for those kinds. "
+        "pattern replaces style/progression with a named one: drums " + ", ".join(drum_names()) + "; bass " + ", ".join(bass_names())
+        + "; melody " + ", ".join(lead_names()) + "; chords (emotion) " + ", ".join(mood_names()) + ".",
     ),
     (
         "transform_notes",

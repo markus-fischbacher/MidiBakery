@@ -12,6 +12,7 @@ By Klirrwerk. AI composition and session control for Ableton Live 12 Suite.
 | Concept, roadmap and what is done (German) | [docs/KONZEPT.md](docs/KONZEPT.md) |
 | How the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together (German) | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) |
 | Genre recipes behind `plan_song` (German) | [docs/GENRES.md](docs/GENRES.md) |
+| Named patterns for `compose` (bass, lead, techno drums, emotion progressions) | [docs/PATTERNS.md](docs/PATTERNS.md) |
 | Update and license service | [services/updates/README.md](services/updates/README.md) |
 
 ## Layout

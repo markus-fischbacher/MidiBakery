@@ -123,6 +123,21 @@ async def test_compose_checks_the_fields_of_its_kind(client):
     assert notes and all(48 <= n["pitch"] <= 62 for n in notes)  # the kind's own fields reach its generator
 
 
+async def test_compose_with_named_patterns(client):
+    server = build_server(client)
+    chords = _payload(await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 1, "pattern": "pure_joy", "bars": 4}))
+    assert chords["changes"][0]["kind"] == "chords"
+    bass = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "slot": 1, "seed": 1, "pattern": "rolling_16", "bars": 4}))
+    assert bass["changes"][0]["kind"] == "bass"
+    notes = (await client.call("notes.get", {"track": 1, "slot": 1}))["notes"]
+    assert notes and all(n["pitch"] <= 60 for n in notes)  # the bass follows the chords of the mood
+    lead = _payload(await server.call_tool("compose", {"kind": "melody", "track": 1, "slot": 2, "seed": 1, "pattern": "gated_vocal", "bars": 4}))
+    assert lead["changes"][0]["kind"] == "melody"
+    with pytest.raises(ToolError) as exc:
+        await server.call_tool("compose", {"kind": "bass", "track": 1, "slot": 3, "pattern": "no_such"})
+    assert "rolling_16" in str(exc.value)  # the error names the valid patterns
+
+
 async def test_plan_changes_schema_stays_small_but_steps_are_still_checked(client):
     server = build_server(client)
     tools = {t.name: t for t in await server.list_tools()}
