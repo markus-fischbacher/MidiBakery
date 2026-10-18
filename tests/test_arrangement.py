@@ -204,3 +204,65 @@ async def test_automation_of_an_unknown_parameter_changes_nothing(client, live):
     assert exc.value.code == "NOT_FOUND" and "Cutoff" in str(exc.value)
     track = live.on_main(lambda: live.song.tracks[0])
     assert live.on_main(lambda: (len(track.arrangement_clips), sum(s.has_clip for s in track.clip_slots))) == (0, 1)
+
+
+async def test_swap_and_move_arrangement_clips(client, live):
+    # "swap Intro Bass and Drop Bass": a model rebuilt both clips by hand and failed four times
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 0, "start": 0, "length": 16, "name": "Intro Bass", "notes": [KICK]},
+        {"action": "add_clip", "track": 0, "start": 16, "length": 8, "name": "Break"},
+        {"action": "add_clip", "track": 0, "start": 32, "length": 16, "name": "Drop Bass", "notes": [{**KICK, "pitch": 45}, {**KICK, "start_time": 2.0}]},
+    ]})
+    await client.call("arrangement.edit", {"actions": [{"action": "swap_clips", "track": 0, "clip": 2, "with_clip": 0}]})
+    clips = (await client.call("arrangement.get", {}))["tracks"][0]["clips"]
+    assert [(c["name"], c["start"], c["end"]) for c in clips] == [("Drop Bass", 0.0, 16.0), ("Break", 16.0, 24.0), ("Intro Bass", 32.0, 48.0)]
+    notes = (await client.call("notes.get", {"track": 0, "arrangement_clip": 0}))["notes"]
+    assert sorted((n["pitch"], n["start_time"]) for n in notes) == [(36, 2.0), (45, 0.0)]
+
+    await client.call("arrangement.edit", {"actions": [{"action": "move_clip", "track": 0, "clip": 1, "start": 24}]})
+    clips = (await client.call("arrangement.get", {}))["tracks"][0]["clips"]
+    assert [(c["name"], c["start"]) for c in clips] == [("Drop Bass", 0.0), ("Break", 24.0), ("Intro Bass", 32.0)]
+    # a move onto another clip changes nothing
+    with pytest.raises(BridgeError, match="already 'Intro Bass'"):
+        await client.call("arrangement.edit", {"actions": [{"action": "move_clip", "track": 0, "clip": 1, "start": 30}]})
+    assert len((await client.call("arrangement.get", {}))["tracks"][0]["clips"]) == 3
+    # clips of different lengths that would overlap after a swap: nothing is lifted
+    with pytest.raises(BridgeError, match="already 'Intro Bass'"):  # Drop Bass at 24-40
+        await client.call("arrangement.edit", {"actions": [{"action": "swap_clips", "track": 0, "clip": 1, "with_clip": 0}]})
+    assert [c["name"] for c in (await client.call("arrangement.get", {}))["tracks"][0]["clips"]] == ["Drop Bass", "Break", "Intro Bass"]
+
+
+def test_delete_clip_takes_arrangement_clip_like_every_other_tool():
+    edit = ArrangementEdit.model_validate({"actions": [{"action": "delete_clip", "track": 0, "arrangement_clip": 1}]})
+    assert edit.model_dump()["actions"][0]["clip"] == 1
+
+
+async def test_run_batch_takes_arrangement_actions(client, live):
+    # gemma sent {"action": "move_clip", ...} as run_batch ops five times in a row
+    from midibakery.mcp.server import build_server
+
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 0, "start": 0, "length": 16, "name": "Intro Bass"},
+        {"action": "add_clip", "track": 0, "start": 32, "length": 16, "name": "Drop Bass"},
+    ]})
+    await build_server(client).call_tool("run_batch", {"ops": [
+        {"action": "move_clip", "track": 0, "clip": 1, "start": 64},
+        {"action": "move_clip", "track": 0, "arrangement_clip": 0, "start": 32},
+        {"action": "move_clip", "track": 0, "clip": 1, "start": 0},
+    ]})
+    clips = (await client.call("arrangement.get", {}))["tracks"][0]["clips"]
+    assert [(c["name"], c["start"]) for c in clips] == [("Drop Bass", 0.0), ("Intro Bass", 32.0)]
+
+
+async def test_clip_ops_take_arrangement_clips_by_name(client):
+    # qwen: get_clip {"arrangement_clip": "Breakdown Bass"}, like compose and transform_notes take it
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 0, "start": 0, "length": 4, "name": "Intro Bass"},
+        {"action": "add_clip", "track": 0, "start": 8, "length": 4, "name": "Drop Bass"},
+    ]})
+    await client.call("clip.set", {"track": 0, "arrangement_clip": "drop bass", "name": "Main Bass"})
+    assert (await client.call("clip.get", {"track": 0, "arrangement_clip": "Main"}))["start_time"] == 8.0
+    await client.call("batch", {"ops": [{"op": "clip.delete", "params": {"track": 0, "arrangement_clip": "Intro Bass"}}]})
+    assert [c["name"] for c in (await client.call("arrangement.get", {}))["tracks"][0]["clips"]] == ["Main Bass"]
+    with pytest.raises(BridgeError, match="No arrangement clip named 'Outro'.*0 'Main Bass'"):
+        await client.call("clip.get", {"track": 0, "arrangement_clip": "Outro"})

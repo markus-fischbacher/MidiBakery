@@ -329,8 +329,20 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         if op == "track.delete":
             clips = len(track.get("clips", []))
             return f"Delete {track_name} with {clips} clip(s)?"
-        if params.get("arrangement_clip") is not None:
-            return f"Delete arrangement clip {params['arrangement_clip'] + 1} of {track_name}?"
+        ref = params.get("arrangement_clip")
+        if ref is not None:
+            # by index or by name ('Intro Kick'): name it as the user sees it
+            try:
+                clips = (await bridge.call("arrangement.get", {"track": params["track"]}))["tracks"][0]["clips"]
+            except (BridgeError, KeyError, IndexError):
+                clips = []
+            wanted = str(ref).strip().casefold()
+            clip = next((c for c in clips if c["index"] == ref or str(c.get("name", "")).strip().casefold() == wanted), None)
+            if clip is None:
+                clip = next((c for c in clips if isinstance(ref, str) and wanted in str(c.get("name", "")).casefold()), None)
+            if clip is None:
+                return f"Delete arrangement clip {ref!r} of {track_name}?"
+            return f"Delete arrangement clip '{clip.get('name') or 'unnamed'}' (index {clip['index']}) of {track_name}?"
         clip = next((c for c in track.get("clips", []) if c["slot"] == params.get("slot")), {})
         return f"Delete clip '{clip.get('name') or 'unnamed'}' in slot {params.get('slot', 0) + 1} of {track_name}?"
 
@@ -381,8 +393,8 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
     server.add_tool(
         _make_tool(ArrangementTool, edit_arrangement),
         name="edit_arrangement",
-        title="Add, copy or delete arrangement clips and locators",
-        description="Add MIDI clips with notes, copy session clips, delete arrangement clips, set or delete locators. "
+        title="Add, copy, move, swap or delete arrangement clips and locators",
+        description="Add MIDI clips with notes, copy session clips, move, swap or delete arrangement clips, set or delete locators. "
         + inspect.cleandoc(ArrangementTool.__doc__ or ""),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     )

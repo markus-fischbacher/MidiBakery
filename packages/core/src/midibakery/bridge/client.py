@@ -136,6 +136,15 @@ class BridgeClient:
         payload = _validate(op, params or {})
         if not self.connected:
             await self.connect()
+        await self._clip_names(payload)
+        for item in payload.get("ops", []) if op == "batch" else []:
+            await self._clip_names(item.get("params", {}))
+            for action in item.get("params", {}).get("actions", []) if item.get("op") == "arrangement.edit" else []:
+                await self._clip_names(action, ("clip", "with_clip"))
+        for action in payload.get("actions", []) if op == "arrangement.edit" else []:
+            await self._clip_names(action, ("clip", "with_clip"))
+        if not self.connected:
+            await self.connect()
         req_id = next(self._ids)
         future: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
         self._pending[req_id] = future
@@ -155,6 +164,30 @@ class BridgeClient:
             return reply.get("result")
         error = reply.get("error") or {}
         raise BridgeError(error.get("code", "INTERNAL"), error.get("message", "Unknown error"), error.get("details"))
+
+    async def _clip_names(self, params: dict[str, Any], keys: tuple[str, ...] = ("arrangement_clip",)) -> None:
+        """Clip ops take an arrangement clip by name too ('Drop Bass'), like compose: Live only knows indices.
+        The exact name (any case), else the one clip whose name contains it."""
+        for key in keys:
+            await self._clip_name(params, key)
+
+    async def _clip_name(self, params: dict[str, Any], key: str) -> None:
+        ref = params.get(key)
+        if not isinstance(ref, str) or not isinstance(params.get("track"), int):
+            return
+        if ref.strip().isdigit():
+            params[key] = int(ref.strip())
+            return
+        clips = (await self.call("arrangement.get", {"track": params["track"]}))["tracks"][0]["clips"]
+        wanted = ref.strip().casefold()
+        exact = [c for c in clips if str(c.get("name", "")).strip().casefold() == wanted]
+        found = exact or [c for c in clips if wanted in str(c.get("name", "")).casefold()]
+        if len(found) != 1 and not exact:
+            listed = ", ".join(f"{c['index']} '{c.get('name', '')}'" for c in clips[:16]) or "none"
+            problem = f"{len(found)} arrangement clips match '{ref}'" if found else f"No arrangement clip named '{ref}'"
+            raise BridgeError("NOT_FOUND", f"{problem} on track index {params['track']} (its clips: {listed})",
+                              {"track": params["track"], "arrangement_clip": ref})
+        params[key] = int(found[0]["index"])
 
     async def _read_loop(self, reader: asyncio.StreamReader) -> None:
         try:

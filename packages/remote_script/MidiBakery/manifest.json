@@ -484,9 +484,19 @@
           ]
         },
         "clip": {
-          "minimum": 0,
-          "type": [
-            "integer"
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "minLength": 1,
+              "type": [
+                "string"
+              ]
+            }
           ]
         },
         "track": {
@@ -624,6 +634,54 @@
       "required": [
         "macro",
         "value"
+      ],
+      "type": [
+        "object"
+      ]
+    },
+    "MoveArrangementClip": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "move_clip",
+          "type": [
+            "string"
+          ]
+        },
+        "clip": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "minLength": 1,
+              "type": [
+                "string"
+              ]
+            }
+          ]
+        },
+        "start": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "clip",
+        "start",
+        "track"
       ],
       "type": [
         "object"
@@ -986,6 +1044,64 @@
       "type": [
         "object"
       ]
+    },
+    "SwapArrangementClips": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "swap_clips",
+          "type": [
+            "string"
+          ]
+        },
+        "clip": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "minLength": 1,
+              "type": [
+                "string"
+              ]
+            }
+          ]
+        },
+        "track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        },
+        "with_clip": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "minLength": 1,
+              "type": [
+                "string"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "clip",
+        "track",
+        "with_clip"
+      ],
+      "type": [
+        "object"
+      ]
     }
   },
   "ops": {
@@ -1010,6 +1126,12 @@
                 },
                 {
                   "$ref": "DeleteArrangementClip"
+                },
+                {
+                  "$ref": "MoveArrangementClip"
+                },
+                {
+                  "$ref": "SwapArrangementClips"
                 },
                 {
                   "$ref": "AddTakeLane"
@@ -1322,6 +1444,12 @@
                 ]
               },
               {
+                "minLength": 1,
+                "type": [
+                  "string"
+                ]
+              },
+              {
                 "type": [
                   "null"
                 ]
@@ -1375,6 +1503,12 @@
                 "minimum": 0,
                 "type": [
                   "integer"
+                ]
+              },
+              {
+                "minLength": 1,
+                "type": [
+                  "string"
                 ]
               },
               {
@@ -1452,6 +1586,12 @@
                 "minimum": 0,
                 "type": [
                   "integer"
+                ]
+              },
+              {
+                "minLength": 1,
+                "type": [
+                  "string"
                 ]
               },
               {
@@ -1550,6 +1690,12 @@
                 "minimum": 0,
                 "type": [
                   "integer"
+                ]
+              },
+              {
+                "minLength": 1,
+                "type": [
+                  "string"
                 ]
               },
               {
@@ -2387,6 +2533,12 @@
                 ]
               },
               {
+                "minLength": 1,
+                "type": [
+                  "string"
+                ]
+              },
+              {
                 "type": [
                   "null"
                 ]
@@ -2458,6 +2610,12 @@
                 "minimum": 0,
                 "type": [
                   "integer"
+                ]
+              },
+              {
+                "minLength": 1,
+                "type": [
+                  "string"
                 ]
               },
               {
