@@ -228,6 +228,7 @@ def test_chat_confirmation_round_trip(app_factory, live):
     provider = ScriptedProvider([
         Turn("tool_use", [ToolCall("t1", "delete_track", {"track": 1})]),
         Turn("end_turn", text="Deleted."),
+        Turn("end_turn", text="I cannot delete tracks here."),  # after "[Check: delete_track failed ...]"
     ])
     api, _ = app_factory(provider)
     with api.websocket_connect(f"/chat?token={TOKEN}&tools=reduced") as ws:

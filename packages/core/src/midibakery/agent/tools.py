@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -61,6 +62,22 @@ class ToolOutcome:
     meta: dict[str, Any] = field(default_factory=dict)
 
 
+_PYDANTIC_ERROR = re.compile(r"^(\S[^\n]*)\n  ([^\n]*?) \[type=(\w+)[^\n]*(?:\n    For further information[^\n]*)?", re.M)
+
+
+def tidy_validation_error(text: str) -> str:
+    """The MCP framework rejects arguments that miss a tool's schema with pydantic's own text: three lines
+    per error, input echoes and doc links. Small models read past the point in it; keep `where: what`."""
+    head, sep, rest = text.partition(" validation error")
+    if not sep:
+        return text
+    errors = [(loc, "unknown field" if kind == "extra_forbidden" else msg) for loc, msg, kind in _PYDANTIC_ERROR.findall(rest)]
+    if not errors:
+        return text
+    prefix = head.rsplit(":", 1)[0] if ":" in head else head
+    return f"{prefix}: INVALID_PARAMS: " + "; ".join(f"{loc}: {msg}" for loc, msg in errors)
+
+
 class ToolHost:
     """An in-process MCP client session on the MidiBakery server."""
 
@@ -101,17 +118,23 @@ class ToolHost:
     def _spec(self, name: str) -> ToolSpec:
         return next(t for t in self.tools if t.name == name)
 
+    def read_only(self, name: str) -> bool:
+        return any(t.name == name and t.read_only for t in self.tools)
+
     async def call(self, name: str, arguments: Any) -> ToolOutcome:
         if name not in self.names():
             return ToolOutcome(f"Unknown tool '{name}'. Available: {', '.join(sorted(self.names()))}", is_error=True)
         if not isinstance(arguments, dict):
             return ToolOutcome(f"Arguments for '{name}' must be a JSON object, got {json.dumps(arguments)}", is_error=True)
+        arguments = lift_nested(self._spec(name).input_schema, arguments)
         unknown = _unknown_arguments(self._spec(name).input_schema, arguments)
         if unknown:
             return ToolOutcome(unknown, is_error=True)
         assert self._client is not None, "use ToolHost as an async context manager"
         result = await self._client.call_tool(name, arguments)
         text = "\n".join(c.text for c in result.content if getattr(c, "type", None) == "text")
+        if result.is_error:
+            text = tidy_validation_error(text)
         meta = dict(result.meta or {})
         return ToolOutcome(
             text=text or json.dumps(result.structured_content or {}),
@@ -126,6 +149,21 @@ class ToolHost:
         if accepted:
             return ElicitResult(action="accept", content={"confirm": True})
         return ElicitResult(action="decline")
+
+
+def lift_nested(schema: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
+    """Small models wrap some of a tool's own parameters in an invented object:
+    {"operation": "transpose", "range": {"semitones": 12}}. Lift such an object's fields
+    when the key is unknown and every field in it is a parameter the call does not set yet."""
+    known = schema.get("properties")
+    if not isinstance(known, dict):
+        return arguments
+    lifted = dict(arguments)
+    for key, value in arguments.items():
+        if key not in known and isinstance(value, dict) and value and all(k in known and k not in arguments for k in value):
+            del lifted[key]
+            lifted.update(value)
+    return lifted
 
 
 def _unknown_arguments(schema: dict[str, Any], arguments: dict[str, Any]) -> str | None:
@@ -176,6 +214,11 @@ def compact_schema(node: Any, limit: int = 90) -> Any:
         non_null = [v for v in variants if v != {"type": "null"}]
         if len(non_null) == 1 and len(non_null) < len(variants):
             node = {**non_null[0], **{k: v for k, v in node.items() if k != "anyOf"}}
+        else:
+            # index or name (int | str): one type list instead of a variant per type
+            bare = [compact_schema(v, limit) for v in non_null]
+            if len(bare) > 1 and all(isinstance(v, dict) and set(v) == {"type"} and isinstance(v["type"], str) for v in bare):
+                node = {"type": [v["type"] for v in bare], **{k: v for k, v in node.items() if k != "anyOf"}}
     out: dict[str, Any] = {}
     for key, value in node.items():
         if key in _DROP_KEYS or (key == "default" and value in (None, [], {})):

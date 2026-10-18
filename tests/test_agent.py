@@ -12,7 +12,8 @@ from midibakery.agent.providers import make_provider
 from midibakery.agent.providers.base import ToolResult
 from midibakery.agent.providers.ollama import OllamaProvider, inline_refs
 from midibakery.agent.providers.openai_compat import OpenAICompatProvider
-from midibakery.agent.tools import ToolSpec, compact_schema, compact_session
+from midibakery.agent.loop import language_reminder
+from midibakery.agent.tools import ToolSpec, compact_schema, compact_session, lift_nested
 from midibakery.mcp import build_server
 
 
@@ -424,7 +425,8 @@ async def test_lmstudio_plain_answer_and_http_error():
     assert (turn.stop_reason, turn.text, turn.tool_calls) == ("end_turn", "Hallo", [])
     assert provider.messages[-1] == {"role": "assistant", "content": "Hallo"}
     turn = await provider.stream_turn(emit)
-    assert turn.error and "400" in turn.error and "context length" in turn.error
+    # what to do instead of LM Studio's own words (qwen loaded on first use with an 8k context)
+    assert turn.error and "too small a context" in turn.error and "-c 32768" in turn.error
 
 
 async def test_lmstudio_unreachable_is_a_turn_error(monkeypatch):
@@ -581,3 +583,99 @@ def test_compact_session_shows_the_arrangement():
     assert lines[4].endswith("; arrangement clips 0 'Drop Bass' 8 bars (song bars 1-8), 1 'Groove Bass' 24 bars (song bars 9-32)")
     assert "arrangement_clip=<index or name>" in lines[-1]
     assert compact_session(SESSION).splitlines()[2].startswith("0 'Drums'")  # no arrangement: as before
+
+
+def test_language_reminder_names_the_language():
+    # gemma answered English and German requests in Korean and Turkish with the generic reminder
+    assert "Deutsch" in language_reminder("Variiere die zweite Hälfte des Clips 'Breakdown Bass' ein wenig.")
+    assert "Deutsch" in language_reminder("Lösch den Clip 'Intro Kick'.")
+    assert "English" in language_reminder("Create a variation for the clip 'Breakdown Bass'. The second half should change.")
+    assert "language of this message" in language_reminder("ok")
+
+
+def test_invented_sub_objects_are_lifted():
+    # gemma: {"operation": "transpose", "range": {"semitones": 12}} and "operation_note": {...}
+    schema = {"properties": {"track": {}, "operation": {}, "semitones": {}, "chords_from": {}}}
+    assert lift_nested(schema, {"track": 1, "operation": "transpose", "range": {"semitones": 12}}) == {
+        "track": 1, "operation": "transpose", "semitones": 12}
+    # an object of unknown fields, or one that would overwrite a set parameter, stays (and is reported)
+    assert "range" in lift_nested(schema, {"semitones": 2, "range": {"semitones": 12}})
+    assert "x" in lift_nested(schema, {"x": {"y": 1}})
+
+
+async def test_a_model_claiming_a_failed_write_is_asked_to_fix_it(client, live):
+    # gemma: transform_notes failed, then "I transposed the Lead Riff an octave down"
+    bad = ("transform_notes", {"track": 1, "slot": 0, "operation": "transpose", "semitones": 99})
+    provider = ScriptedProvider([tool_turn(bad), Turn("end_turn", text="Done, an octave down."), Turn("end_turn", text="That did not work.")])
+    events = await run(build_server(client), provider, "play the lead an octave lower")
+    assert provider.users[-1].startswith("[Check: transform_notes failed") and "changed nothing" in provider.users[-1]
+    assert events[-1]["type"] == "done" and not provider.turns  # asked once, then the model's answer stands
+
+
+async def test_an_empty_answer_gets_one_more_try(client, live):
+    provider = ScriptedProvider([Turn("end_turn", text=""), Turn("end_turn", text="Loaded 106 Organ.")])
+    events = await run(build_server(client), provider, "load an organ preset on the chords")
+    assert provider.users[-1].startswith("[You answered nothing")
+    assert events[-1]["type"] == "done" and not provider.turns
+
+
+async def test_local_models_get_the_session_with_the_first_message(client, live):
+    # gemma asked "which track is 'Drop Bass' on?" instead of calling get_session
+    provider = ScriptedProvider([Turn("end_turn", text="ok")] * 3)
+
+    async def emit(event):
+        pass
+
+    async def no(message):
+        return False
+
+    async with ToolHost(build_server(client), no) as host:
+        agent = Agent(provider, host, compact=True)
+        await agent.send("rename 'Drop Bass' to 'Main Bass'", emit)
+        await agent.send("and the intro?", emit)
+        first, second = provider.users
+        agent.reset()
+        await agent.send("hi", emit)
+    (after_reset,) = provider.users
+    assert "[The Live set now (get_session):\nSong: 120 BPM" in first and "1 '2-MIDI'" in first
+    assert "get_session" not in second and "get_session" in after_reset
+
+
+async def test_a_change_claimed_without_a_tool_is_questioned(client, live):
+    # gemma: "Tempo auf 128 BPM gesetzt." and no tool call
+    provider = ScriptedProvider([Turn("end_turn", text="Tempo auf 128 BPM gesetzt."), tool_turn(("set_song", {"tempo": 128})),
+                                 Turn("end_turn", text="Jetzt wirklich: 128 BPM.")])
+
+    async def emit(event):
+        pass
+
+    async def yes(message):
+        return True
+
+    async with ToolHost(build_server(client), yes) as host:
+        await Agent(provider, host, compact=True).send("Setz das Tempo auf 128 BPM.", emit)
+    assert provider.users[-1].startswith("[No tool ran") and not provider.turns
+    assert live.on_main(lambda: live.song.tempo) == 128
+
+
+def test_claims_a_change():
+    from midibakery.agent.loop import claims_a_change
+
+    assert claims_a_change("Tempo auf 128 BPM gesetzt.") and claims_a_change("I renamed the clip.")
+    assert not claims_a_change("OK. What would you like me to do?") and not claims_a_change("Soll ich es löschen?")
+
+
+async def test_deleting_an_arrangement_clip_by_name_asks_with_its_name(client, live):
+    # gemma: delete_clip {"arrangement_clip": "Intro Kick"} crashed the confirmation; edit_arrangement took no names
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 0, "start": 0, "length": 4, "name": "Intro Kick"},
+        {"action": "add_clip", "track": 0, "start": 8, "length": 4, "name": "Drop Kick"},
+        {"action": "add_clip", "track": 0, "start": 16, "length": 4, "name": "Outro Kick"},
+    ]})
+    provider = ScriptedProvider([tool_turn(("delete_clip", {"track": 0, "arrangement_clip": "Intro Kick"})),
+                                 tool_turn(("edit_arrangement", {"actions": [{"action": "delete_clip", "track": 0, "clip": "outro kick"}]})),
+                                 Turn("end_turn", text="Deleted.")])
+    events = await run(build_server(client), provider, "delete Intro Kick and Outro Kick")
+    assert {"type": "confirm", "message": "Delete arrangement clip 'Intro Kick' (index 0) of track 1 '1-MIDI'?"} in events
+    assert not any(e.get("is_error") for e in events if e["type"] == "tool_result")
+    assert [c["name"] for c in (await client.call("arrangement.get", {}))["tracks"][0]["clips"]] == ["Drop Kick"]
