@@ -252,6 +252,13 @@ def chat_device() -> dict[str, Any]:
                   bgcolor=[0.165, 0.165, 0.165, 1.0], textcolor=[0.85, 0.85, 0.85, 1.0],
                   bordercolor=[0.3, 0.3, 0.3, 1.0], varname="chat_entry")
     on_text = p.obj("route text", 700, 240, outlets=["", ""], width=70)
+    # textedit also outputs its text when it loses focus (selecting another track; Enter itself, a moment
+    # later), so its own output is dropped: Return (13) or keypad Enter (3) on the key outlet opens the
+    # gate, bangs the field for its current text and closes the gate again.
+    gate = p.obj("gate 1 0", 760, 240, inlets=2, outlets=[""], width=50)
+    on_enter = p.obj("sel 13 3", 820, 200, inlets=2, outlets=["bang", "bang", ""], width=60)
+    enter_delay = p.obj("deferlow", 820, 230, width=60)
+    ask_text = p.obj("t 0 b 1", 820, 260, outlets=["int", "bang", "int"], width=60)
     order = p.obj("t b l", 700, 270, outlets=["bang", ""], width=50)
     as_symbol = p.obj("tosymbol", 760, 300, width=60)
     to_page = p.obj("prepend chat_input", 760, 330, width=120)
@@ -260,7 +267,15 @@ def chat_device() -> dict[str, Any]:
     refocus_delay = p.obj("deferlow", 700, 360, width=60)
     refocus = p.message("select", 700, 390)
     p.connect(entry, 0, on_text)
-    p.connect(on_text, 0, order)
+    p.connect(on_text, 0, gate, 1)
+    p.connect(gate, 0, order)
+    p.connect(entry, 1, on_enter)
+    p.connect(on_enter, 0, enter_delay)
+    p.connect(on_enter, 1, enter_delay)
+    p.connect(enter_delay, 0, ask_text)
+    p.connect(ask_text, 2, gate)
+    p.connect(ask_text, 1, entry)
+    p.connect(ask_text, 0, gate)
     p.connect(order, 1, as_symbol)
     p.connect(as_symbol, 0, to_page)
     p.connect(to_page, 0, web)
