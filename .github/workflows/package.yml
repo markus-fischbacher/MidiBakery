@@ -5,12 +5,15 @@ name: Package
 # Intel Macs get their own build on release tags and on PRs labelled "intel" (macOS minutes are dear;
 # GitHub's Intel runners are expected to go in 2027, and with them this build).
 
+# Markdown-only changes build nothing; release tags always build (path filters do not apply to tags).
 on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore: ["**.md"]
   pull_request:
     types: [opened, synchronize, reopened, labeled]
+    paths-ignore: ["**.md"]
 
 concurrency:
   group: package-${{ github.ref }}
