@@ -11,7 +11,7 @@ MidiBakery ist ein Tool von Klirrwerk.
 - Die alte Notes-API zerstört Note-IDs und Undo-Schritte.
 - Es gibt keine Events, die „KI-Helfer“ sind bloße Zufallsgeneratoren.
 
-MidiBakery übernimmt nur die Idee und baut sie neu: als **kommerzielles Produkt**, in **Python**, für **Claude via MCP, Chat direkt in Live und lokale LLMs (Ollama)**, mit Schwerpunkt **Komposition/MIDI und Session-Fernsteuerung**.
+MidiBakery übernimmt nur die Idee und baut sie neu: als **kommerzielles Produkt**, in **Python**, für **Claude via MCP, Chat direkt in Live und lokale LLMs (LM Studio, Ollama)**, mit Schwerpunkt **Komposition/MIDI und Session-Fernsteuerung**.
 
 Ausgangslage auf deinem Rechner: Live **12.4.6 Suite** (Python 3.11 im Remote-Script-Host, `ableton.v3` vorhanden) und Max **9.2.0**.
 
@@ -142,8 +142,8 @@ M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
    - Gleicher Code wie die MCP-Kompositions-Tools.
 
 ### Agent / LLM-Provider (`agent/`)
-- Provider-Interface mit zwei Implementierungen: **Anthropic** (Default `claude-sonnet-5-5`, wählbar `claude-opus-5-5`) und **Ollama** (lokal).
-- Der Tool-Loop nutzt dieselben Katalog-Tools. Lokale Modelle bekommen dieselben Tools; ein reduziertes Tool-Set für Modelle mit kleinem Kontext ist optional.
+- Provider-Interface mit drei Implementierungen: **Anthropic** (Default `claude-sonnet-5-5`, wählbar `claude-opus-5-5` und `claude-haiku-5-5`), **LM Studio** (OpenAI-kompatibler Server) und **Ollama** (beide lokal).
+- Der Tool-Loop nutzt dieselben Katalog-Tools. Lokale Modelle bekommen dieselben Tools im Compact-Modus (kurze Schemas und Ergebnisse); ein reduziertes Tool-Set für Modelle mit kleinem Kontext ist optional.
 - Bei der Umsetzung wird die `claude-api`-Skill-Referenz für die SDK-Nutzung herangezogen.
 
 ## Kommerzielle Aspekte
@@ -160,7 +160,7 @@ M4L MIDI Tools (Generator/Transform) ─WebSocket────┤
   - Getestet wird gegen 12.3, 12.4.x und Max 9.1/9.2.
 - **Telemetrie:** nur Opt-in. Die Crash-Logs der Core landen lokal.
 
-## Projektstruktur (`/Users/maxx/Development/Ableton/MidiBakery`)
+## Projektstruktur (ursprünglicher Plan; heutiger Aufbau: README)
 ```
 MidiBakery/
 ├─ pyproject.toml / uv workspace
@@ -189,6 +189,25 @@ MidiBakery/
    - Take Lanes: `compose_takes` legt mehrere Varianten eines Parts (Hook, Melodie, Bass, Chords, Drums) über dieselben Akkorde in eigene Take Lanes, damit man in Live comppen kann. Ein Undo entfernt alle Takes. Das braucht Live 12.2 oder neuer; die Lanes sind in Live erst über „Show Take Lanes“ (⌘⌥U) sichtbar.
 5. **Produktisierung:** Installer, Signierung, Lizenz, Doku, Beta-Programm.
 6. **Optional:** Extensions-SDK-Adapter, sobald die SDK-Doku zugänglich und stabil ist.
+
+## Stand der Umsetzung (Oktober 2026, Version 0.3.0)
+
+Die Roadmap ist bis auf Punkt 5 abgearbeitet; der Plan oben bleibt als Begründung stehen, die Umsetzung weicht an wenigen Stellen ab.
+
+| Roadmap | Stand |
+|---|---|
+| 1 Fundament | fertig: Katalog, Remote Script, Bridge-Client, MCP-Server über stdio. Der Katalog hat 37 MCP-Tools statt der geplanten 25–35; für lokale Modelle ist das Budget für Schemas fast ausgeschöpft (siehe ARCHITEKTUR.md) |
+| 2 Komposition | fertig: `compose` (Drums, Bass, Akkorde, Melodie), `transform_notes` (Humanize, Quantize, Invert, Arpeggiate, Variation, Transponieren; auch auf Teilen eines Clips), `plan_changes` und `apply_plan` mit Vorschau, MCP-Apps-Piano-Roll |
+| 3 Frontends | fertig: Chat-Gerät mit Anthropic, LM Studio und Ollama; Generator und Transform als MIDI Tools; dazu das Reference-Analyzer-Gerät |
+| 4 Abdeckung | fertig: Events und Statuszeile, Mixer und Routing, Racks, Arrangement (Clips auch per Name, verschieben, vertauschen, Locators), ganze Songs aus Genre-Vorlagen (`plan_song`, fünf Genres, optional nach einem analysierten Referenzsong), Take Lanes (`compose_takes`) |
+| 5 Produktisierung | zum Teil: Installer für macOS (`.pkg`) und Windows (Inno Setup) und der signierte Update-Dienst auf Cloudflare stehen. **Offen:** Signierung und Notarisierung der Installer (die Zertifikate fehlen), das Einschalten der Lizenzprüfung (gebaut, aber ausgeschaltet; offen sind Preis, Rechnerzahl, Zahlungsabwickler) und das Beta-Programm. Die Benutzeranleitung liegt unter `docs/user/` |
+| 6 Optional | nicht begonnen |
+
+Abweichungen vom Plan:
+- Der Lizenzserver ist kein „späteres Thema“ mehr: Er läuft als Teil des Update-Dienstes (`services/updates`).
+- Die Chat-Oberfläche ist eine HTML-Seite in `jweb` (nicht `v8ui`); die Tastatureingabe liegt in einem nativen Max-Textfeld, weil Live keine Tasten an `jweb` reicht.
+- Das Gerät zeigt Plan-Diffs mit Apply und einen Undo-Button; Take Lanes brauchen Live 12.2 oder neuer.
+- Die MIDI Tools reden per HTTP mit der API, nicht per WebSocket.
 
 ## Verifikation
 - **Unit:** `compose/` (deterministisch über Seed, Theorie-Checks), Katalog-Schemas, Codegen-Snapshots (`uv run pytest`).
