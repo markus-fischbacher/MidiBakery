@@ -393,6 +393,10 @@ async def test_vary_the_second_half_and_hints_for_a_wrong_target(client, live):
     # "vary the Break Bass" as a compose/bass step: the error points to transform_notes
     with pytest.raises(ToolError, match="operation changes an existing clip: use transform_notes"):
         await server.call_tool("plan_changes", {"steps": [{"kind": "bass", "track": 1, "arrangement_clip": 0, "operation": "variation"}]})
+    # a local model nested the step's fields in operation (and retried that until the chat stopped it)
+    nested = _payload(await server.call_tool("plan_changes", {"steps": [{"kind": "transform", "operation": {
+        "operation": "variation", "track": 1, "arrangement_clip": 0, "from_bar": 5, "to_bar": 8}}]}))
+    assert nested["changes"][0]["notes_considered"] == 32
     # a new slot clip on a track with a song part says the Arrangement stays as it was
     new = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "seed": 1, "preview": True}))
     assert "arrangement clips ('Break Bass') stay unchanged" in new["changes"][0]["note"]
