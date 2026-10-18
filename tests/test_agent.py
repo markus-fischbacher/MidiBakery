@@ -763,3 +763,39 @@ async def test_the_new_clip_guard_covers_a_free_slot_on_a_track_with_clips(clien
     events = await _compact_send(client, provider, "Make the hats groove more.")
     assert next(e for e in events if e["type"] == "tool_result")["is_error"]
     assert live.on_main(lambda: [s.clip is not None for s in live.song.tracks[1].clip_slots][:2]) == [True, False]
+
+
+SET_WITH_HATS = {"tracks": [{"index": 0, "name": "Drums", "volume": 0.85}, {"index": 1, "name": "Hats", "volume": 0.7}]}
+
+
+def test_a_relative_volume_wish_must_change_the_value():
+    from midibakery.agent.loop import unchanged_volume
+
+    # gemma: "mach die Hats leiser" -> volume 0.85 on a track already at 0.85
+    assert "nothing would change" in unchanged_volume("Mach die Drums leiser.", SET_WITH_HATS, "update_track", {"track": 0, "volume": 0.85})
+    assert unchanged_volume("Mach die Hats leiser.", SET_WITH_HATS, "update_track", {"track": "Hats", "volume": 0.6}) is None
+    assert "not 'quieter'" in unchanged_volume("Mach die Hats leiser.", SET_WITH_HATS, "update_track", {"track": 1, "mute": True})
+    assert unchanged_volume("Setz die Hats auf 0.7.", SET_WITH_HATS, "update_track", {"track": 1, "volume": 0.7}) is None  # absolute wish
+
+
+def test_update_track_says_how_to_change_volume_relatively():
+    from midibakery.catalog.ops import TrackSet
+
+    assert "current value -/+ 0.1" in json.dumps(TrackSet.model_json_schema()["properties"]["volume"])
+
+
+def test_mastering_and_a_missing_vocal_track_are_refused():
+    from midibakery.agent.loop import NO_MASTERING, NO_VOCALS, missing_thing
+
+    assert missing_thing("Master den Song auf -14 LUFS.", SET_WITH_HATS) == NO_MASTERING
+    assert missing_thing("Make the vocals louder.", SET_WITH_HATS) == NO_VOCALS
+    assert missing_thing("Make the vocals louder.", {"tracks": [{"name": "Lead Vocals"}]}) is None
+    assert missing_thing("Mach die Hats leiser.", SET_WITH_HATS) is None
+
+
+async def test_the_agent_refuses_a_write_for_a_missing_vocal_track(client, live):
+    provider = ScriptedProvider([tool_turn(("update_track", {"track": 3, "volume": 0.95})),
+                                 Turn("end_turn", text="Es gibt keine Gesangsspur.")])
+    events = await _compact_send(client, provider, "Make the vocals louder.")
+    result = next(e for e in events if e["type"] == "tool_result" and e["name"] == "update_track")
+    assert result["is_error"] and "no vocal track" in result["result"]

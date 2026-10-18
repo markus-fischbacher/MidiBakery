@@ -89,6 +89,48 @@ def deletes_wrong_thing(user_text: str, tool: str) -> bool:
     return tool == "delete_track" and bool(_CLIP_WORD.search(user_text)) and not _TRACK_WORD.search(user_text)
 
 
+# Things the tools cannot do. gemma lowered the master fader and reported "-14 LUFS"; models took the Lead
+# track for "the vocals".
+_MASTERING = re.compile(r"\b(lufs|mastern|mastering|master(e)? (den|die|das|the|my|this|diesen|dein\w*)\b)", re.I)
+_VOCALS = re.compile(r"\b(vocals?|gesang|stimme|sänger\w*|singer|vox)\b", re.I)
+_LESS = re.compile(r"\b(leiser|quieter|softer|lower|decrease|reduce|senk\w*|runter)\b", re.I)
+_MUTE = re.compile(r"\b(stumm\w*|mute\w*|silen\w*)\b", re.I)
+_MORE = re.compile(r"\b(lauter|louder|higher|increase|erhöh\w*|hoch)\b", re.I)
+NO_MASTERING = ("NOT DONE: no tool masters or measures loudness (LUFS), so do not touch the master fader. "
+                "Tell the user plainly that this cannot be done with these tools; change nothing.")
+NO_VOCALS = ("NOT DONE: this set has no vocal track, and no other track is the vocals. "
+             "Tell the user there is no vocal track; change nothing.")
+
+
+def missing_thing(user_text: str, session: dict[str, Any]) -> str | None:
+    """The refusal for a write when the user asks for mastering or for a vocal track the set lacks."""
+    if _MASTERING.search(user_text):
+        return NO_MASTERING
+    if _VOCALS.search(user_text) and not any(
+            re.search(_VOCALS, str(t.get("name", ""))) for t in session.get("tracks", [])):
+        return NO_VOCALS
+    return None
+
+
+def unchanged_volume(user_text: str, session: dict[str, Any], tool: str, args: dict[str, Any]) -> str | None:
+    """gemma: "mach die Hats leiser" -> update_track volume 0.85, the value the track already had."""
+    volume, track = args.get("volume"), args.get("track")
+    relative = _LESS.search(user_text) or _MORE.search(user_text)
+    if tool == "update_track" and relative and args.get("mute") is True and not _MUTE.search(user_text):
+        return "NOT DONE: muting is not 'quieter'. Change volume to a value about 0.1 below the current one; do not mute."
+    if tool != "update_track" or not isinstance(volume, (int, float)) or not relative:
+        return None
+    tracks = session.get("tracks", [])
+    found = tracks[track] if isinstance(track, int) and 0 <= track < len(tracks) else next(
+        (t for t in tracks if str(t.get("name", "")).lower() == str(track).lower()), None)
+    current = ((found or {}).get("mixer") or {}).get("volume", (found or {}).get("volume"))
+    if not isinstance(current, (int, float)) or abs(current - volume) > 0.005:
+        return None
+    direction = "lower" if _LESS.search(user_text) else "higher"
+    return (f"NOT DONE: volume {volume} is what the track already has, so nothing would change. "
+            f"A relative change needs a value {direction} than the current one (about 0.1 {direction}).")
+
+
 _PART_KINDS = frozenset({"drums", "bass", "chords", "melody"})
 
 
@@ -165,6 +207,17 @@ class Agent:
         if outcome.is_error or not outcome.structured:
             return ""
         return "\n\n[The Live set now (get_session):\n" + COMPACT_RESULTS["get_session"](outcome.structured) + "]"
+
+    async def _refuse(self, user_text: str, call: ToolCall) -> str | None:
+        """A write the set or the tools cannot back up (see missing_thing, unchanged_volume)."""
+        if not (_MASTERING.search(user_text) or _VOCALS.search(user_text) or _LESS.search(user_text) or _MORE.search(user_text)):
+            return None
+        if "get_session" not in self.host.names():
+            return None
+        outcome = await self.host.call("get_session", {})
+        if not outcome.structured:
+            return None
+        return missing_thing(user_text, outcome.structured) or unchanged_volume(user_text, outcome.structured, call.name, call.input)
 
     async def _new_clip_hint(self, call: ToolCall) -> str | None:
         """compose (or a plan_changes part step) that would add a clip without slot or arrangement_clip
@@ -269,6 +322,12 @@ class Agent:
                         await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": "model"})
                         await emit({"type": "tool_result", "id": call.id, "name": call.name, "source": "model", "is_error": True, "result": refusal})
                         results.append(ToolResult(call.id, call.name, refusal, True))
+                        continue
+                    if self.compact and not self.host.read_only(call.name) and (refusal := await self._refuse(text_in, call)):
+                        await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": "model"})
+                        await emit({"type": "tool_result", "id": call.id, "name": call.name, "source": "model", "is_error": True, "result": refusal})
+                        results.append(ToolResult(call.id, call.name, refusal, True))
+                        unresolved[call.name] = refusal  # "Hats leiser gemacht" after a refused call is a false claim
                         continue
                     if guards < 2 and (hint := await self._new_clip_hint(call)):
                         guards += 1
