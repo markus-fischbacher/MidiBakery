@@ -515,8 +515,9 @@ def test_compact_session():
         "0 'Drums' [drums, 909 Core Kit]; free slots 2-7; clips 0 'Beat' 2 bars, 1 'Fill' 1 bars",
         "1 'Chord Stabs' [midi, Drift]; free slots 0-2,4-7; clips 3 'Stabs' 4 bars",
         "2 'Vox' [audio]; free slots 0-7; no clips",
+        "No other tracks (vocals, guitar, ...): say so, use none.",
     ]
-    assert len(text) * 3 < len(json.dumps(SESSION))
+    assert len(text) * 2 < len(json.dumps(SESSION))
 
 
 async def test_small_profile_shortens_get_session(client, live):
@@ -581,7 +582,7 @@ def test_compact_session_shows_the_arrangement():
     lines = compact_session(session).splitlines()
     assert lines[2] == "Arrangement sections (locators): Drop bar 1, Groove bar 9."
     assert lines[4].endswith("; arrangement clips 0 'Drop Bass' 8 bars (song bars 1-8), 1 'Groove Bass' 24 bars (song bars 9-32)")
-    assert "arrangement_clip=<index or name>" in lines[-1]
+    assert "arrangement_clip=<index or name>" in lines[-2]
     assert compact_session(SESSION).splitlines()[2].startswith("0 'Drums'")  # no arrangement: as before
 
 
@@ -621,7 +622,7 @@ async def test_an_empty_answer_gets_one_more_try(client, live):
 
 async def test_local_models_get_the_session_with_the_first_message(client, live):
     # gemma asked "which track is 'Drop Bass' on?" instead of calling get_session
-    provider = ScriptedProvider([Turn("end_turn", text="ok")] * 3)
+    provider = ScriptedProvider([Turn("end_turn", text="ok?")] * 3)
 
     async def emit(event):
         pass
@@ -704,10 +705,10 @@ async def test_a_new_clip_is_composed_when_the_user_asks_for_one(client, live):
 
 
 async def test_the_new_clip_guard_lets_a_repeated_call_through(client, live):
-    # once per message: a model that insists gets its clip
+    # twice per message: a model that insists gets its clip
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 8.0, "name": "Bass Loop"})
     compose = ("compose", {"kind": "bass", "track": 1})
-    provider = ScriptedProvider([tool_turn(compose), tool_turn(compose), Turn("end_turn", text="Neu.")])
+    provider = ScriptedProvider([tool_turn(compose), tool_turn(compose), tool_turn(compose), Turn("end_turn", text="Neu.")])
     await _compact_send(client, provider, "Mach den Bass spannender.")
     assert live.on_main(lambda: [s.clip is not None for s in live.song.tracks[1].clip_slots][:2]) == [True, True]
 
@@ -741,3 +742,24 @@ async def test_deleting_a_clip_is_not_answered_with_delete_track(client, live):
 
     assert not deletes_wrong_thing("Lösch die Spur und den Clip", "delete_track")
     assert deletes_wrong_thing("Lösch den Clip 'Intro Kick'", "delete_track")
+
+
+async def test_a_request_answered_with_talk_only_is_nudged_once(client, live):
+    # gemma: "Tausche ... tausche ich gegeneinander." / "wird nun mit dem Sound versehen" and no tool call
+    provider = ScriptedProvider([Turn("end_turn", text="Die Chords-Spur wird nun mit dem Sound versehen."),
+                                 Turn("end_turn", text="Das kann ich mit meinen Tools nicht.")])
+    await _compact_send(client, provider, "Lade ein Orgel-Preset auf die Chords-Spur.")
+    assert provider.users[-1].startswith("[No tool ran") and not provider.turns
+    # a question from the user is answered without a nudge
+    provider = ScriptedProvider([Turn("end_turn", text="Eine Oktave sind 12 Halbtöne.")])
+    await _compact_send(client, provider, "Wie viele Halbtöne ist eine Oktave?")
+    assert not provider.turns and not provider.users[-1].startswith("[No tool ran")
+
+
+async def test_the_new_clip_guard_covers_a_free_slot_on_a_track_with_clips(client, live):
+    # gemma: compose into slot 1 beside the 'Hats Loop' in slot 0
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 8.0, "name": "Hats Loop"})
+    provider = ScriptedProvider([tool_turn(("compose", {"kind": "drums", "track": 1, "slot": 1})), Turn("end_turn", text="Nicht möglich.")])
+    events = await _compact_send(client, provider, "Make the hats groove more.")
+    assert next(e for e in events if e["type"] == "tool_result")["is_error"]
+    assert live.on_main(lambda: [s.clip is not None for s in live.song.tracks[1].clip_slots][:2]) == [True, False]

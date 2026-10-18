@@ -306,6 +306,7 @@ def compact_session(result: dict[str, Any]) -> str:
             lines.insert(2, f"Arrangement sections (locators): {locators}.")
         lines.append("A section of the song (e.g. the Groove's bass): its arrangement clip; change it with compose or "
                      "transform_notes and arrangement_clip=<index or name>, not a new slot clip.")
+    lines.append("No other tracks (vocals, guitar, ...): say so, use none.")
     return "\n".join(lines)
 
 
