@@ -67,7 +67,8 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
 - measure_master: Master LUFS (quote loudness only from it); plan_loudness + apply_plan: a round toward a target.
 - compose writes one part into the track's first free slot (if_exists for occupied ones),
   reproducible by seed. Make parts fit: bass and melody chords_from the chord clip, the bass
-  follow_kick the drum clip; a counter melody is kind melody with counter_to = the lead clip; or plan_changes, where later steps share the first step's chords.
+  follow_kick the drum clip; a counter melody is kind melody with counter_to = the lead clip (an arrangement lead: its name, e.g.
+  'Breakdown Lead'; without slot the counter clips land at the same bars on track); or plan_changes, where later steps share the first step's chords.
 - preview=true or plan_changes return a diff (a piano roll in MCP Apps clients) and a plan_id;
   apply_plan writes it as one undo step.
 - get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick); plan_song(reference=name) follows one (warped; an unwarped one only at its own tempo).
@@ -270,6 +271,8 @@ def with_arrangement(session: dict[str, Any], arrangement: dict[str, Any]) -> di
 
 def _clip_label(change: Any) -> str:
     """As the user counts: track 2 slot 1, track 2 arrangement clip 3."""
+    if change.place.start is not None:
+        return f"track {change.track + 1} at bar {change.info.get('bar', change.place.start)}"
     if change.place.in_arrangement:
         return f"track {change.track + 1} arrangement clip {change.place.arrangement_clip + 1}"
     return f"track {change.track + 1} slot {change.slot + 1}"

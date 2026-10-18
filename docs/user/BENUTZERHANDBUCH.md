@@ -340,6 +340,8 @@ Alles liegt **in der Tonart und im Takt deines Sets**. Stelle also zuerst Tonart
 
 Eine zweite Melodie, die auf eine vorhandene Lead-Melodie antwortet. Frage: *„Schreib eine Gegenmelodie zum Lead in Slot 1 von Spur 2“*. Sie kommt in einen neuen Clip, der Lead bleibt unverändert. Ohne Akkorde werden diese aus den Noten des Leads abgeleitet. Der Lead darf auch ein Clip sein, der im selben Auftrag vorher geplant wurde.
 
+Ein Lead im Arrangement, wie `plan_song` ihn schreibt: Frage *„Schreib eine Gegenmelodie zu den Breakdown-Lead-Clips auf einer neuen MIDI-Spur“*. Jeder Clip dieses Namens bekommt an denselben Takten und in derselben Länge einen Gegenclip auf der anderen Spur (*Breakdown Counter*), jeweils über den Akkorden des Akkord- oder Pad-Clips, der dort spielt. Die Lead-Spur allein beantwortet den ganzen Song. Nochmal fragen gibt diesen Clips neue Noten statt einer zweiten Lage.
+
 Modi (in Worten sagen, Standard ist der erste):
 
 - **fill_the_gaps**: spielt nur, wo der Lead eine Note hält oder pausiert.

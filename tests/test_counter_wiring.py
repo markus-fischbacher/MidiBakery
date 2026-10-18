@@ -155,3 +155,60 @@ async def test_an_arrangement_lead_by_track_or_by_its_listed_name(client, live):
 async def test_a_track_without_clips_says_so(client, live):
     with pytest.raises(ToolError, match="has no MIDI clip to read"):
         await build_server(client).call_tool("compose", {"kind": "melody", "track": 0, "slot": 0, "counter_to": {"track": 1}})
+
+
+def _arranged(track, start, name, notes):
+    return {"action": "add_clip", "track": track, "start": start, "length": 16, "name": name,
+            "notes": [{"pitch": p, "start_time": s, "duration": d} for p, s, d in notes]}
+
+
+async def _song(client, live):
+    """A song as plan_song leaves it: chords on track 2, the lead on track 1, two Breakdown Lead clips."""
+    live.on_main(lambda: live.song.create_midi_track(-1))
+    live.on_main(lambda: setattr(live.song.tracks[2], "name", "Chords"))
+    a_minor = [(p, 4.0 * b, 4.0) for b in range(4) for p in (57, 60, 64)]  # Am the whole clip
+    await client.call("arrangement.edit", {"actions": [
+        _arranged(1, 0, "Drop Lead", LEAD), _arranged(1, 32, "Breakdown Lead", LEAD), _arranged(1, 64, "Breakdown Lead", LEAD),
+        _arranged(2, 32, "Breakdown Chords", a_minor), _arranged(2, 64, "Breakdown Chords", a_minor)]})
+
+
+async def test_a_counter_melody_to_arrangement_clips_lands_at_their_bars(client, live):
+    # "Write a counter melody to the Breakdown Lead clips. Put them in a new midi track."
+    await _song(client, live)
+    server = build_server(client)
+    result = _payload(await server.call_tool("compose", {
+        "kind": "melody", "track": 0, "seed": 4, "counter_to": {"track": 1, "arrangement_clip": "Breakdown Lead"}}))
+    changes = result["changes"]
+    assert [(c["start"], c["bar"], c["action"]) for c in changes] == [(32.0, 9, "create clip"), (64.0, 17, "create clip")]
+    assert all(c["chords_from"] == "'Breakdown Chords' on track index 2" and c["chords"][0].startswith("Am") for c in changes)
+    assert [c["counter_to"] for c in changes] == ["arrangement clip index 1 on track index 1", "arrangement clip index 2 on track index 1"]
+    clips = (await client.call("arrangement.get", {"track": 0}))["tracks"][0]["clips"]
+    assert [(c["start"], c["end"], c["name"]) for c in clips] == [(32.0, 48.0, "Breakdown Counter"), (64.0, 80.0, "Breakdown Counter")]
+    notes = (await client.call("notes.get", {"track": 0, "arrangement_clip": 0}))["notes"]
+    assert notes and min(n["pitch"] for n in notes) >= max(p for p, _, _ in LEAD) - 1
+    # again: the same clips get new notes (asks first), no second layer
+    again = await server.call_tool("compose", {
+        "kind": "melody", "track": 0, "seed": 8, "counter_to": {"track": 1, "arrangement_clip": "Breakdown Lead"}})
+    assert "Replace" in again.content[0].text or "replace" in again.content[0].text
+    assert len((await client.call("arrangement.get", {"track": 0}))["tracks"][0]["clips"]) == 2
+
+
+async def test_the_lead_track_alone_answers_the_whole_song(client, live):
+    await _song(client, live)
+    changes = _payload(await build_server(client).call_tool("compose", {
+        "kind": "melody", "track": 0, "seed": 2, "counter_to": {"track": 1}}))["changes"]
+    assert [c["start"] for c in changes] == [0.0, 32.0, 64.0]
+    assert changes[0]["chords_from"] == "derived from the lead clip's notes"  # no chord clip under the drop
+    names = [c["name"] for c in (await client.call("arrangement.get", {"track": 0}))["tracks"][0]["clips"]]
+    assert names == ["Drop Counter", "Breakdown Counter", "Breakdown Counter"]
+
+
+async def test_arrangement_counter_clips_need_a_free_track(client, live):
+    await _song(client, live)
+    server = build_server(client)
+    with pytest.raises(ToolError, match="its own track"):
+        await server.call_tool("compose", {"kind": "melody", "track": 1, "counter_to": {"track": 1, "arrangement_clip": "Drop Lead"}})
+    with pytest.raises(ToolError, match="already has clips"):
+        await server.call_tool("compose", {"kind": "melody", "track": 2, "counter_to": {"track": 1, "arrangement_clip": "Breakdown Lead"}})
+    with pytest.raises(ToolError, match="No arrangement clip named 'Outro Lead'"):
+        await server.call_tool("compose", {"kind": "melody", "track": 0, "counter_to": {"track": 1, "arrangement_clip": "Outro Lead"}})
