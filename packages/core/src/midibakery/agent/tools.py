@@ -199,8 +199,13 @@ def _first_sentence(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-# What the system prompt already says ("Times are in beats (quarter notes)"): dropped from every field.
-_SAID_IN_PROMPT = frozenset({"Beats (quarter notes)", "Beats"})
+# What the system prompt already says ("Times are in beats (quarter notes)", "zero-based indices",
+# "a slot is a scene", "return A = 0"): dropped from every field.
+_SAID_IN_PROMPT = frozenset({
+    "Beats (quarter notes)", "Beats",
+    "0-based track index", "Zero-based track index", "0-based slot (= scene) index",
+    "0-based return track index (A = 0)",
+})
 
 
 def compact_schema(node: Any, limit: int = 90) -> Any:
@@ -208,7 +213,7 @@ def compact_schema(node: Any, limit: int = 90) -> Any:
 
     Drops titles, bounds and discriminator mappings, folds Optional (anyOf [X, null]) into X, removes
     null/empty/false defaults (an option left out is off), descriptions the system prompt already gives
-    (_SAID_IN_PROMPT), and cuts descriptions to their first sentence.
+    (_SAID_IN_PROMPT: beats, zero-based track/slot/return indices), and cuts descriptions to their first sentence.
     """
     if isinstance(node, list):
         return [compact_schema(v, limit) for v in node]
