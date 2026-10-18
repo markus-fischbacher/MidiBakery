@@ -460,6 +460,47 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 | Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
 | Andere Taktarten | die Grooves sind 16-Schritt-Takte; `plan_song` braucht deshalb 4/4 und meldet das sonst |
 
+## Master-Kette (`plan_master`)
+
+`plan_master` setzt drei native Geräte ans Ende der Master-Spur: EQ Eight, Glue Compressor, Limiter. Das ist ein Startpunkt und kein fertiges Mastering, denn MidiBakery hört den Song nicht. Die Kette macht den Song nicht lauter, und eine Lautheit (LUFS) misst sie nicht.
+
+| Gerät | Einstellung | House, Melodic Techno, Peak-Time Techno | Drum & Bass, Trap |
+|---|---|---|---|
+| EQ Eight | Low Cut (Band 1) | 30 Hz, 12 dB/Oktave | 20 Hz, 48 dB/Oktave |
+| Glue Compressor | Ratio, Attack, Release | 2:1, 30 ms, Auto | gleich |
+| Glue Compressor | Threshold | -10 dB als Startwert | gleich |
+| Glue Compressor | Sidechain-EQ | High Pass 150 Hz | gleich |
+| Limiter | Ceiling, Modus | -1 dB, True Peak (einstellbar -3 bis -0,1 dB) | gleich |
+| Limiter | Input Gain | 0 dB | gleich |
+
+- **●** Limiter als letztes Gerät, Ceiling -1 dBTP für Streaming. Spotify empfiehlt -2 dBTP nur für Master, die lauter als -14 LUFS sind.
+- **●** Glue als Bus-Kompressor: 2:1, Attack 30 ms (die Transienten der Kick kommen durch), Release Auto, in den lautesten Teilen 1–2 dB Gain Reduction.
+- **◐** Sidechain-EQ des Glue: Hochpass um 150 Hz, damit Kick und Sub nicht den ganzen Mix pumpen lassen. Das sagt nur eine Quelle.
+- **◐** Low Cut auf dem Master bei 20–30 Hz entfernt Rumpeln unterhalb des Hörbaren. Die Quellen widersprechen sich, ob er auf den Master gehört oder nur auf einzelne Spuren:
+  - Ein sanfter Cut bei 30 Hz gilt als unhörbar.
+  - Sub-lastige Genres (808, Reese-Subs bis 25 Hz) brauchen einen tieferen, steilen Cut.
+  - EQ Eight bietet als Steilheit nur 12 oder 48 dB/Oktave; eine Quelle nennt 24 dB/Oktave.
+- **○** Glue-Threshold -10 dB: Das nennt keine Quelle. Weil die Kette nichts hört, ist es nur ein Startwert. Stelle den Threshold beim lautesten Teil so ein, dass die Nadel 1–2 dB zeigt.
+- **○** Limiter Input Gain 0 dB ist Absicht: Lauter machen ohne Messung wäre geraten.
+
+Gemessen in Live 12.4:
+- Die Parameternamen der drei Geräte.
+- Glue Attack, Ratio und Release sind Stufen (roh 0–6, 0–2, 0–6).
+- Ein Batch, der Geräte einfügt und danach ihre Parameter setzt, hinterlässt zwei Undo-Schritte. `apply_plan` schreibt die Kette deshalb in zwei Batches; zwei Undo-Schritte entfernen sie.
+
+`plan_master` setzt keine Kette auf einen Master, der schon einen Limiter, einen EQ Eight oder einen Glue Compressor hat. Andere Geräte dort bleiben vor der Kette.
+
+**Quellen:**
+- Violet Recording (Bus-Kompressoren, Mastering-Kompressoren)
+- MusicHub (Compressor-Einstellungen)
+- Ableton-Forum (Glue Compressor auf dem Master)
+- Production Advice (Spotify True Peak)
+- Flux (True-Peak-Limiting)
+- AES TD1008, nur über Zusammenfassungen
+- Soundbridge (Sub-Bass)
+- Richie ZXY (Mastering Drum & Bass)
+- Gearspace, schwächer belegt (808, High-Pass-Filter, Master-Bus-Kompression)
+
 ## Lücken
 
 - **Lead-Dichte und Stab-Länge** nennen die Quellen kaum in Zahlen. Die Werte oben sind Konventionen (○) und gehören nach Gehör justiert.

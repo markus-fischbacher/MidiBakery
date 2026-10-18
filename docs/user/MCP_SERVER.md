@@ -7,7 +7,7 @@ Deutsche Version: [MCP-SERVER.md](MCP-SERVER.md) · Back to the [User Guide](USE
 **Contents**
 
 - Part A: [In short](#part-a-in-short) – what it is, setup, what you can say
-- Part B: [Reference of all 37 tools](#part-b-reference-of-all-37-tools)
+- Part B: [Reference of all 38 tools](#part-b-reference-of-all-38-tools)
 
 ---
 
@@ -21,7 +21,7 @@ MidiBakery offers two ways to the same abilities:
 |---|---|---|
 | Where you type | in Live, in the **MidiBakery Chat** device | in Claude Desktop or Claude Code |
 | Which AI | Claude (own API key), LM Studio, Ollama | the AI of the app you are in (e.g. your Claude subscription) |
-| Tools | the same 37 | the same 37 |
+| Tools | the same 38 | the same 38 |
 | Preview cards | in the Chat device, with **Apply** | as a piano roll in the app (if it supports "MCP Apps"), otherwise as text |
 | For whom | beginners, everything inside Live | people who already work with Claude, or like the terminal |
 
@@ -58,7 +58,7 @@ claude mcp add midibakery -- uv --directory <path to the repository> run midibak
 }
 ```
 
-Quit Claude Desktop completely and start it again. The tools icon in the chat then lists "midibakery" with 37 tools.
+Quit Claude Desktop completely and start it again. The tools icon in the chat then lists "midibakery" with 38 tools.
 
 **Note on updates:** the installed program lives in a folder named after its version. After a MidiBakery update the path points to the new version: adjust it (Claude Code: `claude mcp remove midibakery`, then add it again).
 
@@ -90,7 +90,7 @@ The difference from the Chat device: Claude Desktop and Claude Code can do **mor
 
 ---
 
-## Part B: Reference of all 37 tools
+## Part B: Reference of all 38 tools
 
 Conventions Claude knows (from the instructions the server sends along):
 
@@ -146,7 +146,7 @@ The **Kind** column says: **read** (changes nothing), **write**, **asks first** 
 |---|---|---|
 | `update_mixer` | write | Volume (`volume` normalised or `volume_db`), pan, sends, mute, solo, crossfader, routing (`input_routing`, `input_channel`, `output_routing`, `output_channel`). For tracks, returns and master. |
 | `create_return_track` | write | Create a return track, optionally with a Live device (`device`). |
-| `insert_device` | write | Insert a native Live device (`name`, `index`). |
+| `insert_device` | write | Insert a native Live device (`name`, `index`) on a track, a return (`return_track`) or the master (`master`). |
 | `load_browser_item` | write | Load a browser item onto a track (`path`); an instrument or kit replaces the existing instrument. |
 | `set_device_parameter` | write | Set one device parameter (`parameter`, `value` or `display`). |
 | `update_rack` | write | Set macros, edit chains or add a chain. |
@@ -160,6 +160,7 @@ The **Kind** column says: **read** (changes nothing), **write**, **asks first** 
 | `transform_notes` | **asks first** (when replacing) | Edits a clip **as a diff**: `humanize`, `quantize`, `invert` (diatonic), `arpeggiate`, `variation`, `transpose` (`semitones` chromatic **or** `steps` in key). Only part of it: `half` (`first`/`second`) or `from_bar`/`to_bar` (bars **of the clip**), or `note_ids`. `preview` shows what would happen first. |
 | `plan_changes` | read | Plans several steps (drums, bass, chords, melody, transform) **without changing anything**. Later steps see earlier ones (the bass can follow a planned kick; chords are shared). Returns a preview and a `plan_id`. |
 | `plan_song` | read | Plans a **whole song** from a genre (`house`, `melodic_techno`, `peak_time_techno`, `drum_and_bass`, `trap`): sections, locators, tracks (missing ones are created), optionally mix, automation, sidechain, FX. Fields: `length` (`radio`/`standard`/`extended`) or `minutes`, `start_bar`, `roles`, `clips`, `create_missing`, `sounds`, `mix`, `fx`, `sidechain`, `progression`, `set_tempo`, `reference`, `seed`. Returns a preview and a `plan_id`; **nothing changes until `apply_plan`**. |
+| `plan_master` | read | Plans a **master chain** (EQ Eight low cut, Glue Compressor, Limiter at -1 dB true peak) with the genre's settings (`genre`, optional; `ceiling_db`). A starting point: it hears nothing and makes nothing louder. Returns a preview and a `plan_id`; `apply_plan` writes it in two undo steps. A Master that has a Limiter, EQ Eight or Glue Compressor is left alone. |
 | `apply_plan` | **asks first** (when replacing notes) | Writes a plan to Live as **one undo step**. Fails with `CONFLICT` if a target clip changed since planning; then plan again. |
 | `compose_takes` | write | Several **variations** of one part (`kind`: hook, melody, bass, chords, drums; `count`) over the same chords, each on its own **take lane** in the Arrangement (Live 12.2+), to comp in Live. One undo step. |
 
