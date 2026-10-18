@@ -93,6 +93,15 @@ def test_chat_device_types_into_a_native_field(devices):
     assert wx + ww <= entry_box["presentation_rect"][0]  # the text field sits beside the chat, never over it
     assert (by_text["prepend chat_input"], web) in lines
     assert (entry, by_text["route text"]) in lines
+    # only Enter sends: textedit also outputs its text when it loses focus (selecting another track)
+    full = {(l["patchline"]["source"][0], l["patchline"]["source"][1], l["patchline"]["destination"][0],
+             l["patchline"]["destination"][1]) for l in patcher["patcher"]["lines"]}
+    gate, ask = by_text["gate 1 0"], by_text["t 0 b 1"]
+    assert (by_text["route text"], 0, gate, 1) in full and (gate, 0, by_text["t b l"], 0) in full
+    assert (entry, 1, by_text["sel 13 3"], 0) in full  # the key outlet
+    # Enter: open (right outlet fires first), bang the field for its text, close
+    assert {(ask, 2, gate, 0), (ask, 1, entry, 0), (ask, 0, gate, 0)} <= full
+    assert not any(src == by_text["route text"] and dst == by_text["t b l"] for src, _, dst, _ in full)
     # Native Model menu: the page fills it and gets the pick back as model_index.
     menu = next(i for i, b in boxes.items() if b["maxclass"] == "umenu")
     router = by_text["route menu_clear menu_append menu_select"]
