@@ -10,6 +10,8 @@ Devices:
   composition engine in the clip view's Generate / Transform panels.
 - MidiBakery Reference Analyzer (Audio Effect): analyzes the reference song on its track
   (sections, kick, energy per bar), shows the structure and sets locators.
+- MidiBakery Loudness Meter (Audio Effect): on the Master, after the Limiter: momentary,
+  short-term and integrated LUFS (BS.1770) and the sample peak, for MidiBakery's measure_master.
 
 Patchers are generated here instead of hand-saved in Max, so they stay
 reviewable in git and every device shares one node helper (src/midibakery-node.js).
@@ -34,8 +36,9 @@ NODE_SCRIPT = "midibakery-node.js"
 # node.script entry files per device kind; each sets its mode and loads NODE_SCRIPT.
 NODE_ENTRIES = ("midibakery-chat.js", "midibakery-miditool.js")
 REFERENCE_FILES = ("midibakery-reference.js", "reference-analysis.js")  # the Reference device's node.script
-ABOUT_SCRIPT = "midibakery-about.js"  # the About button's version line, for both node.scripts
-NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES, ABOUT_SCRIPT)
+METER_FILES = ("midibakery-meter.js", "loudness.js")  # the Loudness Meter's node.script
+ABOUT_SCRIPT = "midibakery-about.js"  # the About button's version line, for every node.script
+NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES, *METER_FILES, ABOUT_SCRIPT)
 # MidiBakery's one version (midibakery.__version__), read as text: building needs no installed package.
 VERSION = re.search(r'^__version__ = "([^"]+)"', (HERE.parent / "core/src/midibakery/__init__.py").read_text(encoding="utf-8"), re.M)[1]
 
@@ -551,9 +554,94 @@ def reference_device() -> dict[str, Any]:
     return p.to_json(kind="audio_effect", title="MidiBakery Reference Analyzer", width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
 
 
+METER_WIDTH, METER_HEIGHT = 170.0, 169.0
+METER_ROWS = (("m", "Momentary", "LUFS"), ("s", "Short-term", "LUFS"), ("i", "Integrated", "LUFS"), ("p", "Peak", "dB"))
+METER_MAX_WINDOW = 19200  # average~'s longest window: 100 ms at 192 kHz
+
+
+def meter_device() -> dict[str, Any]:
+    """Layout (170 x 169): the four readings (momentary, short-term, integrated LUFS; sample peak), Reset | About,
+    the status line. Audio passes through. Per channel the K-weighting (two biquad~ with loudness.js's coefficients
+    for the current sample rate) feeds average~ rms over 100 ms; every 100 ms metro reads both RMS values and both
+    sample peaks (peakamp~ restarts on each read) and sends them to node.script as one block."""
+    p = Patcher()
+    plugin = p.obj("plugin~", 20, 20, inlets=2, outlets=["signal", "signal"], width=60)
+    plugout = p.obj("plugout~", 20, 400, inlets=2, outlets=["signal", "signal"], width=60)
+    p.connect(plugin, 0, plugout, 0)
+    p.connect(plugin, 1, plugout, 1)
+    node = p.obj("node.script midibakery-meter.js @autostart 1 @watch 0", 520, 400, outlets=["", ""], width=300)
+
+    # node.script -> the filters, the window, the display, the status line; "needrate" asks dspstate~ again
+    route = p.obj("route coeff window needrate status " + " ".join(key for key, _, _ in METER_ROWS), 520, 440,
+                  outlets=[""] * (5 + len(METER_ROWS)), width=300)
+    p.connect(node, 0, route)
+    coeff = p.obj("route pre rlb", 520, 40, outlets=["", "", ""], width=90)
+    p.connect(route, 0, coeff)
+    dsp = p.obj("dspstate~", 640, 40, outlets=["int", "float", "int", "int"], width=70)
+    rate = p.obj("prepend samplerate", 640, 70, width=110)
+    p.connect(route, 2, dsp)
+    p.connect(dsp, 1, rate)
+    p.connect(rate, 0, node)
+
+    clock = p.obj("metro 100", 300, 80, inlets=2, outlets=["bang"], width=70)
+    start = p.message("1", 300, 50)
+    this_device = p.obj("live.thisdevice", 300, 20, outlets=["bang", "int", "int"], width=90)
+    p.connect(this_device, 0, start)
+    p.connect(start, 0, clock)
+    reads = p.obj("t b b b b", 300, 110, outlets=["bang"] * 4, width=80)
+    p.connect(clock, 0, reads)
+    block = p.obj("pack 0. 0. 0. 0.", 300, 340, inlets=4, outlets=[""], width=110)
+    to_node = p.obj("prepend block", 300, 370, width=90)
+    p.connect(block, 0, to_node)
+    p.connect(to_node, 0, node)
+
+    for ch in range(2):
+        x = 100 + 100 * ch
+        pre = p.obj("biquad~", x, 60, inlets=6, outlets=["signal"], width=60)
+        rlb = p.obj("biquad~", x, 100, inlets=6, outlets=["signal"], width=60)
+        rms = p.obj(f"average~ {METER_MAX_WINDOW} rms", x, 140, inlets=1, outlets=["signal"], width=90)
+        level = p.obj("snapshot~", x, 180, inlets=2, outlets=["float"], width=70)
+        peak = p.obj("peakamp~", x, 220, inlets=2, outlets=["float"], width=70)
+        p.connect(plugin, ch, pre)
+        p.connect(pre, 0, rlb)
+        p.connect(rlb, 0, rms)
+        p.connect(rms, 0, level)
+        p.connect(plugin, ch, peak)
+        p.connect(coeff, 0, pre)
+        p.connect(coeff, 1, rlb)
+        p.connect(route, 1, rms)
+        # trigger fires right to left: the peaks and the right channel first, the left RMS (pack's hot inlet) last
+        p.connect(reads, ch, level)
+        p.connect(reads, 2 + ch, peak)
+        p.connect(level, 0, block, ch)
+        p.connect(peak, 0, block, 2 + ch)
+
+    for i, (key, label, unit) in enumerate(METER_ROWS):
+        y = 4 + 26 * i
+        p.comment(label, (860, 20 + 30 * i, 70, 14), presentation=(4, y + 6, 64, 14), fontsize=9.0, **THEMED_TEXT)
+        value = p.comment("--", (940, 20 + 30 * i, 60, 22), presentation=(68, y, 62, 24), fontsize=16.0,
+                          textjustification=2, **THEMED_TEXT)
+        p.comment(unit, (1010, 20 + 30 * i, 40, 14), presentation=(132, y + 6, 36, 14), fontsize=9.0, **THEMED_TEXT)
+        shown = p.obj("prepend set", 940, 160 + 30 * i, width=70)
+        p.connect(route, 4 + i, shown)
+        p.connect(shown, 0, value)
+
+    reset = p.box("live.text", (860, 300, 50, 15), inlets=1, outlets=["", ""], presentation=(4, 110, 60, 16),
+                  parameter_enable=0, mode=0, text="Reset", texton="Reset", varname="reset")
+    _on_press(p, reset, "reset", node, 860, 330)
+    _about(p, (116, 110, 50, 16), node, 960, 300)
+    status = p.comment("Starting...", (860, 440, 160, 30), presentation=(4, 130, 162, 36), linecount=3,
+                       fontsize=9.0, **THEMED_TEXT)
+    to_status = p.obj("prepend set", 860, 470, width=70)
+    p.connect(route, 3, to_status)
+    p.connect(to_status, 0, status)
+    return p.to_json(kind="audio_effect", title="MidiBakery Loudness Meter", width=METER_WIDTH, height=METER_HEIGHT)
+
+
 DEVICES = {
     "MidiBakery Chat": ("midi_effect", chat_device),
     "MidiBakery Reference Analyzer": ("audio_effect", reference_device),
+    "MidiBakery Loudness Meter": ("audio_effect", meter_device),
     "MidiBakery Generator": ("generator", generator_device),
     "MidiBakery Transform": ("transformation", transform_device),
 }
