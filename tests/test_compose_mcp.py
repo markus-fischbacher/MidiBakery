@@ -408,6 +408,9 @@ async def test_arrangement_targets_are_checked(client, live):
         await server.call_tool("compose", {"kind": "bass", "track": 1, "slot": 0, "arrangement_clip": 0})
     with pytest.raises(ToolError, match="give slot .* or arrangement_clip"):
         await server.call_tool("transform_notes", {"track": 1, "operation": "humanize"})
+    # song bars without the clip (api.log: "the second half of the Break Bass" sent from_bar 65 alone)
+    with pytest.raises(ToolError, match="'Break Bass'.*bars of that clip .*not of the song"):
+        await server.call_tool("transform_notes", {"track": 1, "operation": "variation", "from_bar": 65})
     with pytest.raises(ToolError, match="No arrangement clip index 2 .*its clips: none.*get_arrangement"):
         await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": 2})
     # chords_from and follow_kick can name arrangement clips too
@@ -423,3 +426,25 @@ async def test_plan_changes_ignores_preview_in_a_step(client, live):
     server = build_server(client)
     plan = _payload(await server.call_tool("plan_changes", {"steps": [{"kind": "bass", "track": 1, "slot": 0, "preview": True}]}))
     assert plan["changes"][0]["kind"] == "bass"
+
+
+async def test_transform_half_needs_no_bar_count(client, live):
+    # small models guessed from_bar 3 for "the second half" of an 8 bar clip
+    server = build_server(client)
+    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 32, "name": "Breakdown Bass"}]})
+    await client.call("notes.apply", {"track": 1, "arrangement_clip": 0, "add": [
+        {"pitch": 33, "start_time": float(b), "duration": 0.5} for b in range(32)]})
+    second = _payload(await server.call_tool("transform_notes", {"track": 1, "arrangement_clip": "Breakdown Bass", "operation": "transpose",
+                                                                 "semitones": 12, "half": "second", "preview": True}))
+    assert second["changes"][0]["notes_considered"] == 16
+    with pytest.raises(ToolError, match="either half or from_bar/to_bar"):
+        await server.call_tool("transform_notes", {"track": 1, "arrangement_clip": 0, "operation": "variation", "half": "second", "from_bar": 5})
+
+
+async def test_composing_over_an_arrangement_clip_says_it_replaces_it(client, live):
+    # gemma "varied" the second half of 'Breakdown Bass' with a bass step that rewrote all of it
+    server = build_server(client)
+    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 16, "name": "Breakdown Bass",
+                                                        "notes": [{"pitch": 33, "start_time": float(b), "duration": 0.5} for b in range(16)]}]})
+    plan = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": "Breakdown Bass", "seed": 1, "preview": True}))
+    assert plan["changes"][0]["note"].startswith("Replaces all 16 notes") and "transform_notes" in plan["changes"][0]["note"]

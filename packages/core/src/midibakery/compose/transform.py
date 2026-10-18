@@ -173,4 +173,14 @@ def variation(notes: list[dict], rng: random.Random, scale: Scale | None, amount
         if rng.random() < 0.25 * amount and n.get("probability", 1.0) >= 1.0:
             fields["probability"] = round(rng.uniform(0.6, 0.9), 2)
         changes.append(_change(n, **fields) if fields else None)
+    # A slight variation (amount 0.2) of a short phrase often rolled no pitch change at all, and the
+    # user heard nothing: at least one note moves to a neighbour tone.
+    if amount > 0 and notes and not any(c and "pitch" in c for c in changes):
+        i = rng.randrange(len(notes))
+        n = notes[i]
+        if scale and scale.contains(n["pitch"]):
+            pitch = clamp_pitch(scale.step(n["pitch"], rng.choice((-1, 1))))
+        else:
+            pitch = clamp_pitch(n["pitch"] + rng.choice((-2, 2)))
+        changes[i] = _change(n, **{k: v for k, v in (changes[i] or {}).items() if k != "note_id"}, pitch=pitch)
     return _collect(changes)

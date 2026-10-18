@@ -37,7 +37,11 @@ def _one_place(spec: Any, required: bool) -> None:
     if spec.slot is not None and spec.arrangement_clip is not None:
         raise ValueError("give either slot (Session View) or arrangement_clip (Arrangement), not both")
     if required and spec.slot is None and spec.arrangement_clip is None:
-        raise ValueError("give slot (Session View) or arrangement_clip (Arrangement, from get_arrangement)")
+        # A model asked for "the second half of the Break Bass" tends to send song bars without the clip
+        bars = (" from_bar/to_bar count bars of that clip (1 = its first bar), not of the song."
+                if getattr(spec, "from_bar", None) is not None or getattr(spec, "to_bar", None) is not None else "")
+        raise ValueError("give slot (Session View) or arrangement_clip (Arrangement: the clip's index or name, "
+                         "e.g. 'Break Bass', from get_session or get_arrangement)." + bars)
 
 
 class ClipLocation(Spec):
@@ -153,6 +157,8 @@ class TransformSpec(Spec):
     from_bar: Annotated[int, Field(ge=1)] | None = Field(
         None, description="Only notes starting from this bar of the clip (1 = its first bar), e.g. its second half")
     to_bar: Annotated[int, Field(ge=1)] | None = Field(None, description="Only notes starting up to this bar of the clip (inclusive)")
+    half: Literal["first", "second"] | None = Field(
+        None, description="Only the first or second half of the clip (instead of from_bar/to_bar)")
     amount: Amount = Field(0.5, description="humanize/variation intensity")
     grid: Annotated[float, Field(gt=0, le=4, description="quantize grid in beats (0.25 = 1/16)")] = 0.25
     strength: Amount = Field(1.0, description="quantize strength")
@@ -181,6 +187,8 @@ class TransformSpec(Spec):
     def _bars(self) -> TransformSpec:
         if self.from_bar is not None and self.to_bar is not None and self.to_bar < self.from_bar:
             raise ValueError("to_bar must not be before from_bar")
+        if self.half is not None and (self.from_bar is not None or self.to_bar is not None):
+            raise ValueError("give either half or from_bar/to_bar, not both")
         return self
 
     @model_validator(mode="after")

@@ -47,8 +47,8 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   when tracks or scenes are created or deleted; users count from 1 ("track 1" = index 0).
 - Times are beats (quarter notes); pitch 60 = C3. Prefer notes from the song scale.
 - edit_notes and transform_notes are diffs by note_id from get_clip; never rewrite a whole
-  clip to change a few notes. transform_notes from_bar/to_bar limit it to bars of the clip (its second
-  half). Transpose: semitones are chromatic (12 = octave), steps are scale steps.
+  clip to change a few notes. transform_notes half ('first'/'second') or from_bar/to_bar (bars
+  of the clip, 1 = its first bar) limit it to part of the clip. Transpose: semitones are chromatic (12 = octave), steps are scale steps.
   run_batch makes several edits one undo step; undo takes back any write.
 - Mixer: volume and sends in dB as Live shows them; routing by the names get_mixer(options=true)
   lists. Devices inside racks: chain_path [chain, device, ...].

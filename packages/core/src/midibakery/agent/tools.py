@@ -254,7 +254,7 @@ def compact_session(result: dict[str, Any]) -> str:
         arranged = track.get("arrangement_clips") or []
         if arranged:
             line += "; arrangement clips " + ", ".join(
-                f"{c['index']} '{c.get('name', '')}' bars {_num(c['start_bar'])}-{_num(round(c['start_bar'] + c['bars'] - 1, 2))}"
+                f"{c['index']} '{c.get('name', '')}' {_num(c['bars'])} bars (song bars {_num(c['start_bar'])}-{_num(round(c['start_bar'] + c['bars'] - 1, 2))})"
                 for c in arranged)
         lines.append(line)
     if any(t.get("arrangement_clips") for t in result.get("tracks", [])):

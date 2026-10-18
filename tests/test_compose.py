@@ -364,3 +364,14 @@ def test_drum_chance_scales_only_the_optional_hits():
     assert scale_chance(1.0, 1.0) == 1.0  # backbeats never drop out
     assert scale_chance(0.7, 0.5) == 0.7
     assert all(n.probability == 1.0 for n in generate_drums(Meter(), 4, "hiphop", random.Random(3), map_pads(None)))
+
+
+def test_a_slight_variation_always_changes_a_pitch():
+    # amount 0.2 on a short phrase used to roll no pitch change at all: the user heard nothing
+    import random
+
+    from midibakery.compose.transform import variation
+    notes = [{"note_id": i, "pitch": 33, "start_time": float(i), "duration": 0.5, "velocity": 100.0} for i in range(8)]
+    for seed in range(50):
+        diff = variation(notes, random.Random(seed), None, amount=0.1)
+        assert any("pitch" in c for c in diff.modify), seed
