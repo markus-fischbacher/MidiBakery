@@ -1,0 +1,385 @@
+"""Counter melody generator: a second line that answers a main melody read from a clip.
+
+The rules come from docs/COUNTER_MELODY.md (two tutorials, 13 techniques). `analyze` reads the main
+melody (onsets, held notes, rests, density, range); `generate_counter` builds an onset pattern per
+mode and then picks every pitch against the main note sounding at that moment and the chord.
+
+Modes (rhythm and placement, then pitch):
+- fill_the_gaps: starts only inside the main's held notes and rests; stops (or sustains) when it returns.
+- call_and_response: the same at phrase level: answers in whole silent beats and bars of the main.
+- passive_over_active: a third to half of a busy main's onsets, longer notes; more notes over a sparse one.
+- contrasting_rhythm: an onset pattern that differs from the main's (sparse over dense, dense over sparse).
+- harmonic_notes: follows the main's onsets (or an eighth late) on another consonant note, never the same pitch class.
+- note_layering: the main's own pitch classes an octave away, same time or delayed.
+
+Rules every mode keeps: the register is clear of the main's range (above/below: a whole octave; same only
+with onsets that never meet the main's); on strong beats (meter accent >= 0.8) the interval to the sounding
+main note is a third, sixth, fifth or octave (a unison only in note_layering); no parallel fifths or octaves
+between consecutive notes; chord tones first, then scale tones. A note that fits nowhere is shortened,
+then dropped: a gap is better than a clash. Same seed, same notes.
+
+Fixed figures (staircase, dotted-eighth pulse, echo answer) are not here: they plug in later as patterns.
+"""
+
+from __future__ import annotations
+
+import math
+import random
+from bisect import bisect_left
+from dataclasses import dataclass
+
+from midibakery.compose.harmony import Harmony
+from midibakery.compose.notes import Note, dedupe
+from midibakery.compose.rhythm import Grid, Meter
+from midibakery.compose.theory import Scale
+
+MODES = ("fill_the_gaps", "call_and_response", "passive_over_active", "contrasting_rhythm", "harmonic_notes", "note_layering")
+REGISTERS = ("above", "below", "same")
+
+STEP = 0.25  # one 16th, in beats
+EPS = 1e-6
+WINDOW = 14  # semitones the counter line may span above/below the main's range
+CONSONANT = frozenset({3, 4, 7, 8, 9})  # thirds, fifths, sixths (octaves and unisons are handled apart)
+PARALLEL = frozenset({0, 7})
+MAX_BEATS = {"passive_over_active": 4.0}  # longest note per mode, default 2 beats
+
+
+@dataclass(frozen=True)
+class MainLine:
+    notes: tuple[Note, ...]  # sorted, looped or cut to the bar count
+    meter: Meter
+    bars: int
+    onset_steps: frozenset[int]  # 16th steps from the clip start where a main note starts
+    onsets_per_bar: tuple[int, ...]
+    low: int
+    high: int
+    median: float
+
+    @property
+    def length(self) -> float:
+        return self.meter.beats_per_bar * self.bars
+
+    def at(self, time: float) -> Note | None:
+        """The main note sounding at `time` (the latest started one)."""
+        sounding = [n for n in self.notes if n.start_time <= time + EPS and time < n.end_time - EPS]
+        return max(sounding, key=lambda n: (n.start_time, n.pitch)) if sounding else None
+
+    def overlapping(self, start: float, end: float) -> list[Note]:
+        return [n for n in self.notes if n.start_time < end - EPS and n.end_time > start + EPS]
+
+    def silent(self, start: float, end: float) -> bool:
+        """No main note sounds anywhere in [start, end): a rest the counter may own."""
+        return not self.overlapping(start, end)
+
+    def held(self) -> list[tuple[float, float]]:
+        return [(n.start_time, n.end_time) for n in self.notes]
+
+    def rests(self) -> list[tuple[float, float]]:
+        """Spans where no main note sounds."""
+        gaps, cursor = [], 0.0
+        for n in self.notes:
+            if n.start_time > cursor + EPS:
+                gaps.append((cursor, n.start_time))
+            cursor = max(cursor, n.end_time)
+        if cursor < self.length - EPS:
+            gaps.append((cursor, self.length))
+        return gaps
+
+    def strong_times(self) -> list[float]:
+        bpb = self.meter.beats_per_bar
+        return [bar * bpb + p for bar in range(self.bars) for p in self.meter.pulses if self.meter.accent(p) >= 0.8]
+
+
+def analyze(main: list[Note], meter: Meter, bars: int) -> MainLine:
+    """The main melody as a line of `bars` bars: it loops when shorter, is cut when longer."""
+    notes = sorted((n for n in main if not n.mute), key=lambda n: (n.start_time, n.pitch))
+    if not notes:
+        raise ValueError("the main melody has no notes to answer")
+    bpb = meter.beats_per_bar
+    total = bpb * bars
+    cycle = max(1, math.ceil(max(n.end_time for n in notes) / bpb - EPS)) * bpb  # whole bars
+    looped: list[Note] = []
+    for k in range(int(total // cycle) + 1):
+        for n in notes:
+            start = n.start_time + k * cycle
+            if start < total - EPS:
+                looped.append(Note(n.pitch, start, min(n.duration, total - start), n.velocity))
+    onset_steps = frozenset(round(n.start_time / STEP) for n in looped)
+    per_bar = tuple(sum(1 for n in looped if int(n.start_time // bpb + EPS) == bar) for bar in range(bars))
+    pitches = sorted(n.pitch for n in looped)
+    mid = len(pitches) // 2
+    median = pitches[mid] if len(pitches) % 2 else (pitches[mid - 1] + pitches[mid]) / 2
+    return MainLine(tuple(looped), meter, bars, onset_steps, per_bar, pitches[0], pitches[-1], median)
+
+
+def consonant(interval: int, unison_ok: bool = False) -> bool:
+    d = abs(interval)
+    if d == 0:
+        return unison_ok
+    return d % 12 == 0 or d % 12 in CONSONANT
+
+
+@dataclass(frozen=True)
+class Onset:
+    step: int  # 16th step from the clip start
+    end: float | None = None  # the note must end by this beat (the end of a rest it answers in)
+    source: Note | None = None  # the main note a layer copies
+
+
+def _pick(rng: random.Random, pool: list[int], count: int, spacing: int = 2) -> list[int]:
+    """`count` steps of `pool` at random, at least `spacing` steps apart."""
+    chosen: list[int] = []
+    for step in sorted(pool, key=lambda s: rng.random()):
+        if len(chosen) >= count:
+            break
+        if all(abs(step - c) >= spacing for c in chosen):
+            chosen.append(step)
+    return sorted(chosen)
+
+
+def _weighted(line: MainLine, rng: random.Random, pool: list[int], count: int, spacing: int = 2) -> list[int]:
+    """Like `_pick`, but strong positions are likelier."""
+    accent = line.meter.accent
+    keyed = sorted(pool, key=lambda s: rng.random() ** (1 / (0.2 + accent((s * STEP) % line.meter.beats_per_bar))))
+    chosen: list[int] = []
+    for step in reversed(keyed):  # the largest keys are the likeliest
+        if len(chosen) >= count:
+            break
+        if all(abs(step - c) >= spacing for c in chosen):
+            chosen.append(step)
+    return sorted(chosen)
+
+
+def _bar_steps(line: MainLine, bar: int) -> range:
+    spb = round(line.meter.beats_per_bar / STEP)
+    return range(bar * spb, (bar + 1) * spb)
+
+
+def _fill_the_gaps(line: MainLine, rng: random.Random, density: float | None) -> list[Onset]:
+    d = 0.5 if density is None else density
+    onsets = []
+    for bar in range(line.bars):
+        free = [s for s in _bar_steps(line, bar) if s not in line.onset_steps]
+        onsets += [Onset(s) for s in _weighted(line, rng, free, round(1 + 5 * d))]
+    return onsets
+
+
+def _call_and_response(line: MainLine, rng: random.Random, density: float | None) -> list[Onset]:
+    """Answers in the silent beats and bars. A main without a silent beat is answered like fill_the_gaps."""
+    d = 0.5 if density is None else density
+    beats = int(line.length)
+    silent = [line.silent(b, b + 1) for b in range(beats)]
+    if not any(silent):
+        return _fill_the_gaps(line, rng, density)
+    onsets: list[Onset] = []
+    b = 0
+    while b < beats:
+        if not silent[b]:
+            b += 1
+            continue
+        run_end = b
+        while run_end < beats and silent[run_end]:
+            run_end += 1
+        first, last = b * 4, run_end * 4  # 16th steps of the silent run
+        steps = [first] + [s for s in range(first + 2, last, 2) if rng.random() < 0.35 + 0.5 * d]
+        onsets += [Onset(s, float(run_end)) for s in steps]
+        b = run_end
+    return onsets
+
+
+def _passive_over_active(line: MainLine, rng: random.Random, density: float | None) -> list[Onset]:
+    onsets = []
+    for bar in range(line.bars):
+        steps = _bar_steps(line, bar)
+        busy = line.onsets_per_bar[bar]
+        if busy >= 5:
+            ratio = 0.34 + 0.16 * rng.random() if density is None else 0.2 + 0.4 * density
+            count = max(1, round(busy * ratio))
+        else:
+            count = min(8, max(2, busy * 2 + 2) if density is None else round(2 + 6 * density))
+        spb = len(steps)
+        onsets += [Onset(steps[0] + round(i * spb / count)) for i in range(count)]
+    return onsets
+
+
+def _contrasting_rhythm(line: MainLine, rng: random.Random, density: float | None) -> list[Onset]:
+    onsets = []
+    for bar in range(line.bars):
+        steps = list(_bar_steps(line, bar))
+        theirs = {s for s in steps if s in line.onset_steps}
+        if len(theirs) >= 8:
+            count = 3 + (rng.random() < 0.5)  # sparse over dense
+        else:
+            count = min(8, max(len(theirs) + 2, 4))  # dense over sparse
+        if density is not None:
+            count = max(1, round(1 + 7 * density))
+        free = [s for s in steps if s not in theirs]
+        mine = _weighted(line, rng, free, count, spacing=1 if len(theirs) < 8 else 2)
+        if len(mine) < count:  # no room outside the main's onsets: share a few
+            shared = _weighted(line, rng, [s for s in steps if s in theirs and s not in mine], count - len(mine), spacing=2)
+            mine = sorted(mine + [s for s in shared if all(abs(s - m) >= 2 for m in mine)])
+        if set(mine) == theirs and mine:  # never the same pattern
+            mine = mine[:-1]
+        onsets += [Onset(s) for s in mine]
+    return onsets
+
+
+def _harmonic_notes(line: MainLine, rng: random.Random, density: float | None) -> list[Onset]:
+    chance = 0.7 if density is None else density
+    onsets: dict[int, Onset] = {}
+    for n in line.notes:
+        if rng.random() >= chance:
+            continue
+        step = round(n.start_time / STEP) + (2 if rng.random() < 0.4 else 0)
+        if step < line.length / STEP:
+            onsets.setdefault(step, Onset(step))
+    return list(onsets.values())
+
+
+def _note_layering(line: MainLine, rng: random.Random, density: float | None) -> list[Onset]:
+    chance = 1.0 if density is None else density
+    onsets: dict[int, Onset] = {}
+    delayed = True  # the previous copy came late: this one may sound with the main
+    for n in line.notes:
+        if rng.random() >= chance:
+            continue
+        delay = 0 if delayed and rng.random() < 0.6 else rng.choice((2, 3))
+        delayed = delay > 0
+        step = round(n.start_time / STEP) + delay
+        if step < line.length / STEP:
+            onsets.setdefault(step, Onset(step, source=n))
+    return list(onsets.values())
+
+
+RHYTHMS = {
+    "fill_the_gaps": _fill_the_gaps,
+    "call_and_response": _call_and_response,
+    "passive_over_active": _passive_over_active,
+    "contrasting_rhythm": _contrasting_rhythm,
+    "harmonic_notes": _harmonic_notes,
+    "note_layering": _note_layering,
+}
+
+
+def _window(line: MainLine, register: str) -> tuple[int, int]:
+    """Lowest and highest pitch of the counter line."""
+    if register == "above":
+        low = min(line.high + 12, 127 - WINDOW)
+        return low, low + WINDOW
+    if register == "below":
+        high = max(line.low - 12, WINDOW)
+        return high - WINDOW, high
+    width = max(line.high - line.low, 7)
+    return line.low, line.low + width
+
+
+class _Voice:
+    """Picks pitches for one counter line and remembers the last note for the parallel check."""
+
+    def __init__(self, line: MainLine, harmony: Harmony, scale: Scale, mode: str, register: str, rng: random.Random):
+        self.line, self.harmony, self.scale, self.mode, self.register, self.rng = line, harmony, scale, mode, register, rng
+        self.low, self.high = _window(line, register)
+        self.strong = line.strong_times()
+        self.previous: Note | None = None
+
+    def _checked_times(self, start: float, end: float) -> list[float]:
+        times = [start] + [n.start_time for n in self.line.overlapping(start, end) if n.start_time > start + EPS]
+        i = bisect_left(self.strong, start + EPS)
+        while i < len(self.strong) and self.strong[i] < end - EPS:
+            times.append(self.strong[i])
+            i += 1
+        return times
+
+    def valid(self, pitch: int, start: float, end: float) -> bool:
+        line, mode = self.line, self.mode
+        for m in line.overlapping(start, end):
+            if mode == "harmonic_notes" and pitch % 12 == m.pitch % 12:
+                return False
+            if (self.register == "above" and pitch <= m.pitch) or (self.register == "below" and pitch >= m.pitch):
+                return False
+        for t in self._checked_times(start, end):
+            m = line.at(t)
+            if m and line.meter.accent(t % line.meter.beats_per_bar) >= 0.8 and not consonant(pitch - m.pitch, mode == "note_layering"):
+                return False
+        return not self._parallel(pitch, start)
+
+    def _parallel(self, pitch: int, start: float) -> bool:
+        """Parallel fifths or octaves against the main since the previous counter note."""
+        prev = self.previous
+        if prev is None:
+            return False
+        before, now = self.line.at(prev.start_time), self.line.at(start)
+        if not before or not now or before == now:
+            return False
+        a, b = abs(prev.pitch - before.pitch), abs(pitch - now.pitch)
+        same_way = (pitch - prev.pitch) * (now.pitch - before.pitch) > 0
+        return same_way and a % 12 == b % 12 and a % 12 in PARALLEL and a > 0 and b > 0
+
+    def choose(self, start: float, end: float, source: Note | None) -> int | None:
+        chord = self.harmony.at(start).chord
+        strong = self.line.meter.accent(start % self.line.meter.beats_per_bar) >= 0.8
+        pool = [p for p in range(self.low, self.high + 1) if self.scale.contains(p)]
+        chord_tones = [p for p in pool if chord.contains(p)]
+        if source is not None:  # a layer: the main's own pitch class, else a chord tone
+            tiers = [[p for p in pool if p % 12 == source.pitch % 12], chord_tones]
+        elif strong or self.mode == "harmonic_notes" or self.rng.random() < 0.6:
+            tiers = [chord_tones, pool]
+        else:
+            tiers = [pool, chord_tones]
+        target = self.previous.pitch if self.previous else (self.low + self.high) // 2
+        for tier in tiers:
+            ranked = sorted(tier, key=lambda p: abs(p - target) + self.rng.random() * 3)
+            for pitch in ranked:
+                if self.valid(pitch, start, end):
+                    return pitch
+        return None
+
+
+def generate_counter(
+    main: list[Note],
+    harmony: Harmony,
+    scale: Scale,
+    meter: Meter,
+    bars: int,
+    rng: random.Random,
+    mode: str,
+    register: str = "above",
+    density: float | None = None,
+    swing: float = 0.0,
+) -> list[Note]:
+    if mode not in MODES:
+        raise ValueError(f"unknown counter melody mode {mode!r}; use one of {', '.join(MODES)}")
+    if register not in REGISTERS:
+        raise ValueError(f"unknown register {register!r}; use above, below or same")
+    line = analyze(main, meter, bars)
+    grid = Grid(meter, STEP, swing)
+    spb = grid.steps_per_bar
+    onsets = RHYTHMS[mode](line, rng, density)
+    if register == "same":  # the same octave needs a different rhythm: never start with the main
+        onsets = [o if o.step not in line.onset_steps else Onset(o.step + 1, o.end, o.source) for o in onsets]
+        onsets = [o for o in onsets if o.step not in line.onset_steps]
+    unique = {o.step: o for o in onsets if o.step < bars * spb}
+    ordered = [unique[s] for s in sorted(unique)]
+    times = [grid.position(o.step // spb, o.step % spb) for o in ordered]
+    voice = _Voice(line, harmony, scale, mode, register, rng)
+    cap = MAX_BEATS.get(mode, 2.0)
+    notes: list[Note] = []
+    for i, onset in enumerate(ordered):
+        start = times[i]
+        end = min(times[i + 1] if i + 1 < len(times) else line.length, start + cap, onset.end or line.length)
+        returns = next((n.start_time for n in line.notes if n.start_time > start + EPS), None)
+        ends = [end]
+        if returns is not None and returns < end - EPS:
+            fill = mode in ("fill_the_gaps", "call_and_response")
+            ends = [returns] if fill and rng.random() < 0.5 else [end, returns]  # sustain under the re-entry, or stop
+        ends += [start + 2 * STEP] if end - start > 2 * STEP + EPS else []
+        for stop in ends:
+            pitch = voice.choose(start, stop, onset.source)
+            if pitch is not None:
+                accent = meter.accent(start % meter.beats_per_bar)
+                velocity = 62 + 28 * accent + rng.uniform(-5, 5)
+                note = Note(pitch, start, max(STEP * 0.9, (stop - start) * 0.92), velocity, 1.0, velocity_deviation=8)
+                notes.append(note)
+                voice.previous = note
+                break
+    return dedupe(notes)
