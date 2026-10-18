@@ -508,6 +508,7 @@ class Browser(LiveObject):
         self.instruments = BrowserItem("instruments", [
             BrowserItem("Drift", [_folder("Bass", BrowserItem("Sub Bass.adv", device="Drift"))], device="Drift"),
             BrowserItem("Wavetable", [_folder("Pad", BrowserItem("Warm Pad.adv", device="Wavetable"))], device="Wavetable"),
+            BrowserItem("Operator", device="Operator"),
         ])
         self.audio_effects = BrowserItem("audio_effects", [BrowserItem("Reverb", device="Reverb")])
         # The House template's sounds; pad names as in Live's 909 Core Kit.

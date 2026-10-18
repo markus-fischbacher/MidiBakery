@@ -178,7 +178,7 @@ class BrowserSearch(Params):
 
 class BrowserLoad(Params):
     track: TrackIndex
-    path: list[str] = Field(min_length=2, description="Browser path from browser.search, e.g. ['drums', '909 Core Kit.adg']")
+    path: list[str] = Field(min_length=1, description="Browser path from browser.search, e.g. ['drums', '909 Core Kit.adg'], or just an item name")
 
 
 ChainPath = Annotated[
