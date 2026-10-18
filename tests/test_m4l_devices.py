@@ -148,7 +148,8 @@ def test_node_scripts_ship_next_to_every_device(devices):
 def test_each_device_starts_the_node_entry_for_its_mode(devices):
     """Node for Max does not pass script arguments in process.argv, so the mode comes from the entry file."""
     expected = {"MidiBakery Chat": "midibakery-chat.js", "MidiBakery Generator": "midibakery-miditool.js",
-                "MidiBakery Transform": "midibakery-miditool.js", "MidiBakery Reference Analyzer": "midibakery-reference.js"}
+                "MidiBakery Transform": "midibakery-miditool.js", "MidiBakery Reference Analyzer": "midibakery-reference.js",
+                "MidiBakery Loudness Meter": "midibakery-meter.js"}
     for name, path in devices.items():
         _, patcher = build.read_amxd(path)
         scripts = [b.get("text", "") for b in _boxes(patcher).values() if b.get("text", "").startswith("node.script")]
