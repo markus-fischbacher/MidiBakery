@@ -8,6 +8,7 @@ By Klirrwerk. AI composition and session control for Ableton Live 12 Suite.
 |---|---|
 | Musicians (German): install, set up, use | [docs/user/BENUTZERHANDBUCH.md](docs/user/BENUTZERHANDBUCH.md) |
 | Musicians (English) | [docs/user/USER_GUIDE.md](docs/user/USER_GUIDE.md) |
+| MCP server for Claude Desktop / Claude Code: setup, all 37 tools, plain-language version (German: [MCP-SERVER.md](docs/user/MCP-SERVER.md)) | [docs/user/MCP_SERVER.md](docs/user/MCP_SERVER.md) |
 | Concept, roadmap and what is done (German) | [docs/KONZEPT.md](docs/KONZEPT.md) |
 | How the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together (German) | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) |
 | Genre recipes behind `plan_song` (German) | [docs/GENRES.md](docs/GENRES.md) |
@@ -140,6 +141,8 @@ Each device's *About* button shows its version next to the API's and the Remote 
 ```bash
 claude mcp add midibakery -- uv --directory <path to this repository> run midibakery mcp
 ```
+
+For the installed app, Claude Desktop and every tool explained: [docs/user/MCP_SERVER.md](docs/user/MCP_SERVER.md).
 
 ## License
 
