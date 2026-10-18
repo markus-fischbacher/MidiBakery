@@ -18,12 +18,13 @@ SYSTEM_PROMPT = (
     "You compose and edit MIDI and control the Live session through tools. "
     "Always answer in the language of the user's latest message and keep replies short: say what you changed or propose, "
     "with names of tracks, clips, chords and seeds where useful.\n\n"
-    "Find named tracks and clips in get_session; never ask for indices. Meet a vague wish with a sensible choice.\n\n"
+    "Find named tracks and clips in get_session; never ask for indices. Meet a vague wish with a sensible choice. "
+    "A vague wish about an existing part ('more exciting') changes that clip (transform_notes), never adds one. "
+    "A track or clip the set lacks (no typo): say so, use no other.\n\n"
     "Work like a producer: keep parts in the song's scale and "
-    "time signature, and make parts fit together (bass follows the kick and the chords, melody "
-    "follows the chords). For more than one part, or when the user wants to hear options first, "
+    "time signature and fitting together (bass follows kick and chords, melody follows the chords). For more than one part, or when the user wants to hear options first, "
     "use plan_changes and let them apply the preview; otherwise write directly with the compose "
-    "tools. If a tool fails, read the error and fix the call instead of repeating it.\n\n"
+    "tools. If a tool fails, fix the call instead of repeating it.\n\n"
     "Tool guide:\n" + INSTRUCTIONS
 )
 
@@ -66,8 +67,49 @@ _ENGLISH = frozenset("the and is not a an on with for please should make write d
 _CLAIM = re.compile(
     r"\b(gesetzt|geändert|gelöscht|erstellt|hinzugefügt|umbenannt|transponiert|geladen|ersetzt|angewendet|gestartet|"
     r"variiert|vertauscht|getauscht|stummgeschaltet|geschrieben|verschoben|humanisiert|"
+    r"eingestellt|angepasst|reduziert|erhöht|verringert|gemacht|aktualisiert|aktiviert|entfernt|"
     r"changed|deleted|created|added|renamed|transposed|loaded|replaced|applied|started|muted|swapped|moved|"
-    r"wrote|written|humanized|varied)\b", re.I)
+    r"wrote|written|humanized|varied|updated|adjusted|lowered|raised|increased|reduced|removed)\b"
+    # present tense and future: "Ich lade den Preset", "I'll load the preset", "Tempo auf 128 gesetzt"
+    r"|\b(ich (lade|setze|ändere|lösche|erstelle|schreibe|mache|variiere|tausche|erhöhe|reduziere|senke|verringere|stelle|passe|füge|benenne|verschiebe|transponiere|schalte|plane|ersetze|wende|werde|füge)|i(?:'ll| will| am|'m) "
+    r"(load|set|change|delete|create|write|make|vary|swap)\w*)\b", re.I)
+
+# Words with which a user asks for a new clip. Without one, a vague wish ("mach den Bass spannender")
+# is about the clip that exists: gemma composed a second clip next to it every time.
+_NEW_CLIP = re.compile(
+    r"\b(neu\w*|new|schreib\w*|write|erstell\w*|create|komponier\w*|compose|generier\w*|generate|"
+    r"hinzu\w*|add|another|weitere\w*|zusätzlich\w*|extra|song|beat|idee\w*|ideas?|alternativ\w*|option\w*|"
+    r"vorschl\w*|suggest\w*|variante\w*|versions?|takes?)\b", re.I)
+_TRACK_WORD = re.compile(r"\b(tracks?|spur(en)?|kanal|channel)\b", re.I)
+_CLIP_WORD = re.compile(r"\b(clips?)\b", re.I)
+
+
+def deletes_wrong_thing(user_text: str, tool: str) -> bool:
+    """gemma answered "Delete the clip 'Intro Kick'" with delete_track track 0."""
+    return tool == "delete_track" and bool(_CLIP_WORD.search(user_text)) and not _TRACK_WORD.search(user_text)
+
+
+_PART_KINDS = frozenset({"drums", "bass", "chords", "melody"})
+
+
+def asks_for_new_clip(text: str) -> bool:
+    return bool(_NEW_CLIP.search(text))
+
+
+def existing_clip_hint(session: dict[str, Any], track: Any) -> str | None:
+    """The clips a part-writing call would leave next to: names for the error that sends the model to
+    transform_notes. None when the track has no clip (a new one is then the only way) or is unknown."""
+    tracks = session.get("tracks", [])
+    found = None
+    if isinstance(track, int) and 0 <= track < len(tracks):
+        found = tracks[track]
+    elif isinstance(track, str):
+        found = next((t for t in tracks if str(t.get("name", "")).lower() == track.lower()), None)
+    if not found:
+        return None
+    parts = [f"arrangement_clip '{c.get('name', '')}'" for c in found.get("arrangement_clips") or []]
+    parts += [f"slot {c['slot']} '{c.get('name', '')}'" for c in sorted(found.get("clips") or [], key=lambda c: c["slot"])]
+    return ", ".join(parts[:6]) or None
 
 
 def claims_a_change(text: str) -> bool:
@@ -122,6 +164,23 @@ class Agent:
             return ""
         return "\n\n[The Live set now (get_session):\n" + COMPACT_RESULTS["get_session"](outcome.structured) + "]"
 
+    async def _new_clip_hint(self, call: ToolCall) -> str | None:
+        """compose (or a plan_changes part step) that would add a clip without slot or arrangement_clip
+        to a track that has clips, while the user did not ask for a new one."""
+        steps = [call.input] if call.name == "compose" else (
+            [x for x in call.input.get("steps", []) if isinstance(x, dict)] if call.name == "plan_changes" else [])
+        for step in steps:
+            kind = step.get("kind") if call.name == "plan_changes" else call.input.get("kind")
+            if kind not in _PART_KINDS or step.get("slot") is not None or step.get("arrangement_clip") is not None:
+                continue
+            outcome = await self.host.call("get_session", {})
+            if not outcome.structured:
+                return None
+            hint = existing_clip_hint(outcome.structured, step.get("track"))
+            if hint:
+                return hint
+        return None
+
     async def run_tool(self, name: str, arguments: dict[str, Any], emit: Emit) -> None:
         """A tool the user started from the UI (Apply, Undo): the same events as a model's call,
         and the model hears about it with the next message so it does not apply or undo twice."""
@@ -165,6 +224,8 @@ class Agent:
             unresolved: dict[str, str] = {}  # tool -> error of a write that failed and was not redone
             wrote = False  # a write tool succeeded during this message
             nudged = False
+            text_in = text
+            guarded = not self.compact or asks_for_new_clip(text)  # once per message: the second try goes through
             for _ in range(self.max_steps):
                 try:
                     turn = await self.provider.stream_turn(emit)
@@ -199,6 +260,23 @@ class Agent:
                 stuck = None
                 # Sequential on purpose: Live ops depend on each other's order (create, then fill).
                 for call in turn.tool_calls:
+                    if self.compact and deletes_wrong_thing(text_in, call.name):
+                        refusal = "NOT DONE: the user asked to delete a clip, not a track. Delete the clip (delete_clip, or edit_arrangement delete_clip for an arrangement clip)."
+                        await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": "model"})
+                        await emit({"type": "tool_result", "id": call.id, "name": call.name, "source": "model", "is_error": True, "result": refusal})
+                        results.append(ToolResult(call.id, call.name, refusal, True))
+                        continue
+                    if not guarded and (hint := await self._new_clip_hint(call)):
+                        guarded = True
+                        await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": "model"})
+                        refusal = (f"NOT DONE: the user did not ask for a new clip, and this track already has {hint}. "
+                                   "Change an existing clip instead: transform_notes with slot or arrangement_clip "
+                                   "(operation variation for something more lively, humanize, ...), "
+                                   "or compose with arrangement_clip to replace an arrangement clip. "
+                                   "Only if a new clip is really wanted, repeat this call.")
+                        await emit({"type": "tool_result", "id": call.id, "name": call.name, "source": "model", "is_error": True, "result": refusal})
+                        results.append(ToolResult(call.id, call.name, refusal, True))
+                        continue
                     outcome = await self._call(call, emit)
                     text = outcome.text
                     if self.compact and not outcome.is_error and outcome.structured and call.name in COMPACT_RESULTS:
