@@ -594,6 +594,12 @@ async def _plan_transform(session: Session, spec: TransformSpec) -> ClipChange:
         if not notes:
             bars = f"bars {spec.from_bar or 1}-{spec.to_bar or 'end'}"
             raise BridgeError("NOT_FOUND", f"No notes start in {bars} of the clip in {place} (it is {(state.length or 0) / bpb:g} bars long)")
+    if spec.half is not None:
+        # Small models guess from_bar for "the second half" without knowing the clip's length
+        middle = (state.length or 0) / 2
+        notes = [n for n in notes if (n["start_time"] >= middle - 1e-6) == (spec.half == "second")]
+        if not notes:
+            raise BridgeError("NOT_FOUND", f"No notes start in the {spec.half} half of the clip in {place}")
     seed = spec.seed if spec.seed is not None else new_seed()
     op = spec.operation
     try:
@@ -671,6 +677,10 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
                 names = ", ".join(f"'{c.get('name', '')}'" for c in arranged[:8])
                 change.info["note"] = (f"A new Session View clip in slot {key.slot + 1}: the track's arrangement clips "
                                        f"({names}) stay unchanged. To change one, pass arrangement_clip (its name or index).")
+        if key.in_arrangement and step.kind != "transform" and change.existing:
+            # a model asked to vary the second half of 'Breakdown Bass' rewrote all of it with kind 'bass'
+            change.info["note"] = (f"Replaces all {len(change.existing)} notes of this arrangement clip with a new part. "
+                                   "To vary it or only part of it, use transform_notes (operation 'variation', half 'second').")
         changes.append(change)
     fingerprints = {}
     for key in targets:
