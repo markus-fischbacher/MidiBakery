@@ -67,7 +67,7 @@ _ENGLISH = frozenset("the and is not a an on with for please should make write d
 _CLAIM = re.compile(
     r"\b(gesetzt|geändert|gelöscht|erstellt|hinzugefügt|umbenannt|transponiert|geladen|ersetzt|angewendet|gestartet|"
     r"variiert|vertauscht|getauscht|stummgeschaltet|geschrieben|verschoben|humanisiert|"
-    r"eingestellt|angepasst|reduziert|erhöht|verringert|gemacht|aktualisiert|aktiviert|entfernt|"
+    r"eingefügt|versehen|eingestellt|angepasst|reduziert|erhöht|verringert|gemacht|aktualisiert|aktiviert|entfernt|"
     r"changed|deleted|created|added|renamed|transposed|loaded|replaced|applied|started|muted|swapped|moved|"
     r"wrote|written|humanized|varied|updated|adjusted|lowered|raised|increased|reduced|removed)\b"
     # present tense and future: "Ich lade den Preset", "I'll load the preset", "Tempo auf 128 gesetzt"
@@ -96,7 +96,7 @@ def asks_for_new_clip(text: str) -> bool:
     return bool(_NEW_CLIP.search(text))
 
 
-def existing_clip_hint(session: dict[str, Any], track: Any) -> str | None:
+def existing_clip_hint(session: dict[str, Any], track: Any, slot: Any = None) -> str | None:
     """The clips a part-writing call would leave next to: names for the error that sends the model to
     transform_notes. None when the track has no clip (a new one is then the only way) or is unknown."""
     tracks = session.get("tracks", [])
@@ -107,6 +107,8 @@ def existing_clip_hint(session: dict[str, Any], track: Any) -> str | None:
         found = next((t for t in tracks if str(t.get("name", "")).lower() == track.lower()), None)
     if not found:
         return None
+    if isinstance(slot, int) and any(c["slot"] == slot for c in found.get("clips") or []):
+        return None  # an occupied slot: compose's own CONFLICT error handles it
     parts = [f"arrangement_clip '{c.get('name', '')}'" for c in found.get("arrangement_clips") or []]
     parts += [f"slot {c['slot']} '{c.get('name', '')}'" for c in sorted(found.get("clips") or [], key=lambda c: c["slot"])]
     return ", ".join(parts[:6]) or None
@@ -171,12 +173,12 @@ class Agent:
             [x for x in call.input.get("steps", []) if isinstance(x, dict)] if call.name == "plan_changes" else [])
         for step in steps:
             kind = step.get("kind") if call.name == "plan_changes" else call.input.get("kind")
-            if kind not in _PART_KINDS or step.get("slot") is not None or step.get("arrangement_clip") is not None:
+            if kind not in _PART_KINDS or step.get("arrangement_clip") is not None:
                 continue
             outcome = await self.host.call("get_session", {})
             if not outcome.structured:
                 return None
-            hint = existing_clip_hint(outcome.structured, step.get("track"))
+            hint = existing_clip_hint(outcome.structured, step.get("track"), step.get("slot"))
             if hint:
                 return hint
         return None
@@ -225,7 +227,7 @@ class Agent:
             wrote = False  # a write tool succeeded during this message
             nudged = False
             text_in = text
-            guarded = not self.compact or asks_for_new_clip(text)  # once per message: the second try goes through
+            guards = 0 if self.compact and not asks_for_new_clip(text) else 2  # twice per message: then the call goes through
             for _ in range(self.max_steps):
                 try:
                     turn = await self.provider.stream_turn(emit)
@@ -241,10 +243,12 @@ class Agent:
                         nudged = True
                         self.provider.add_user("[You answered nothing. Do what was asked with the tools, or answer briefly.]")
                         continue
-                    if self.compact and not wrote and not unresolved and not nudged and claims_a_change(turn.text):
+                    if self.compact and not wrote and not unresolved and not nudged and (
+                            claims_a_change(turn.text) or ("?" not in text_in and not turn.text.rstrip().endswith("?"))):
+                        # a claim, or a request answered with talk only ("tausche ich gegeneinander")
                         nudged = True
-                        self.provider.add_user("[No tool ran, so nothing in Live changed. Make the change now with the tools, "
-                                               "or tell the user you did not.]")
+                        self.provider.add_user("[No tool ran, so nothing in Live changed. If the user asked for a change, make it "
+                                               "now with the tools; if it cannot be done with them, say so plainly.]")
                         continue
                     if unresolved and not nudged:
                         # gemma: transform_notes failed, then "transposed it an octave down"; once per message
@@ -266,8 +270,8 @@ class Agent:
                         await emit({"type": "tool_result", "id": call.id, "name": call.name, "source": "model", "is_error": True, "result": refusal})
                         results.append(ToolResult(call.id, call.name, refusal, True))
                         continue
-                    if not guarded and (hint := await self._new_clip_hint(call)):
-                        guarded = True
+                    if guards < 2 and (hint := await self._new_clip_hint(call)):
+                        guards += 1
                         await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": "model"})
                         refusal = (f"NOT DONE: the user did not ask for a new clip, and this track already has {hint}. "
                                    "Change an existing clip instead: transform_notes with slot or arrangement_clip "

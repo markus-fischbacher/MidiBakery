@@ -546,7 +546,7 @@ for spec in [
     OpSpec("transport.control", Transport, "Play, stop, continue, stop all session clips or toggle arrangement record", read_only=False),
     OpSpec("tracks.list", Empty, "All tracks with mixer state, devices and clip slots", read_only=True),
     OpSpec("track.create", TrackCreate, "Create a MIDI or audio track", read_only=False),
-    OpSpec("track.set", TrackSet, "Rename, recolor or change mixer state of a track", read_only=False),
+    OpSpec("track.set", TrackSet, "Rename a track, mute/solo/arm it, set volume (louder/quieter, 0.85 = 0 dB, not mute) or pan", read_only=False),
     OpSpec("track.delete", TrackRef, "Delete a whole track and all its clips (one clip: delete_clip)", read_only=False, destructive=True),
     OpSpec("clip.create", ClipCreate, "Create an empty MIDI clip in a session slot", read_only=False),
     OpSpec("clip.get", ClipRef, "Clip properties", read_only=True),
