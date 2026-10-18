@@ -13,10 +13,10 @@ class Params(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-TrackIndex = Annotated[int, Field(ge=0, description="Zero-based index into song.tracks")]
-SlotIndex = Annotated[int, Field(ge=0, description="Zero-based clip slot (= scene) index")]
+TrackIndex = Annotated[int, Field(ge=0, description="0-based track index")]
+SlotIndex = Annotated[int, Field(ge=0, description="0-based slot (= scene) index")]
 Pitch = Annotated[int, Field(ge=0, le=127, description="MIDI pitch, 60 = C3 in Live")]
-Beats = Annotated[float, Field(ge=0, description="Position or length in beats (quarter notes)")]
+Beats = Annotated[float, Field(ge=0, description="Beats (quarter notes)")]
 
 
 # --------------------------------------------------------------------------
@@ -161,9 +161,17 @@ class NotesApply(ClipRef):
 
 
 class DeviceInsert(Params):
-    track: TrackIndex
+    track: TrackIndex | None = None
+    return_track: Annotated[int, Field(ge=0)] | None = None
+    master: bool = False
     name: str = Field(description="Native Live device name as shown in the browser, e.g. 'Operator', 'Drift', 'Reverb'")
     index: int = Field(-1, ge=-1, description="Position in the chain, -1 = end")
+
+    @model_validator(mode="after")
+    def _one_owner(self) -> DeviceInsert:
+        if (self.track is not None) + (self.return_track is not None) + self.master != 1:
+            raise ValueError("give exactly one of track, return_track, master")
+        return self
 
 
 BrowserCategory = Literal["drums", "instruments", "audio_effects", "midi_effects", "sounds", "packs", "user_library", "plugins"]
@@ -187,21 +195,22 @@ ChainPath = Annotated[
 ]
 
 
-ReturnIndex = Annotated[int, Field(ge=0, description="Zero-based index into the return tracks (A = 0)")]
+ReturnIndex = Annotated[int, Field(ge=0, description="0-based return track index (A = 0)")]
 
 
 class DeviceRef(Params):
-    """A device on a track or, with return_track instead of track, on a return track."""
+    """A device on a track or, with return_track or master instead of track, on a return or the master track."""
 
     track: TrackIndex | None = None
     return_track: ReturnIndex | None = None
+    master: bool = False
     device: Annotated[int, Field(ge=0)]
     chain_path: ChainPath = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _one_owner(self) -> DeviceRef:
-        if (self.track is None) == (self.return_track is None):
-            raise ValueError("give either track or return_track")
+        if (self.track is not None) + (self.return_track is not None) + self.master != 1:
+            raise ValueError("give exactly one of track, return_track, master")
         return self
 
 

@@ -13,7 +13,7 @@ from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood
 from midibakery.compose.transform import ArpDirection, Operation
 
 TrackIndex = Annotated[int, Field(ge=0, description="Zero-based track index")]
-SlotIndex = Annotated[int, Field(ge=0, description="Zero-based clip slot (= scene) index")]
+SlotIndex = Annotated[int, Field(ge=0, description="0-based slot (= scene) index")]
 ArrangementClip = Annotated[
     Annotated[int, Field(ge=0)] | Annotated[str, Field(min_length=1)] | None,
     Field(description="A clip in the Arrangement instead of slot, e.g. one section of a song: its zero-based "
@@ -73,7 +73,7 @@ class ClipLocation(Spec):
 class Generate(Spec):
     track: TrackIndex
     slot: Annotated[
-        int | None, Field(ge=0, description="Zero-based clip slot (= scene) index. Default: the track's first free slot")
+        int | None, Field(ge=0, description="0-based slot (= scene) index. Default: the track's first free slot")
     ] = None
     arrangement_clip: ArrangementClip = None
     bars: Annotated[

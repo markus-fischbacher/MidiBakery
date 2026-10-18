@@ -93,14 +93,19 @@ class Context(object):
             raise OpError(ErrorCode.NOT_FOUND, "No return_track index %d (song has %d return tracks)" % (index, len(returns)), return_track=index)
         return returns[index]
 
-    def device(self, params):
-        """The device params name: on params["track"] or params["return_track"], or inside racks:
-        chain_path alternates chain and device indices below it, e.g. (1, 0) = the first device
-        in the rack's second chain."""
+    def device_owner(self, params):
+        """(track, where) whose chain params mean: the master, a return track or a track."""
+        if params.get("master"):
+            return self.song.master_track, "the master track"
         if params.get("return_track") is not None:
-            owner, where = self.return_track(params["return_track"]), "return_track index %d" % params["return_track"]
-        else:
-            owner, where = self.track(params["track"]), self.where(params["track"])
+            return self.return_track(params["return_track"]), "return_track index %d" % params["return_track"]
+        return self.track(params["track"]), self.where(params["track"])
+
+    def device(self, params):
+        """The device params name: on params["track"], params["return_track"] or the master, or inside
+        racks: chain_path alternates chain and device indices below it, e.g. (1, 0) = the first device
+        in the rack's second chain."""
+        owner, where = self.device_owner(params)
         devices = owner.devices
         device_index, chain_path = params["device"], params.get("chain_path")
         if not 0 <= device_index < len(devices):

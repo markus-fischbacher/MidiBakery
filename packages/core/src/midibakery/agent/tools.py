@@ -203,7 +203,7 @@ def compact_schema(node: Any, limit: int = 90) -> Any:
     """Shrink an inlined JSON schema for small context windows.
 
     Drops titles, bounds and discriminator mappings, folds Optional (anyOf [X, null]) into X, removes
-    null/empty defaults and cuts descriptions to their first sentence.
+    null/empty/false defaults (an option left out is off) and cuts descriptions to their first sentence.
     """
     if isinstance(node, list):
         return [compact_schema(v, limit) for v in node]
@@ -221,7 +221,7 @@ def compact_schema(node: Any, limit: int = 90) -> Any:
                 node = {"type": [v["type"] for v in bare], **{k: v for k, v in node.items() if k != "anyOf"}}
     out: dict[str, Any] = {}
     for key, value in node.items():
-        if key in _DROP_KEYS or (key == "default" and value in (None, [], {})):
+        if key in _DROP_KEYS or (key == "default" and (value is False or value in (None, [], {}))):
             continue
         if key == "description" and isinstance(value, str):
             out[key] = _first_sentence(value, limit)

@@ -1826,21 +1826,49 @@
               "integer"
             ]
           },
+          "master": {
+            "type": [
+              "boolean"
+            ]
+          },
           "name": {
             "type": [
               "string"
             ]
           },
+          "return_track": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
+            ]
+          },
           "track": {
-            "minimum": 0,
-            "type": [
-              "integer"
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": [
+                  "integer"
+                ]
+              },
+              {
+                "type": [
+                  "null"
+                ]
+              }
             ]
           }
         },
         "required": [
-          "name",
-          "track"
+          "name"
         ],
         "type": [
           "object"
@@ -1874,6 +1902,11 @@
             "minimum": 0,
             "type": [
               "integer"
+            ]
+          },
+          "master": {
+            "type": [
+              "boolean"
             ]
           },
           "return_track": {
@@ -1997,6 +2030,11 @@
               }
             ]
           },
+          "master": {
+            "type": [
+              "boolean"
+            ]
+          },
           "return_track": {
             "anyOf": [
               {
@@ -2082,6 +2120,11 @@
                   "null"
                 ]
               }
+            ]
+          },
+          "master": {
+            "type": [
+              "boolean"
             ]
           },
           "parameter": {
@@ -2719,6 +2762,11 @@
               "integer"
             ]
           },
+          "master": {
+            "type": [
+              "boolean"
+            ]
+          },
           "return_track": {
             "anyOf": [
               {
@@ -2813,6 +2861,11 @@
             },
             "type": [
               "array"
+            ]
+          },
+          "master": {
+            "type": [
+              "boolean"
             ]
           },
           "return_track": {
