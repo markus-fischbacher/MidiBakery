@@ -63,21 +63,41 @@ flowchart LR
 ### Core: Engine, MCP-Server, Agent, API
 
 - **Kompositions-Engine** (`compose/`): Drums, Bass, Akkorde, Melodie und Transformationen. Sie ist skalen- und taktbewusst, und mit demselben Seed entstehen dieselben Noten. Sie berechnet nur Noten und weiß nichts von Live.
-- **MCP-Server** (`mcp/`): stellt 36 Tools für Claude bereit, darunter `get_session`, `compose`, `edit_notes`, `plan_changes` und `apply_plan`. Die Schemas kommen aus dem Op-Katalog, Kompositions-Tools rufen die Engine auf, und alles, was Live verändert, geht über den Bridge-Client ans Remote Script.
-  - Tool-Budget für lokale Modelle: Tool-Schemas plus Systemprompt bleiben unter 36.000 Zeichen (geprüft in `tests/test_agent.py`), derzeit etwa 32.400. Neue Tools sollten bestehende Schemas teilen, statt Felder zu wiederholen.
-- **Agent-Loop** (`agent/`): ein Gespräch mit einem LLM, also Claude über die Anthropic API, LM Studio oder Ollama. Er ruft **dieselben** MCP-Tools auf, nur in-process statt über stdio. Claude Code und das Chat-Gerät haben damit exakt dieselben Fähigkeiten. Lokale Modelle bekommen ebenfalls alle Tools, nur mit knapperen Schemas und Ergebnissen; eine reduzierte Auswahl gibt es auf Wunsch (`tools=small` / `--small`).
+- **MCP-Server** (`mcp/`): stellt 37 Tools für Claude bereit. Die Schemas kommen aus dem Op-Katalog, Kompositions-Tools rufen die Engine auf, und alles, was Live verändert, geht über den Bridge-Client ans Remote Script. Nach Aufgabe:
+  - lesen: `get_session` (Song, Spuren, Geräte, Clips, dazu Locators und die Arrangement-Clips jeder Spur), `get_clip`, `get_arrangement`, `get_mixer`, `get_rack`, `get_device_parameters`, `get_drum_pads`, `find_browser_items`, `get_reference`
+  - Session und Clips: `set_song`, `transport`, `create_track`/`update_track`/`delete_track`, `create_clip`/`update_clip`/`delete_clip`, `launch_clip`, `create_scene`/`fire_scene`, `edit_notes`, `undo`, `run_batch`
+  - Geräte und Mixer: `insert_device`, `load_browser_item`, `set_device_parameter`, `write_clip_envelope`, `update_mixer`, `create_return_track`, `update_rack`
+  - Arrangement: `edit_arrangement` (Clips anlegen, kopieren, verschieben, vertauschen, löschen; Locators setzen und löschen), `compose_takes`
+  - Komposition: `compose`, `transform_notes`, `plan_changes`, `plan_song`, `apply_plan`
+  - **Arrangement-Clips per Name:** Wo ein Tool einen Clip braucht (`compose`, `transform_notes`, `delete_clip`, `move_clip`/`swap_clips` in `edit_arrangement`), gibt man statt `slot` den `arrangement_clip` an: seinen Index oder seinen Namen („Groove Bass“; Groß-/Kleinschreibung egal, ein Namensteil genügt, wenn er eindeutig ist). `compose` ersetzt dann die Noten über die ganze Clip-Länge. Ein Clip lässt sich nur verschieben, wenn er nicht getrimmt und kein Loop ist; kein Clip landet auf einem anderen (`CONFLICT`).
+  - **Teile eines Clips:** `transform_notes` nimmt `half` (`first` / `second`) oder `from_bar` / `to_bar` (Takte des Clips, 1 = sein erster) und ändert nur dort Noten; `transpose` hat `semitones` (chromatisch, 12 = Oktave) oder `steps` (Skalenstufen), nie beides.
+  - **Vorschau und Apply:** `preview=true` an `compose` oder `plan_changes` ändert nichts und liefert ein Diff samt `plan_id`; `apply_plan` schreibt es in einem Undo-Schritt. Hat sich ein Ziel-Clip seit der Planung geändert, scheitert es mit `CONFLICT`. Ein bereits angewendeter Plan meldet `already_applied`, statt zu scheitern. `plan_song` plant einen ganzen Song (siehe `docs/GENRES.md`); auch er wird erst mit `apply_plan` geschrieben. Löschen von Spuren und Clips sowie das Ersetzen von Noten fragen vorher nach; eine Ablehnung kommt als `CANCELLED` zurück.
+  - **Take Lanes:** `compose_takes` legt 2 bis 8 Varianten eines Teils (`hook`, `melody`, `bass`, `chords`, `drums`) über dieselben Akkorde in eigene Take Lanes einer Spur im Arrangement (Live 12.2+), ein Undo-Schritt.
+  - Tool-Budget für lokale Modelle: Tool-Schemas plus Systemprompt bleiben unter 36.000 Zeichen (geprüft in `tests/test_agent.py`), derzeit etwa 35.800 – das Limit ist fast erreicht. Neue Tools müssen bestehende Schemas teilen oder Platz an anderer Stelle schaffen.
+- **Agent-Loop** (`agent/`): ein Gespräch mit einem LLM, also Claude über die Anthropic API, LM Studio oder Ollama. Er ruft **dieselben** MCP-Tools auf, nur in-process statt über stdio. Claude Code und das Chat-Gerät haben damit exakt dieselben Fähigkeiten.
+  - **Provider:** `anthropic` (Standard `claude-sonnet-5-5`; wählbar Opus 5.5 und Haiku 5.5), `lmstudio` (OpenAI-kompatibler Server, `LMSTUDIO_HOST`, Standard `127.0.0.1:1234`, Standardmodell `google/gemma-4-e4b`) und `ollama` (`OLLAMA_HOST`, Standard `127.0.0.1:11434`, Standardmodell `qwen3:8b`). Den Claude-Schlüssel liest die App aus dem Schlüsselbund (macOS) bzw. der Anmeldeinformationsverwaltung (Windows); `ANTHROPIC_API_KEY` und ein `ant auth login`-Profil gehen auch.
+  - **Compact-Modus** (automatisch für `lmstudio` und `ollama`, `compact=True`): alle Tools, aber mit Kurzbeschreibungen und schlanken Schemas (`compact_tools`: ohne Titel, Grenzen und Discriminator, Beschreibung nur der erste Satz; `if_exists` ist ausgeblendet, damit kleine Modelle nicht ungefragt überschreiben) und kürzeren Ergebnissen (`COMPACT_RESULTS`: `get_session` als wenige Textzeilen mit freien Slots). Die erste Nachricht eines Gesprächs bringt die Session gleich mit; jede Nachricht trägt eine Spracherinnerung (Deutsch oder Englisch, sonst „Antworte in der Sprache dieser Nachricht“). Arguments, die ein Tool nicht kennt, werden benannt statt still verworfen (mit „meintest du …?“), und von Modellen erfundene Schachtelungen werden angehoben (`lift_nested`).
+  - **Absicherungen** (`loop.py`): Behauptet ein lokales Modell eine Änderung, ohne ein Tool aufgerufen zu haben, oder scheitert ein Schreib-Tool und wird nicht wiederholt, bekommt es einmal pro Nachricht einen Hinweis; eine leere Antwort wird einmal nachgefragt. Dasselbe Scheitern dreimal oder sechs Runden nur mit Fehlern beenden die Nachricht mit dem Code `STUCK`; nach 24 Tool-Runden endet sie ebenfalls. Eine vom Nutzer abgelehnte Änderung (`CANCELLED`) zählt nicht als Fehler.
+  - **UI-Tools:** `apply_plan` und `undo` darf die Chat-Seite selbst auslösen (Buttons Apply, Undo); das Modell erfährt es mit der nächsten Nachricht und wendet nicht doppelt an.
+  - Zwei Systemprompts: `SYSTEM_PROMPT` (voll) und `SMALL_SYSTEM_PROMPT` für 8k-Kontext. `tools=small` bzw. `--small` nimmt dazu nur 12 Tools, `tools=reduced` bzw. `--reduced` 13 (`REDUCED_TOOLS`, `SMALL_TOOLS` in `agent/tools.py`).
+  - **LM Studio** lädt ein Modell beim ersten Gebrauch mit dessen Standard-Kontext (oft 4k oder 8k), zu klein für die Tools. Der Provider erkennt das und rät zu `lms load <modell> -c 32768`. Das Modell-Menü listet geladene Modelle (ohne Embedding-Modelle) von LM Studio und Ollama; ist keiner erreichbar, fehlen sie einfach.
+  - Der Server-Prozess schreibt jede Nutzernachricht und jeden Tool-Aufruf (Eingabe gekürzt, Ergebnis ok/Fehler) mit Zeitstempel in den Log (`midibakery.agent`), siehe `api.log` unten.
 - **Lokale API** (`api/`, `127.0.0.1:8766`): das Tor für die Max-Geräte. Das Remote Script startet sie als eigenen Prozess, wenn Live es lädt, und beendet sie mit Live. In Lives Python läuft sie nicht: Sie braucht Python 3.12 und Pakete außerhalb der Standardbibliothek. Läuft auf dem Port schon eine API, etwa von Hand gestartet, bleibt es bei dieser.
-  - `GET /ui`: die Chat-Seite (ohne Geheimnisse)
-  - `WS /chat`: der Agent im Chat
-  - `GET /models`: die Modellauswahl
+  - `GET /ui`: die Chat-Seite (ohne Geheimnisse, `Cache-Control: no-store`)
+  - `WS /chat`: der Agent im Chat (Query `provider`, `model`, `tools`); Ereignisse `ready`, `text`, `thinking`, `tool_call`, `tool_result`, `plan`, `confirm`, `live_state`, `done`, `error`; Nachrichten `user`, `tool`, `confirm_reply`, `cancel`, `reset`
+  - `GET /models`: die Modellauswahl (Claude-Modelle plus erreichbare lokale)
+  - `GET|PUT|DELETE /auth/anthropic`: Claude-Schlüssel prüfen, speichern, löschen; er wird nie zurückgeschickt
+  - `GET /update`, `POST /update/install`: Update-Stand und Installation
+  - `GET /license`, `POST /license/{trial|activate|deactivate}`: Lizenz
   - `POST /miditool/generate` und `/miditool/transform`: die Engine für die MIDI Tools
-  - `GET /health`
-  Port und Token stehen in `api.json`; jede Anfrage braucht den Token.
+  - `GET /health`: Version, Prozess-ID, Zustand von Live, Update, Lizenz
+  Port und Token stehen in `api.json`; jede Anfrage braucht den Token. Ist die Lizenzprüfung aktiv und die Lizenz nicht gültig, antwortet der Chat vor dem Modell mit `LICENSE_REQUIRED`.
 
 ### Chat-Gerät
 
 - Ein MIDI-Effekt auf einer beliebigen MIDI-Spur; MIDI läuft unverändert durch.
 - Links zeigt `jweb` (eingebetteter Browser) die Chat-Seite `/ui`. Der Token steckt im URL-Fragment `#token=…`, das der Browser nie an den Server schickt.
+- Die Chat-Seite hat: Modell-Menü, **Stop**, **Undo** (nimmt die letzte Änderung in Live zurück), **Key** (nur bei Claude-Modellen), **Copy** (das ganze Gespräch in die Zwischenablage; ein Klick auf eine einzelne Antwort kopiert sie), **New** (Gespräch vergessen), eine Statuszeile mit dem Live-Zustand, Plan-Karten mit **Apply** (Noten-Diff als Piano Roll, bei Songs eine Zeitleiste) und die Banner für Update und Lizenz. Lokale Modelle brauchen keinen Schlüssel.
 - Rechts liegen native Max-Bedienelemente, weil Live keine Tastatur an `jweb` weiterreicht und Dropdowns darin nicht aufgehen:
   - **Model-Menü** (`umenu`): Die Seite füllt es mit der Liste aus `/models`, die Auswahl geht als `model_index` zurück.
   - **Eingabefeld** (`textedit`): Enter schickt den Text als `chat_input` an die Seite, danach bekommt das Feld den Fokus zurück.
@@ -99,6 +119,7 @@ flowchart LR
 
 - Liegt auf der Audiospur mit dem Referenzsong. Der `v8`-Code sucht über die Live API den längsten Audio-Clip im Arrangement der Spur und liest Datei, Lage, Start-Marker und Warp-Marker.
 - `node.script midibakery-reference.js` dekodiert die Datei mit `afconvert` (22,05 kHz mono) und analysiert sie in `reference-analysis.js`, bei gewarpten Clips auf Lives Beat-Raster aus den Warp-Markern, bei ungewarpten auf einem eigenen Raster (Tempo aus dem stärksten Achtel-Puls, Zählzeit eins dort, wo die Tiefen steigen): Energie in vier Bändern pro Takt, Kick aus wiederkehrenden Anstiegen der Tiefen, Tonart aus Chroma und Bass, Abschnitte in 8-Takt-Schritten mit Namen (Intro, Build, Drop, Break, Outro).
+- Das **Genre**-Menü (Auto oder eines von `plan_song`) bestimmt Abschnittsnamen und Phrasenlänge und klärt halbes oder doppeltes Tempo. Vier **Sensitivity**-Felder (0–100, Standard 50; Kick, Lows, Mids, Hats, je auf Höhe der Spur in der Ansicht) steuern, wie fein der Song geteilt wird: Ihr Mittelwert wirkt wie ein Regler (bei 100 ist jede gefundene Änderung ein Abschnitt, niedriger verschmelzen gleichartige Nachbarn), ihr Verhältnis gewichtet die Bänder. **Lock** verschiebt alle Felder gemeinsam. Die Analyse läuft neu, sobald die Felder ruhen. Die Änderungen innerhalb eines verschmolzenen Abschnitts bleiben als `phrases` in der Analyse. Ein ungewarpter Clip wird vorher auf Lives Raster gewarpt (Tempo des Sets unverändert).
 - Das Ergebnis zeigt ein `v8ui` an und es landet in `references/<hash>.json`; das MCP-Tool `get_reference` liest es. **Set Locators** setzt nacheinander Locators an die Abschnitte, **Remove Locators** entfernt alle Locators im Bereich des Clips. Live setzt und entfernt Locators nur an der Abspielposition und rastet sie dabei aufs sichtbare Raster ein, deshalb ein Task mit Ticks, der neue und verschwundene Locators an ihren IDs erkennt; der Transport muss stehen.
 - Weder API noch Remote Script sind nötig.
 
@@ -136,6 +157,12 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 2. Über Node geht `POST /miditool/generate` an die API, die Engine liefert Noten, und `v8` cached sie.
 3. Bei aktivem Replace leert `v8` den Bereich, dann löst es das Tool erneut aus und Live fügt die Noten ein.
 
+## Installer, Updates, Lizenz
+
+- **Paket:** `packaging/build_app.py` friert `midibakery` mit Python und der Nutzlast (Remote Script, gebaute Geräte) per PyInstaller in einen Ordner ein. Darauf bauen `packaging/macos/build_pkg.py` (`.pkg`, Apple Silicon; Intel auf Release-Tags und PRs mit Label `intel`) und `packaging/windows/build_setup.py` (Inno Setup 6, `midibakery.iss`). Beide installieren ohne Administrator für den aktuellen Benutzer (macOS: `~/Library/Application Support/MidiBakery/runtime/<version>/`, Windows: `%LOCALAPPDATA%\Programs\MidiBakery\runtime\<version>\`) und rufen dann `midibakery install` auf. Beide Installer sind noch nicht signiert bzw. notarisiert. CI (`.github/workflows/package.yml`) baut sie und testet Installieren, Aktualisieren und Deinstallieren (`packaging/smoke.py`, `check_pkg.py`, `check_setup.py`).
+- **Update-Dienst:** Cloudflare Worker, R2 und D1 auf `updates.klirrwerk.com` (`services/updates`, siehe dessen README). Die App vertraut einem Manifest nur mit gültiger Ed25519-Signatur (`UPDATE_KEYS` in `updates.py`) und führt einen Installer nur bei passender SHA-256 aus. Ein Tag `v<version>` veröffentlicht ein Release.
+- **Lizenz:** gebaut, aber **ausgeschaltet**: Solange `LICENSE_KEYS` in `license.py` leer ist, ist alles erlaubt. Danach gilt: 30 Tage Testphase, dann Lizenzschlüssel (dauerhaft, 12 Monate Updates, zwei Rechner), vom Dienst signierte Token, offline geprüft. Ohne gültigen Token liest die App Live und macht Undo, erzeugt und ändert aber nichts.
+
 ## Starten und aktualisieren
 
 | Was | Wann nötig | Wie |
@@ -156,7 +183,11 @@ Der MCP-Code läuft also mehrfach: in der API für den Chat und je Claude-Sessio
 | `~/Library/Application Support/MidiBakery/device-miditool.log` | Generator/Transform: Anfragen, Antwortzeiten, Fehler mit Schritt |
 | `~/Library/Application Support/MidiBakery/device-reference.log` | Reference: analysierte Clips, Dauer, Fehler |
 | `~/Library/Application Support/MidiBakery/references/` | Analysen des Reference-Geräts |
-| Terminal mit `midibakery api` | Aufrufe an LM Studio/Ollama, Fehler der API |
+| `~/Library/Application Support/MidiBakery/api.log` | die API, wenn Live sie gestartet hat: Zeitstempel, jede Nutzernachricht und jeder Tool-Aufruf mit Fehler. Hier liest man nach, warum ein Chat danebenging. Unter Windows `%APPDATA%\MidiBakery\api.log` |
+| `…/MidiBakery/launcher.json` | wie das Remote Script die API startet (Befehl, Port); fehlt sie, startet keine API mit Live |
+| `…/MidiBakery/installed.json` | jeder Pfad, den `install` geschrieben hat; `uninstall` entfernt genau diese |
+| `…/MidiBakery/settings.json`, `update.json`, `license.json` | Einstellungen (z. B. Update-Check aus), letzter Update-Stand, Lizenz-Token |
+| Terminal mit `midibakery api` | bei von Hand gestarteter API: Aufrufe an LM Studio/Ollama, Fehler der API, derselbe Log wie in `api.log` |
 | Lives `Log.txt` | Meldungen des Remote Scripts (`MidiBakery: …`) |
 | `uv run midibakery ping` | prüft die Verbindung zum Remote Script |
 

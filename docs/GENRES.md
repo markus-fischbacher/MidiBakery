@@ -12,7 +12,7 @@ Was House, Melodic Techno, Peak-Time Techno, Drum & Bass und EDM-Trap typischerw
 - MIDI-Noten gelten wie in Live: 60 = C3. Quellen benennen Oktaven unterschiedlich, deshalb sind Lagen hier über die Frequenz umgerechnet.
 - Swing in Prozent im MPC-Sinn: 50 % = gerade. In Lives Groove-Pool entspricht das ungefähr „Amount“ ab 0.
 
-Rezepte sind Konventionen, keine Gesetze. Ein Track nach Rezept klingt genretypisch, gut klingt er erst nach dem Hören. Für Einsteiger hilft ein Referenztrack: Abschnitte und Elemente mit einem Song vergleichen, der gefällt.
+Rezepte sind Konventionen, keine Gesetze. Ein Track nach Rezept klingt genretypisch, gut klingt er erst nach dem Hören. Für Einsteiger hilft ein Referenztrack: Das Reference-Analyzer-Gerät zerlegt einen Song, der gefällt, in Abschnitte, und `plan_song` mit `reference` baut den neuen Song nach dessen Aufbau (siehe unten).
 
 ---
 
@@ -445,7 +445,7 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 | Bass | Muster pro Genre: House offbeat, Peak-Time rollende Sechzehntel, Melodic zwischen den Kicks, D&B-Sub lang, Trap-808 unter den Kicks mit Glide; Lagen aus den Rezepten |
 | Harmonik | Genre-Loops nach Tonart (Dur/Moll), Septakkorde für House und Liquid, parallele Moll-Stabs mit Akkordverschiebung für Peak-Time, Trap ohne Grundton |
 | Lead | House, D&B, Trap: Hook mit Ruf/Antwort; Melodic: Arpeggio; Peak-Time: Acid-Line, die sich alle 8 Takte entwickelt und im letzten Peak steigt |
-| Struktur | Vorlagen nach den Rezepten, Längen Radio/Standard/Extended oder Minuten |
+| Struktur | Vorlagen nach den Rezepten (Tempo: House 124, Melodic Techno 122, Peak-Time 128, D&B 174, Trap 145 BPM, mit `set_tempo` gesetzt); Längen Radio/Standard/Extended oder Minuten; mit `reference` folgen Abschnittsfolge und -längen einem vom Reference Analyzer analysierten Song, eingerastet auf das Phrasenraster des Genres (ein ungewarpter Song nur im eigenen Tempo); die Abschnittsarten ohne Gegenstück im Genre fallen auf eine verwandte zurück |
 | Sounds | Neue Spuren bekommen Kit und Presets des Genres aus der Core Library; die Drum-Noten landen auf den Pads des Kits |
 | Mix | Ein Reverb- und ein Delay-Return (vorhandene nutzt der Song), Fader-Pegel und Sends pro Rolle für neue Spuren; vorhandene Spuren behalten ihren Fader und senden nur in neue Returns. Nachhall und Delay-Zeit pro Genre, z. B. Melodic Techno 4,5 s, House 1,8 s |
 | Automation | Auto-Filter-Fahrten pro Clip in allen Genres, dazu Resonanz-Fahrten (Acid in Peak-Time, Pads in Breaks und Builds). Delay-Throws: Der Send einer Rolle springt auf der letzten Zählzeit jedes 8. Takts auf -4 dB und fällt danach auf seinen Pegel zurück |
@@ -456,7 +456,7 @@ Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, V
 
 | Thema | Warum |
 |---|---|
-| Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr; Referenztracks (Abschnitte und Elemente eines Songs, der gefällt) sind als nächster Schritt dafür gedacht |
+| Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr. Ein Referenzsong gibt nur Abschnittsfolge und -längen vor (`reference`), die Klänge und Noten vergleicht die Engine nicht mit ihm |
 | Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
 | Andere Taktarten | die Grooves sind 16-Schritt-Takte; `plan_song` braucht deshalb 4/4 und meldet das sonst |
 
