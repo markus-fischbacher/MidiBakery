@@ -537,6 +537,16 @@ TrackSensei weist ausdrücklich darauf hin, dass seine eigene Skala (Mono-Summe)
 
 Eine eigene Prüfung: Katoff – The Signal (Extended, VANDIT Alternative), ein Melodic-Track, misst -11,3 LUFS, also leiser als der Median, aber in der Breite veröffentlichter Tracks.
 
+In Live 12.4 geprüft, derselbe Song mit der House-Kette auf dem Master, Ziel Melodic Techno (-8,8 LUFS):
+
+| Runde | Input Gain | Integriert |
+|---|---|---|
+| vorher (Kette, Gain 0) | 0,0 dB | -13,9 LUFS |
+| 1 | +5,1 dB | -9,4 LUFS |
+| 2 | +5,7 dB | -9,0 LUFS, im Ziel |
+
+Glue Compressor und Ceiling nehmen dem Song zuerst 2,6 LU. Von den +5,1 dB der ersten Runde schluckte der Limiter 0,6 dB. Der Peak blieb bei -1,0 dB.
+
 **Quellen:**
 - TrackSensei, „563 Techno & House Tracks: Real LUFS Data“
 - WeFoundDNB, „How Loud Should Drum & Bass Be? LUFS From the Pros and 101 Measured Tracks“
