@@ -58,8 +58,8 @@ async def measure_master(call: Call, query: MeterQuery) -> dict[str, Any]:
                                           "short_term_peak_db", "measured_seconds")}
     result["measuring"] = playing
     if not playing:
-        warnings.append(f"The meter stopped {age:.0f} s ago (Live stopped or the device is off): these are the values "
-                        "of the last playback")
+        warnings.append(f"The meter stopped {age:.0f} s ago (the device is off or was removed, or Live is closed): "
+                        "these are its last values")
     if reading.get("integrated_lufs") is None:
         warnings.append("Nothing above -70 LUFS measured yet: play the song")
     result["notes"] = ["Integrated loudness covers everything played since the last reset: reset, then play the whole "
