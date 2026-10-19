@@ -364,14 +364,13 @@ def importer_device() -> dict[str, Any]:
     p.connect(loaded, 1, other)
     p.connect(other, 0, node)
 
+    # live.drop draws its own 'Drop Something Here!'; a label of ours would overprint it.
     # A path from a drop or a dialog goes to the page as "add_path <path>"; the page lists the Sets found there.
     to_page = p.obj("prepend add_path", 700, 300, width=120)
     p.connect(to_page, 0, web)
     drop = p.box("live.drop", (700, 100, 190, 40), inlets=1, outlets=[""], presentation=(column_x, 26, column_w, 44),
                  varname="set_drop")
     p.connect(drop, 0, to_page)
-    p.comment("Drop Sets or a folder here", (700, 60, 190, 14), presentation=(column_x + 4, 40, column_w - 8, 14),
-              fontsize=9.0, **THEMED_TEXT)
     for i, (label, dialog) in enumerate((("Folder...", "opendialog fold"), ("Set...", "opendialog"))):
         x = 700 + i * 200
         opener = p.obj(dialog, x, 200, outlets=["", "", ""], width=100)
@@ -386,7 +385,7 @@ def importer_device() -> dict[str, Any]:
                          ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
     _on_press(p, popout, "popout", node, 440, 100)
-    _about(p, (column_x + half + 4, 76, half, 14), node, 440, 160)
+    _about(p, (column_x + half + 4, 76, half, 18), node, 440, 160)
     set_status = p.obj("prepend set", 260, 100)
     status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 138, column_w, 30),
                        linecount=2, fontsize=9.0, **THEMED_TEXT)
