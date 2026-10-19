@@ -48,7 +48,7 @@ async def test_house_song_on_found_and_new_tracks(client, live):
     assert not (await client.call("arrangement.get", {}))["tracks"][0]["clips"]  # a preview changes nothing
 
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
-    assert applied["clips"] == preview["clips"] and [t["name"] for t in applied["new_tracks"]] == ["House Chords", "House Lead"]
+    assert applied["clips"] == preview["clips"] and [t["name"] for t in applied["new_tracks"]] == ["Chords", "Lead"]
     arrangement = await client.call("arrangement.get", {})
     assert [(l["name"], l["time"]) for l in arrangement["locators"]][:3] == [("Intro", 0.0), ("Build", 64.0), ("Drop", 96.0)]
     drums = {c["name"]: c for c in arrangement["tracks"][0]["clips"]}
@@ -73,7 +73,7 @@ async def test_new_drum_track_gets_the_genre_kit_and_its_pads(client, live):
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
     assert [t["device"] for t in applied["new_tracks"]] == ["909 Core Kit", "Basic FM House Bass", "106 Organ", "Basic Pluck Keys"]
     assert "7 undo step(s)" in applied["undo"]  # tracks+returns, the mix after them, one per sound, clips
-    drums = next(t["track"] for t in applied["new_tracks"] if t["name"] == "House Drums")
+    drums = next(t["track"] for t in applied["new_tracks"] if t["name"] == "Drums")
     drop = (await client.call("notes.get", {"track": drums, "arrangement_clip": 2}))["notes"]
     pitches = {n["pitch"] for n in drop}
     assert 48 in pitches and 49 not in pitches  # the drop's crash moved from GM 49 to the kit's Crash pad
@@ -109,7 +109,7 @@ async def test_mix_scaffold_returns_sends_and_levels(client, live):
     delay = {p["name"]: p["value"] for p in (await client.call("device.params", {"return_track": 1, "device": 0}))["parameters"]}
     assert (delay["Dry/Wet"], delay["L 16th"], delay["Feedback"]) == (1.0, 2.0, 0.3684)  # 3/16, 35 %
     tracks = {t["name"]: t for t in mixer["tracks"]}
-    chords = tracks["House Chords"]
+    chords = tracks["Chords"]
     assert chords["volume"]["display"] == "-12.0 dB" and [s["display"] for s in chords["sends"]] == ["-14.0 dB", "-22.0 dB"]
     assert tracks["Drums"]["volume"]["display"] == "0.0 dB" and [s["display"] for s in tracks["Drums"]["sends"]] == ["-24.0 dB", "-inf dB"]
     assert [s["display"] for s in tracks["Bass"]["sends"]] == ["-inf dB", "-inf dB"]
@@ -159,13 +159,13 @@ async def test_fx_riser_before_each_drop_and_an_impact_on_it(client, live):
     assert "warnings" not in applied
     tracks = {t["name"]: t["index"] for t in (await client.call("tracks.list", {}))["tracks"]}
     arrangement = {t["index"]: t["clips"] for t in (await client.call("arrangement.get", {}))["tracks"]}
-    risers = [(c["name"], c["start"], c["end"]) for c in arrangement[tracks["House Riser"]]]
+    risers = [(c["name"], c["start"], c["end"]) for c in arrangement[tracks["Riser"]]]
     assert risers == [("Build Riser", 64.0, 95.0), ("Build 2 Riser", 288.0, 319.0)]  # up to the beat of silence
-    impacts = [(c["name"], c["start"]) for c in arrangement[tracks["House Impact"]]]
+    impacts = [(c["name"], c["start"]) for c in arrangement[tracks["Impact"]]]
     assert impacts == [("Drop Impact", 96.0), ("Drop 2 Impact", 320.0)]
 
     def swell():
-        track = live.song.tracks[tracks["House Riser"]]
+        track = live.song.tracks[tracks["Riser"]]
         clip = sorted(track.arrangement_clips, key=lambda c: c.start_time)[0]
         cutoff = clip.envelopes[id(track.devices[0].parameters[1])]  # the Filter Cutoff macro
         volume = clip.envelopes[id(track.mixer_device.volume)]
@@ -182,7 +182,7 @@ async def test_fx_need_their_presets(client, live):
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": melodic["plan_id"]}))
     assert any("Hyper Riser could not be loaded" in w and "stays empty" in w for w in applied["warnings"])
     arrangement = {t["name"]: t["clips"] for t in (await client.call("arrangement.get", {}))["tracks"]}
-    assert arrangement["Melodic Techno Riser"] == [] and len(arrangement["Melodic Techno Impact"]) == 2
+    assert arrangement["Riser"] == [] and len(arrangement["Impact"]) == 2
     plain = await _plan(server, fx=True, sounds=False)
     assert "riser" not in plain["tracks"] and any("No riser or impact" in w for w in plain["warnings"])
 
@@ -193,11 +193,11 @@ async def test_fx_on_the_riser_track_of_an_earlier_song(client, live):
     first = await _plan(server, fx=True)
     await server.call_tool("apply_plan", {"plan_id": first["plan_id"]})
     second = await _plan(server, fx=True, seed=8)
-    assert second["tracks"]["riser"]["name"] == "House Riser" and "new" not in second["tracks"]["riser"]
+    assert second["tracks"]["riser"]["name"] == "Riser" and "new" not in second["tracks"]["riser"]
     await server.call_tool("apply_plan", {"plan_id": second["plan_id"]})
 
     def envelopes():
-        track = next(t for t in live.song.tracks if t.name == "House Riser")
+        track = next(t for t in live.song.tracks if t.name == "Riser")
         return [len(c.envelopes) for c in sorted(track.arrangement_clips, key=lambda c: c.start_time)]
 
     assert live.on_main(envelopes) == [2, 2, 2, 2]  # Riser Basic is on the track: the macro swells too
@@ -210,7 +210,7 @@ async def test_fx_on_a_track_called_riser(client, live):
     preview = await _plan(server, fx=True)
     assert preview["tracks"]["riser"] == {"track": 2, "name": "Riser"}
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
-    assert [t["name"] for t in applied["new_tracks"]] == ["House Chords", "House Lead", "House Impact"]
+    assert [t["name"] for t in applied["new_tracks"]] == ["Chords", "Lead", "Impact"]
 
     def riser():
         track = live.song.tracks[2]
@@ -505,7 +505,7 @@ async def test_peak_time_sweeps_auto_filters_clip_by_clip(client, live):
     assert all(values is not None for values in drums.values())  # every clip resets the filter
     assert drums["Lift Drums"][0] == 0.0 and drums["Lift Drums"][2] == pytest.approx(0.36, abs=0.03)  # 20 Hz -> ~250 Hz before the peak
     assert drums["Peak Drums"] == [0.0, 0.0, 0.0]  # the kick slams back in
-    kind, lead = tracks["Peak-Time Techno Lead"]
+    kind, lead = tracks["Lead"]
     assert kind == 0.0 and lead["Peak Lead"][0] < lead["Peak Lead"][1] < lead["Peak Lead"][2]  # the acid opens over the peak
 
 
