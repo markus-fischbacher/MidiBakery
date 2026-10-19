@@ -305,7 +305,7 @@ class ComposeRequest(Generate):
         return self
 
     def spec(self) -> Generate:
-        return PART_SPECS[self.kind].model_validate(self.model_dump(exclude_none=True))
+        return PART_SPECS[self.kind].model_validate(self.model_dump(exclude_none=True, exclude_unset=True))  # defaults stay unset, so they never pose as choices
 
 
 Step = Annotated[DrumsSpec | BassSpec | ChordsSpec | MelodySpec | TransformSpec, Field(discriminator="kind")]

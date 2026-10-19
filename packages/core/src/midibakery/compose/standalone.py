@@ -20,7 +20,8 @@ from midibakery.compose.drums import map_pads
 from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.parts import generate_part
 from midibakery.compose.rhythm import Grid, Meter
-from midibakery.compose.specs import PART_SPECS, SWING_UNITS, TransformSpec
+from midibakery.compose.patterns import mood_harmony
+from midibakery.compose.specs import PART_SPECS, SWING_UNITS, ChordsSpec, TransformSpec
 from midibakery.compose.theory import MAJOR, Scale
 
 
@@ -129,6 +130,22 @@ def run_transform(spec: TransformSpec, notes: list[dict[str, Any]], scale: Scale
     raise ValueError(f"unknown operation {op!r}")
 
 
+# Fields a named pattern or a fixed style does not read, so setting them has no effect.
+_PATTERN_IGNORES = {"bass": ("style", "octave", "density", "kick_relation", "follow_kick"),
+                    "chords": ("rhythm", "low", "high", "voices")}
+_FIXED_RHYTHM_BASS = ("offbeat", "walking", "sustained")
+
+
+def ignored_controls(spec: Any) -> list[str]:
+    """Explicitly supplied fields this spec's pattern or style never reads (defaults are never listed)."""
+    given = spec.model_fields_set
+    kind = getattr(spec, "kind", "")
+    found = [f for f in _PATTERN_IGNORES.get(kind, ()) if getattr(spec, "pattern", None) and f in given]
+    if kind == "bass" and not spec.pattern and spec.style in _FIXED_RHYTHM_BASS and "swing" in given and spec.swing:
+        found.append("swing")  # these styles sit on fixed pulses: swing is not applied
+    return found
+
+
 def generate(request: GenerateRequest) -> dict[str, Any]:
     """New notes for the time selection, positioned at its start."""
     ctx = request.context
@@ -144,11 +161,16 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
     else:
         if spec.progression:
             harmony = harmony_mod.from_progression(spec.progression, scale, meter, bars, spec.chords_per_bar)
+        elif isinstance(spec, ChordsSpec) and spec.pattern:
+            explicit = spec.chords_per_bar if "chords_per_bar" in spec.model_fields_set else None
+            harmony = mood_harmony(spec.pattern, scale, meter, bars, explicit)
         else:
             harmony = harmony_mod.auto(scale, meter, bars, spec.chords_per_bar, rng, getattr(spec, "sevenths", False))
         info["chords"] = harmony.describe()
         notes = generate_part(spec, harmony, scale, meter, bars, rng)
     notes = fit_to_length(notes, ctx.length)
+    if ignored := ignored_controls(spec):
+        info["ignored"] = ignored
     return {"seed": seed, "notes": [_note_out(n, ctx.start) for n in notes], **info}
 
 

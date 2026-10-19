@@ -90,7 +90,8 @@ async def _harmony(call: Call, session: Session, request: TakesRequest, start: f
         return harmony_mod.auto(scale, meter, bars, 1.0, rng), "generated"
 
 
-def _notes(request: TakesRequest, session: Session, harmony: Harmony, seed: int, pads: list[dict] | None, main: list[Note] | None = None) -> list[Note]:
+def _notes(request: TakesRequest, session: Session, harmony: Harmony, seed: int, pads: list[dict] | None, main: list[Note] | None = None,
+           main_length: float | None = None) -> list[Note]:
     meter, scale, bars = session.meter, session.scale, request.bars
     rng = random.Random(seed)
     try:
@@ -103,12 +104,12 @@ def _notes(request: TakesRequest, session: Session, harmony: Harmony, seed: int,
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", f"params: {exc}") from None
     try:
-        return generate_part(spec, harmony, scale, meter, bars, rng, map_pads(pads) if request.kind == "drums" else None, main=main)
+        return generate_part(spec, harmony, scale, meter, bars, rng, map_pads(pads) if request.kind == "drums" else None, main=main, main_length=main_length)
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", str(exc)) from None
 
 
-async def _counter(session: Session, request: TakesRequest) -> list[dict[str, Any]] | None:
+async def _counter(session: Session, request: TakesRequest) -> tuple[list[dict[str, Any]], float | None] | None:
     """Notes of the main melody when params has counter_to (kind melody), else None."""
     if request.kind != "melody" or request.params.get("counter_to") is None:
         return None
@@ -123,8 +124,8 @@ async def _counter(session: Session, request: TakesRequest) -> list[dict[str, An
         spec = MelodySpec.model_validate({"track": request.track, "arrangement_clip": 10**6, **params})
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", f"params: {exc}") from None
-    notes, _ = await _counter_main(session, spec)
-    return notes
+    notes, _, length = await _counter_main(session, spec)
+    return notes, length
 
 
 async def build_takes(call: Call, request: TakesRequest) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -138,7 +139,8 @@ async def build_takes(call: Call, request: TakesRequest) -> tuple[list[dict[str,
     base = request.seed if request.seed is not None else new_seed()
     harmony, harmony_source = await _harmony(call, session, request, start, length, random.Random(f"{base}:harmony"))
     pads = await session.drum_pads(request.track) if request.kind == "drums" else None
-    main_dicts = await _counter(session, request)
+    counter = await _counter(session, request)
+    main_dicts, main_length = counter if counter else (None, None)
     main = _main_notes(main_dicts) if main_dicts else None
     if main_dicts and harmony_source == "generated":  # no chords anywhere: the ones the lead implies, not a clashing loop
         try:
@@ -150,7 +152,7 @@ async def build_takes(call: Call, request: TakesRequest) -> tuple[list[dict[str,
     takes = []
     for k in range(request.count):
         seed = base + k
-        notes = fit_to_length(_notes(request, session, harmony, seed, pads, main), length)
+        notes = fit_to_length(_notes(request, session, harmony, seed, pads, main, main_length), length)
         name = f"Take {k + 1} · {request.kind} · seed {seed}"
         actions.append({"action": "add_take_lane", "track": request.track, "name": name})
         actions.append({"action": "add_take_clip", "track": request.track, "lane": -1, "start": start, "length": length, "name": name, "notes": [n.to_spec() for n in notes]})

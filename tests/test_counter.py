@@ -327,3 +327,32 @@ def test_a_counter_to_a_busy_arp_is_sparser_than_the_arp():
     assert 0 < len(notes) <= len(ARP) / 2 and max(n.pitch for n in notes) <= 96
     answer = counter(CALL, None)
     assert answer and all(3.45 <= n.start_time < 8 or 11.45 <= n.start_time < 15.75 for n in answer)  # in the rests
+
+
+def test_trailing_rests_stay_rests_when_the_clip_length_is_known():
+    notes = [Note(72, 0, 1, 100), Note(72, 4, 1, 100)]  # a 4-bar clip with notes only at beats 0 and 4
+    guessed = analyze(notes, METER, 4)
+    exact = analyze(notes, METER, 4, source_length=16)
+    assert sorted(n.start_time for n in guessed.notes) == [0, 4, 8, 12]  # the old heuristic invents notes
+    assert sorted(n.start_time for n in exact.notes) == [0, 4]
+    assert exact.onsets_per_bar == (1, 1, 0, 0)
+
+
+def test_an_empty_last_bar_of_a_dense_lead_is_not_refilled():
+    notes = [Note(72, bar * 4 + k, 0.5, 100) for bar in range(7) for k in range(4)]  # 8-bar lead, bar 8 empty
+    line = analyze(notes, METER, 8, source_length=32)
+    assert line.onsets_per_bar[7] == 0 and len(line.notes) == 28
+    assert analyze(notes, METER, 8).onsets_per_bar[7] == 4  # without the length it loops at bar 8
+
+
+def test_a_genuinely_shorter_clip_still_loops():
+    notes = [Note(72, 0, 1, 100), Note(72, 4, 1, 100)]
+    line = analyze(notes, METER, 8, source_length=8)
+    assert sorted(n.start_time for n in line.notes) == [0, 4, 8, 12, 16, 20, 24, 28]
+
+
+def test_the_counter_answers_in_the_final_empty_bar():
+    notes = [Note(72, bar * 4 + k, 0.5, 100) for bar in range(3) for k in range(4)]
+    harmony = harmony_mod.from_progression("i VI III VII", SCALE, METER, 4, 1)
+    answer = generate_counter(notes, harmony, SCALE, METER, 4, random.Random(3), "call_and_response", "above", source_length=16)
+    assert any(n.start_time >= 12 for n in answer)  # it has room in the empty bar 4

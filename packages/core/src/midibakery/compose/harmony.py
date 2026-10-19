@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass
 from typing import Any
@@ -25,6 +26,7 @@ class Segment:
 class Harmony:
     segments: tuple[Segment, ...]
     source: str  # "progression", "auto" or "clip"
+    explicit: bool = False  # chords the user named: generators must keep their quality as written
 
     def at(self, time: float) -> Segment:
         for segment in self.segments:
@@ -54,13 +56,19 @@ class Harmony:
                     break
                 segments.append(Segment(start, min(segment.length, total - start), segment.chord))
             offset += cycle
-        return Harmony(tuple(segments), self.source)
+        return Harmony(tuple(segments), self.source, self.explicit)
+
+
+def segment_count(meter: Meter, bars: int, chords_per_bar: float) -> int:
+    """Segments that cover every beat of `bars` bars; the last one is cut to the end."""
+    return max(1, math.ceil(bars * chords_per_bar - 1e-9))
 
 
 def timeline(chords: list[Chord], meter: Meter, bars: int, chords_per_bar: float, source: str) -> Harmony:
     length = meter.beats_per_bar / chords_per_bar
-    count = max(1, round(bars * chords_per_bar))
-    segments = tuple(Segment(i * length, length, chords[i % len(chords)]) for i in range(count))
+    total = meter.beats_per_bar * bars
+    count = segment_count(meter, bars, chords_per_bar)
+    segments = tuple(Segment(i * length, min(length, total - i * length), chords[i % len(chords)]) for i in range(count))
     return Harmony(segments, source)
 
 
@@ -69,7 +77,7 @@ def from_progression(text: str, scale: Scale, meter: Meter, bars: int, chords_pe
 
 
 def auto(scale: Scale, meter: Meter, bars: int, chords_per_bar: float, rng: random.Random, sevenths: bool = False) -> Harmony:
-    count = max(1, round(bars * chords_per_bar))
+    count = segment_count(meter, bars, chords_per_bar)
     # A 4-chord cycle repeats like a real loop; longer clips get a second half.
     cycle = min(count, 4 if count <= 8 else 8)
     chords = functional_progression(scale, cycle, rng, sevenths)
@@ -79,10 +87,11 @@ def auto(scale: Scale, meter: Meter, bars: int, chords_per_bar: float, rng: rand
 def detect(notes: list[dict[str, Any]], scale: Scale, meter: Meter, bars: int, chords_per_bar: float) -> Harmony:
     """Chords of an existing clip, one per segment, weighted by how long each pitch class sounds."""
     length = meter.beats_per_bar / chords_per_bar
-    count = max(1, round(bars * chords_per_bar))
+    total = meter.beats_per_bar * bars
+    count = segment_count(meter, bars, chords_per_bar)
     chords: list[Chord] = []
     for i in range(count):
-        start, end = i * length, (i + 1) * length
+        start, end = i * length, min((i + 1) * length, total)
         weights: dict[int, float] = {}
         lowest: tuple[int, int] | None = None
         for note in notes:
@@ -99,5 +108,5 @@ def detect(notes: list[dict[str, Any]], scale: Scale, meter: Meter, bars: int, c
         if chord is None:
             chord = chords[-1] if chords else diatonic_chord(scale, 0)
         chords.append(chord)
-    segments = tuple(Segment(i * length, length, c) for i, c in enumerate(chords))
+    segments = tuple(Segment(i * length, min(length, total - i * length), c) for i, c in enumerate(chords))
     return Harmony(segments, "clip")

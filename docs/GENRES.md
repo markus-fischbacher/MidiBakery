@@ -434,6 +434,10 @@ Delay throws: the lead throws in the drop, the chords in the verse, each on the 
 
 ---
 
+## Reusing your own clips
+
+`clips` copies a clip you made into a role instead of generating it. It must be a MIDI clip on the same track as that role (`roles`); a clip on another track is refused when planning. Whole copies fill the section; a remainder shorter than the clip, or a clip longer than the section, is reported in `warnings` and `reuse` (never trimmed, never changed). If the clip changed or vanished between plan and apply, apply stops with a conflict. A `progression` is used exactly as written (genre sevenths are not added); a copied chord clip does not set the song's harmony, so the bass and lead follow the progression or the genre loop. Whether it should is a product decision still open. Song bars are 4/4 bars of the plan; a clip's own bars are its length.
+
 ## What the engine implements and what it doesn't
 
 State after the rework to follow the recipes (`compose/grooves.py`, `compose/hook.py`, templates in `compose/structures.py`).

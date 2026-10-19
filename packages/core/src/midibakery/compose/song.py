@@ -164,6 +164,7 @@ class SongPlan:
     reference: str | None = None  # the analyzed song the sections follow
     sidechain_mode: str = "pumping"
     sidechain_source: dict[str, Any] | None = None
+    reuse: dict[str, dict[str, Any]] = field(default_factory=dict)  # role -> copied Session clip and how it is placed
 
     def mix_info(self) -> dict[str, Any]:
         if self.mix is None:
@@ -254,6 +255,7 @@ class SongPlan:
             "harmony": self.harmony,
             "notes": self.notes,
             "clips": len(self.actions),
+            **({"reuse": self.reuse} if self.reuse else {}),
             "warnings": self.warnings,
             "next": "apply_plan(plan_id) writes the song to the Arrangement View",
         }
@@ -480,6 +482,13 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
         roles[role] = RoleTrack(role, index, track.get("name", ""))
         used.add(index)
     for clip in request.clips:
+        redirected = request.roles.get(clip.role)
+        if redirected is not None and redirected != clip.track:
+            raise BridgeError(
+                "INVALID_PARAMS",
+                f"clips: the {clip.role} clip is on track index {clip.track}, but roles.{clip.role} puts {clip.role} on track index {redirected}. "
+                f"Copies stay on their source's track: use the same track or leave roles.{clip.role} out.",
+            )
         if clip.role not in roles:
             roles[clip.role] = RoleTrack(clip.role, clip.track, session.track(clip.track).get("name", ""))
             used.add(clip.track)
@@ -593,7 +602,7 @@ def _from(harmony: Harmony, start: float, length: float) -> Harmony:
         begin, end = max(segment.start, start), min(segment.end, start + length)
         if end > begin + EPSILON:
             segments.append(harmony_mod.Segment(begin - start, end - begin, segment.chord))
-    return Harmony(tuple(segments), harmony.source)
+    return Harmony(tuple(segments), harmony.source, harmony.explicit)
 
 
 def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Random) -> tuple[Harmony, Harmony]:
@@ -607,7 +616,7 @@ def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Rando
         loops.append(loops[0])
     if request.progression:
         try:
-            loops[0] = harmony_mod.from_progression(request.progression, scale, meter, 8, style.chords_per_bar)
+            loops[0] = replace(harmony_mod.from_progression(request.progression, scale, meter, 8, style.chords_per_bar), explicit=True)
         except ValueError as exc:
             raise BridgeError("INVALID_PARAMS", str(exc)) from None
     return loops[0], loops[1]
@@ -703,6 +712,10 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     kick_pitch = drum_map.note("kick")
 
     use = {c.role: c for c in request.clips}
+    if "chords" in use:  # product choice pending: whether a copied chord clip should set the song's harmony
+        warnings.append("clips.chords is copied as is: the song's bass and lead follow "
+                        + ("the given progression" if request.progression else "the genre's progression")
+                        + ", not the chords in that clip. Pass progression to match them")
     sidechain_source = None
     trigger_needed = request.sidechain and request.sidechain_mode == "follow_kick" and "sidechain" in roles
     if trigger_needed:
@@ -752,7 +765,12 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         found = next((c for c in session.track(clip.track).get("clips", []) if c["slot"] == clip.slot), None)
         if found is None:
             raise BridgeError("NOT_FOUND", f"clips: no clip in slot index {clip.slot} of track index {clip.track}")
+        if found.get("is_midi") is False:
+            raise BridgeError("INVALID_PARAMS", f"clips: the clip in slot index {clip.slot} of track index {clip.track} is not a MIDI clip")
+        if float(found["length"]) <= EPSILON:
+            raise BridgeError("INVALID_PARAMS", f"clips: the clip in slot index {clip.slot} of track index {clip.track} has no length")
         loops[role] = float(found["length"])
+    reuse: dict[str, dict[str, Any]] = {r: {"track": c.track, "slot": c.slot, "clip_beats": loops[r], "copies": 0, "uncovered_beats": 0.0} for r, c in use.items()}
 
     cache: dict[tuple, list[Note]] = {}
     actions: list[dict[str, Any]] = []
@@ -814,9 +832,18 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             if role in use:
                 loop = loops[role]
                 for part, offset, bars in playing:
-                    copies = int((bars * bpb + EPSILON) // loop) if loop > 0 else 0
+                    span = bars * bpb
+                    copies = int((span + EPSILON) // loop)
                     for k in range(copies):
                         actions.append({"action": "copy_session_clip", "track": target.index, "slot": use[role].slot, "start": at + offset * bpb + k * loop})
+                    reuse[role]["copies"] += copies
+                    gap = span - copies * loop
+                    if gap > EPSILON:
+                        reuse[role]["uncovered_beats"] += gap
+                        what = f"repeats {copies}x and leaves its last {gap:g} beats empty" if copies else "is longer than the span, so it is left out"
+                        message = f"clips.{role}: the {loop:g}-beat clip {what} in the {span:g}-beat '{section.name}' part (copies are never trimmed)"
+                        if message not in warnings:
+                            warnings.append(message)
                 continue
             cache_key = (section.kind, section.variation, section.bars, role, spec, section.pause_every)
             if cache_key not in cache:
@@ -886,6 +913,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         str(reference.get("name")) if reference is not None else None,
         request.sidechain_mode,
         sidechain_source,
+        {r: {**v, "name": next((c.get("name") for c in session.track(v["track"]).get("clips", []) if c["slot"] == v["slot"]), None)} for r, v in reuse.items()},
     )
 
 
@@ -908,7 +936,7 @@ def _counter_clips(actions: list[dict[str, Any]], roles: dict[str, RoleTrack], s
         harmony = _from((alt if section.kind == "break" else main).for_length(meter, section.bars), action["start"] - at, length)
         lead_notes = [Note(n["pitch"], n["start_time"], n["duration"], n.get("velocity", 100)) for n in action["notes"]]
         notes = fit_to_length(generate_counter(lead_notes, harmony.for_length(meter, bars), scale, meter, bars,
-                                               rng("counter", section.name, action["start"])), length)
+                                               rng("counter", section.name, action["start"]), source_length=length), length)
         if notes:
             counts["counter"] += len(notes)
             clips.append({"action": "add_clip", "track": counter, "start": action["start"], "length": length,
@@ -1002,6 +1030,10 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         timing = ("length", "looping", "loop_start", "loop_end", "start_marker", "end_marker")
         if current["notes"] != source["notes"] or any(current["clip"][k] != source["clip"][k] for k in timing):
             raise BridgeError("CONFLICT", "The copied drum clip changed since the kick-following plan; plan again")
+    for role, source in plan.reuse.items():
+        current = await call("clip.get", {"track": source["track"], "slot": source["slot"]})
+        if not current.get("is_midi", True) or abs(float(current["length"]) - source["clip_beats"]) > EPSILON:
+            raise BridgeError("CONFLICT", f"The copied {role} clip changed since the song plan was made; plan again")
     _trigger_first(plan)
     undo_steps = 0
     warnings: list[str] = []

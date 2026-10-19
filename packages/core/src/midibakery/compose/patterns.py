@@ -8,10 +8,13 @@
 
 from __future__ import annotations
 
+from midibakery.compose import harmony as harmony_mod
 from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, describe_template
-from midibakery.compose.chord_templates import CHORD_TEMPLATES, ChordTemplate, describe_chords
+from midibakery.compose.chord_templates import CHORD_TEMPLATES, ChordTemplate, describe_chords, template_scale
 from midibakery.compose.lead_templates import LEADS, LeadTemplate, describe_lead
+from midibakery.compose.rhythm import Meter
 from midibakery.compose.techno_templates import TECHNO, TECHNO_LEADS, TechnoPattern, describe_techno
+from midibakery.compose.theory import Scale
 
 
 def bass_names() -> tuple[str, ...]:
@@ -46,6 +49,13 @@ def drum_pattern(name: str) -> TechnoPattern:
 
 def mood_template(name: str) -> ChordTemplate:
     return CHORD_TEMPLATES[name]
+
+
+def mood_harmony(name: str, tonic: Scale, meter: Meter, bars: int, chords_per_bar: float | None = None) -> harmony_mod.Harmony:
+    """The progression of a named mood pattern in its own mode on the tonic; its own chord rate unless one is given."""
+    template = mood_template(name)
+    rate = template.chords_per_bar if chords_per_bar is None else chords_per_bar
+    return harmony_mod.from_progression(template.progression, template_scale(template, tonic), meter, bars, rate)
 
 
 def catalog() -> dict[str, list[dict[str, object]]]:
