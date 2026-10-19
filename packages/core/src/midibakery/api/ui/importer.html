@@ -140,7 +140,7 @@ async function addPath(path) {
 }
 
 async function read(set) {
-  if (set.info || set.error) return;
+  if (!set || set.info || set.error) return;  // a Set removed from the list while it waited to be read
   try {
     set.info = await api("/import/preview", { file: set.file });
     set.selected = !set.imported;  // a Set that reads fine is ready to import; untick the ones you do not want
