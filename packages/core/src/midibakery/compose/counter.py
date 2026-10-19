@@ -4,9 +4,16 @@ The rules come from docs/COUNTER_MELODY.md (two tutorials, 13 techniques). `anal
 melody (onsets, held notes, rests, density, range); `generate_counter` builds an onset pattern per
 mode and then picks every pitch against the main note sounding at that moment and the chord.
 
+Rests are phrase rests: the time between two main notes counts only when the next one starts a beat or more
+after the last one ended. The short silence between the staccato hits of an arp or a riff is not room to answer.
+
+Without a mode the main picks it (`resolve`): long phrase rests -> call_and_response, some rests or held notes
+-> fill_the_gaps, a main without any -> passive_over_active (few long notes, no room to fill). Without a
+register: above the main, unless that would go past C7 (pitch 96); then below.
+
 Modes (rhythm and placement, then pitch):
-- fill_the_gaps: starts only inside the main's held notes and rests; stops (or sustains) when it returns.
-- call_and_response: the same at phrase level: answers in whole silent beats and bars of the main.
+- fill_the_gaps: starts only inside the main's phrase rests and held notes (a beat or longer).
+- call_and_response: the same at phrase level: answers in the main's phrase rests, from their first 16th.
 - passive_over_active: a third to half of a busy main's onsets, longer notes; more notes over a sparse one.
 - contrasting_rhythm: an onset pattern that differs from the main's (sparse over dense, dense over sparse).
 - harmonic_notes: follows the main's onsets (or an eighth late) on another consonant note, never the same pitch class.
@@ -20,7 +27,8 @@ Fixed figures (their rhythm does not follow the main's; the main only sets regis
 - echo_gap_answer: 3-4 short stepwise notes inside a long main note, then one longer note that sustains under
   the main's re-entry (needs held notes of 1.25 beats or more; a busy main gets nothing).
 
-Rules every mode keeps: the register is clear of the main's range (above/below: a whole octave; same only
+Rules every mode keeps: the register is clear of the main's range (above/below: a third or more, never past
+pitch 96 or under 36; same only
 with onsets that never meet the main's); on strong beats (meter accent >= 0.8) the interval to the sounding
 main note is a third, sixth, fifth or octave (a unison only in note_layering); no parallel fifths or octaves
 between consecutive notes; chord tones first, then scale tones. A note that fits nowhere is shortened,
@@ -48,6 +56,9 @@ REGISTERS = ("above", "below", "same")
 STEP = 0.25  # one 16th, in beats
 EPS = 1e-6
 WINDOW = 14  # semitones the counter line may span above/below the main's range
+CEILING, FLOOR = 96, 36  # C7 and C2: a counter line higher or lower is shrill or mud
+MIN_ROOM = 9  # semitones the line needs; less room above the main puts it below
+REST = 1.0  # beats of silence before the next main note that make a phrase rest
 CONSONANT = frozenset({3, 4, 7, 8, 9})  # thirds, fifths, sixths (octaves and unisons are handled apart)
 PARALLEL = frozenset({0, 7})
 PULSE = (0, 3, 6, 9, 12, 15)  # 16th steps of the 3-3-3-3-3-1 figure (the lead templates' TUMBLE, counted from 0)
@@ -87,6 +98,10 @@ class MainLine:
     def held(self) -> list[tuple[float, float]]:
         return [(n.start_time, n.end_time) for n in self.notes]
 
+    def phrase_rests(self, min_gap: float = REST) -> list[tuple[float, float]]:
+        """Rests of `min_gap` beats or more: a note holds until the next one starts when that comes sooner."""
+        return phrase_rests(self.notes, self.length, min_gap)
+
     def rests(self) -> list[tuple[float, float]]:
         """Spans where no main note sounds."""
         gaps, cursor = [], 0.0
@@ -101,6 +116,25 @@ class MainLine:
     def strong_times(self) -> list[float]:
         bpb = self.meter.beats_per_bar
         return [bar * bpb + p for bar in range(self.bars) for p in self.meter.pulses if self.meter.accent(p) >= 0.8]
+
+
+def phrase_rests(notes: tuple[Note, ...] | list[Note], length: float, min_gap: float = REST) -> list[tuple[float, float]]:
+    """Spans of `min_gap` beats or more in which no note sounds and none is about to: the staccato gaps of a
+    riff (shorter than `min_gap`) belong to its phrase."""
+    spans: list[list[float]] = []
+    for n in sorted(notes, key=lambda n: n.start_time):
+        if spans and n.start_time - spans[-1][1] < min_gap - EPS:
+            spans[-1][1] = max(spans[-1][1], n.end_time)
+        else:
+            spans.append([n.start_time, n.end_time])
+    rests, cursor = [], 0.0
+    for start, end in spans:
+        if start - cursor >= min_gap - EPS:
+            rests.append((cursor, start))
+        cursor = max(cursor, end)
+    if length - cursor >= min_gap - EPS:
+        rests.append((cursor, length))
+    return rests
 
 
 def analyze(main: list[Note], meter: Meter, bars: int) -> MainLine:
@@ -168,35 +202,39 @@ def _bar_steps(line: MainLine, bar: int) -> range:
     return range(bar * spb, (bar + 1) * spb)
 
 
+def _room(line: MainLine) -> list[tuple[float, float]]:
+    """Where a counter note may start: the phrase rests and the held notes of a beat or more (after their onset)."""
+    holds = [(n.start_time + STEP, n.end_time) for n in line.notes if n.duration >= REST - EPS]
+    return sorted(line.phrase_rests() + holds)
+
+
 def _fill_the_gaps(line: MainLine, rng: random.Random, density: float | None) -> list[Onset]:
+    """Fills phrase rests and held notes. A main without either has no room: answered like passive_over_active."""
     d = 0.5 if density is None else density
+    room = _room(line)
+    if not room:
+        return _passive_over_active(line, rng, density)
     onsets = []
     for bar in range(line.bars):
-        free = [s for s in _bar_steps(line, bar) if s not in line.onset_steps]
-        onsets += [Onset(s) for s in _weighted(line, rng, free, round(1 + 5 * d))]
+        free = {s: end for s in _bar_steps(line, bar) if s not in line.onset_steps
+                for start, end in room if start - EPS <= s * STEP <= end - STEP + EPS}
+        onsets += [Onset(s, free[s]) for s in _weighted(line, rng, list(free), round(1 + 5 * d))]
     return onsets
 
 
 def _call_and_response(line: MainLine, rng: random.Random, density: float | None) -> list[Onset]:
-    """Answers in the silent beats and bars. A main without a silent beat is answered like fill_the_gaps."""
+    """Answers in the phrase rests, from their first 16th. A main without one is answered like fill_the_gaps."""
     d = 0.5 if density is None else density
-    beats = int(line.length)
-    silent = [line.silent(b, b + 1) for b in range(beats)]
-    if not any(silent):
+    rests = line.phrase_rests()
+    if not rests:
         return _fill_the_gaps(line, rng, density)
     onsets: list[Onset] = []
-    b = 0
-    while b < beats:
-        if not silent[b]:
-            b += 1
+    for start, end in rests:
+        first, last = math.ceil(start / STEP - EPS), math.floor(end / STEP + EPS)  # 16th steps of the rest
+        if last - first < 2:
             continue
-        run_end = b
-        while run_end < beats and silent[run_end]:
-            run_end += 1
-        first, last = b * 4, run_end * 4  # 16th steps of the silent run
-        steps = [first] + [s for s in range(first + 2, last, 2) if rng.random() < 0.35 + 0.5 * d]
-        onsets += [Onset(s, float(run_end)) for s in steps]
-        b = run_end
+        steps = [first] + [s for s in range(first + 2, last - 1, 2) if rng.random() < 0.35 + 0.5 * d]
+        onsets += [Onset(s, end) for s in steps]
     return onsets
 
 
@@ -275,13 +313,13 @@ RHYTHMS = {
 
 
 def _window(line: MainLine, register: str) -> tuple[int, int]:
-    """Lowest and highest pitch of the counter line."""
+    """Lowest and highest pitch of the counter line: a third clear of the main, within C2..C7."""
     if register == "above":
-        low = min(line.high + 12, 127 - WINDOW)
-        return low, low + WINDOW
+        low = min(line.high + 3, CEILING - MIN_ROOM)
+        return low, min(low + WINDOW, CEILING)
     if register == "below":
-        high = max(line.low - 12, WINDOW)
-        return high - WINDOW, high
+        high = max(line.low - 3, FLOOR + MIN_ROOM)
+        return max(high - WINDOW, FLOOR), high
     width = max(line.high - line.low, 7)
     return line.low, line.low + width
 
@@ -480,6 +518,30 @@ FIGURE_BUILDERS = {
 }
 
 
+def resolve(main: list[Note], meter: Meter, bars: int, mode: str | None = None, register: str | None = None) -> tuple[str, str, str]:
+    """The mode and register a counter melody uses, and why (empty when both were given)."""
+    line = analyze(main, meter, bars)
+    reasons = []
+    if mode is None:
+        rests = line.phrase_rests()
+        share = sum(end - start for start, end in rests) / line.length
+        per_bar = sum(line.onsets_per_bar) / line.bars
+        if any(end - start >= 2 * REST - EPS for start, end in rests) and share >= 0.25:
+            mode = "call_and_response"
+            reasons.append(f"the lead rests {100 * share:.0f}% of the time: the counter answers in its rests")
+        elif _room(line):
+            mode = "fill_the_gaps"
+            reasons.append("the lead leaves short rests and held notes: the counter fills them")
+        else:
+            mode = "passive_over_active"
+            reasons.append(f"the lead plays without a rest (about {per_bar:.0f} notes a bar): a few long notes against it")
+    if register is None:
+        register = "above" if line.high + 3 + MIN_ROOM <= CEILING else "below"
+        if register == "below":
+            reasons.append("below the lead: above it would go past C7")
+    return mode, register, "; ".join(reasons)
+
+
 def generate_counter(
     main: list[Note],
     harmony: Harmony,
@@ -487,11 +549,12 @@ def generate_counter(
     meter: Meter,
     bars: int,
     rng: random.Random,
-    mode: str,
-    register: str = "above",
+    mode: str | None = None,
+    register: str | None = None,
     density: float | None = None,
     swing: float = 0.0,
 ) -> list[Note]:
+    mode, register, _ = resolve(main, meter, bars, mode, register)
     if mode not in MODES:
         raise ValueError(f"unknown counter melody mode {mode!r}; use one of {', '.join(MODES)}")
     if register not in REGISTERS:

@@ -75,17 +75,17 @@ def test_no_parallel_fifths_or_octaves(mode, name):
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize("name", MAINS)
-def test_register_above_and_below_stay_an_octave_clear_and_never_cross(mode, name):
+def test_register_above_and_below_stay_a_third_clear_within_c2_and_c7(mode, name):
     main = MAINS[name]
     top, bottom = max(n.pitch for n in main), min(n.pitch for n in main)
     above = counter(main, mode, register="above")
     below = counter(main, mode, register="below")
-    if name == "busy" and mode in ("fill_the_gaps", "call_and_response", "echo_gap_answer"):
-        assert not above and not below  # no gap to answer in
+    if name == "busy" and mode == "echo_gap_answer":
+        assert not above and not below  # no held note to answer in
         return
     assert above and below
-    assert min(n.pitch for n in above) >= top + 12
-    assert max(n.pitch for n in below) <= bottom - 12
+    assert top + 3 <= min(n.pitch for n in above) and max(n.pitch for n in above) <= 96
+    assert 36 <= min(n.pitch for n in below) and max(n.pitch for n in below) <= bottom - 3
 
 
 def test_same_register_never_starts_with_the_main():
@@ -109,8 +109,11 @@ def test_fill_the_gaps_starts_inside_held_notes_and_rests(name):
     assert len(inside) >= 0.8 * len(notes)
 
 
-def test_fill_the_gaps_has_nothing_to_add_to_a_line_without_gaps():
-    assert counter(BUSY, "fill_the_gaps") == []
+def test_fill_the_gaps_over_a_line_without_rests_plays_few_long_notes():
+    # nothing to fill between 16ths: the staccato gaps of a riff are no room to answer
+    notes = counter(BUSY, "fill_the_gaps")
+    starts = lambda mode: [n.start_time for n in counter(BUSY, mode)]  # noqa: E731
+    assert starts("fill_the_gaps") == starts("passive_over_active") and len(notes) <= len(BUSY) / 2
 
 
 def test_call_and_response_answers_in_silent_beats_and_owns_the_empty_bar():
@@ -161,7 +164,7 @@ def test_note_layering_uses_the_mains_pitch_classes_an_octave_away():
     main_classes = {m.pitch % 12 for m in SPARSE}
     layered = [n for n in notes if n.pitch % 12 in main_classes]
     assert len(layered) >= 0.7 * len(notes)
-    assert min(n.pitch for n in notes) >= max(m.pitch for m in SPARSE) + 12
+    assert min(n.pitch for n in notes) >= max(m.pitch for m in SPARSE) + 3
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -282,7 +285,7 @@ def test_echo_gap_answer_sits_in_held_notes_and_ends_on_a_longer_note():
         assert 3 <= len(short) <= 4
         assert last.duration > max(n.duration for n in short)
         assert last.start_time >= max(n.start_time for n in short)
-    assert min(n.pitch for n in notes) >= max(m.pitch for m in SPARSE) + 12
+    assert min(n.pitch for n in notes) >= max(m.pitch for m in SPARSE) + 3
 
 
 def test_echo_gap_answer_moves_by_steps():
@@ -294,3 +297,33 @@ def test_echo_gap_answer_moves_by_steps():
 
 def test_echo_gap_answer_has_nothing_to_add_to_a_line_of_short_notes():
     assert counter(BUSY, "echo_gap_answer") == []
+
+
+# An arp like Melodic Techno's: seven 0.2-beat hits in a bar, a 0.8-beat pause after the first
+ARP = [Note(72 + k, b * 4 + t, 0.2, 100) for b in range(BARS) for k, t in enumerate((0.0, 1.0, 1.5, 2.25, 2.75, 3.0, 3.25))]
+# The same hits in bar 1 and 3 only: a bar of rest after each (the Build's lead); a pickup ends bar 4
+CALL = [n for n in ARP if int(n.start_time // 4) % 2 == 0] + [Note(79, 15.75, 0.2, 100)]
+
+
+def test_the_staccato_gaps_of_an_arp_are_no_phrase_rests():
+    from midibakery.compose.counter import analyze
+    assert analyze(ARP, METER, BARS).phrase_rests() == []
+    assert analyze(CALL, METER, BARS).phrase_rests() == [(3.45, 8.0), (11.45, 15.75)]
+
+
+def test_the_lead_picks_mode_and_register():
+    from midibakery.compose.counter import resolve
+    busy = resolve(ARP, METER, BARS)
+    assert busy[:2] == ("passive_over_active", "above") and "without a rest" in busy[2]
+    assert resolve(CALL, METER, BARS)[0] == "call_and_response"
+    assert resolve(PHRASE, METER, BARS)[0] == "call_and_response"
+    high = [Note(p + 12, n.start_time, n.duration, 100) for n, p in zip(CALL, (84, 86, 88, 86, 84, 83, 81) * BARS)]
+    assert resolve(high, METER, BARS)[1] == "below"  # above a lead up to pitch 100 would pass C7
+    assert resolve(ARP, METER, BARS, "fill_the_gaps", "below") == ("fill_the_gaps", "below", "")
+
+
+def test_a_counter_to_a_busy_arp_is_sparser_than_the_arp():
+    notes = counter(ARP, None)
+    assert 0 < len(notes) <= len(ARP) / 2 and max(n.pitch for n in notes) <= 96
+    answer = counter(CALL, None)
+    assert answer and all(3.45 <= n.start_time < 8 or 11.45 <= n.start_time < 15.75 for n in answer)  # in the rests

@@ -60,7 +60,7 @@ def generate_part(
         if spec.counter_to is not None:
             assert main is not None, "a counter melody needs the main melody's notes"
             return generate_counter(
-                main, harmony, scale, meter, bars, rng, spec.counter_mode or "fill_the_gaps", spec.counter_register or "above",
+                main, harmony, scale, meter, bars, rng, spec.counter_mode, spec.counter_register,
                 density=spec.density if "density" in spec.model_fields_set else None, swing=spec.swing,
             )
         if spec.pattern:

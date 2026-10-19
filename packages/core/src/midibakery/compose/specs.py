@@ -291,8 +291,8 @@ class ComposeRequest(Generate):
     voices: Literal[3, 4] | None = Field(None, description="(chords) 3 (default) or 4")
     sevenths: bool | None = Field(None, description="(chords) Seventh chords for a generated progression")
     counter_to: ClipLocation | None = Field(None, description="(melody) Main melody clip to answer; a lead in the Arrangement (arrangement_clip: a name like 'Breakdown Lead' means all such clips) gets counter clips at the same bars on track")
-    counter_mode: CounterMode | None = Field(None, description="(melody) With counter_to: " + ", ".join(COUNTER_MODES) + "; default fill_the_gaps")
-    counter_register: CounterRegister | None = Field(None, description="(melody) With counter_to: above (default), below or same")
+    counter_mode: CounterMode | None = Field(None, description="(melody) With counter_to: " + ", ".join(COUNTER_MODES) + "; default: picked from the lead's rests")
+    counter_register: CounterRegister | None = Field(None, description="(melody) With counter_to: above, below or same; default above, below when above would pass C7")
     low: Pitch | None = Field(None, description="(chords, melody) Lowest pitch; default 52 chords, 60 melody")
     high: Pitch | None = Field(None, description="(chords, melody) Highest pitch; default 76 chords, 84 melody")
 

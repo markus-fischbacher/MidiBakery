@@ -106,3 +106,7 @@ Which patterns are rule-based and which are fixed:
 | `timbre_split` | not built (hint only) |
 
 A first generator needs only one input beyond what `compose` has today: the main melody read from a clip. With that, `fill_the_gaps`, `harmonic_notes` and `octave_separation` cover most of what both videos show; the fixed figures are cheap to add as templates.
+
+## As built: rests and register
+
+A rest is a **phrase rest**: the lead is silent for a beat or more before its next note. The pauses between the staccato hits of an arp or a riff belong to its phrase, so `fill_the_gaps` and `call_and_response` never fill them. Without `counter_mode` the lead picks one: long phrase rests (2 beats or more, a quarter of the time) give `call_and_response`; shorter rests or held notes give `fill_the_gaps`; a lead without either gets `passive_over_active`. The register keeps a third (not an octave) clear of the lead and stays within C2..C7 (pitches 36..96); without `counter_register` it is above unless that would pass C7. `plan_song` leads that would play through a 4-bar phrase rest in its 4th bar, which gives a counter melody a whole bar to answer in.
