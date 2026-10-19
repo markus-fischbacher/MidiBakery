@@ -451,7 +451,7 @@ State after the rework to follow the recipes (`compose/grooves.py`, `compose/hoo
 | Sounds | New tracks get the genre's kit and presets from the Core Library; the drum notes land on the kit's pads |
 | Mix | One reverb and one delay return (the song uses existing ones), fader levels and sends per role for new tracks; existing tracks keep their fader and only send into new returns. Reverb decay and delay time per genre, e.g. Melodic Techno 4.5 s, House 1.8 s |
 | Automation | Auto Filter sweeps per clip in all genres, plus resonance sweeps (acid in Peak-Time, pads in breaks and builds). Delay throws: a role's send jumps to -4 dB on the last beat of every 8th bar and then falls back to its level |
-| Sidechain | Optional continuous rhythmic pumping, not detection of the audible kick. A dedicated, silent track "Sidechain" at the very front of the set (Operator, fader at -inf) plays 1/16 notes on the genre's kick steps across the whole song, even where the kick pauses (House, Melodic, Peak-Time every beat, D&B steps 1 and 11, Trap 1, 8 and 11). A Compressor (4:1, attack 1 ms) on bass and pads listens to its post-FX signal. Preset threshold and release: House bass -24 / chords -18 dB, 160 ms; Melodic -22 / -16 dB, 200 ms; Peak-Time -24 / -20 dB, 120 ms; D&B bass only -18 dB, 90 ms; Trap 808 only -14 dB, 100 ms. These settings do not guarantee a particular gain reduction; audition the result |
+| Sidechain | Optional silent-trigger ducking. Default `sidechain_mode="pumping"` plays the genre's main kick steps across the whole song, even during kick rests (House, Melodic, Peak-Time every beat, D&B steps 1 and 11, Trap 1, 8 and 11). `follow_kick` instead derives triggers from the planned drum MIDI, including fills, variations and note-free passages. It is not audio detection: track mute, filters, instrument envelopes and later edits can change what is heard. A dedicated silent "Sidechain" track (Operator, fader at -inf) keys Compressors Post FX. Preset ratio 4:1, attack 1 ms; threshold/release: House bass -24 / chords -18 dB, 160 ms; Melodic -22 / -16 dB, 200 ms; Peak-Time -24 / -20 dB, 120 ms; D&B bass only -18 dB, 90 ms; Trap 808 only -14 dB, 100 ms. These settings do not guarantee gain reduction |
 | FX | A riser fills the last bars (at most 8) before every drop that follows a different section, and ends at the pause before it; volume and filter macro rise exponentially. An impact (Sub 808 Pitch Boom) hits the one of the drop. Riser presets: House and Trap Riser Basic, Melodic and Peak-Time Hyper Riser, D&B ENCOM Riser |
 
 **Still open**
@@ -466,7 +466,7 @@ All cutoff frequencies, resonance values, sends, dynamics settings and section t
 
 ## Master chain (`plan_master`)
 
-`plan_master` puts three native devices at the end of the master track: EQ Eight, Glue Compressor, Limiter. This is an optional preset to audition, not finished mastering, because MidiBakery does not hear the song. It adds no Limiter input gain, but filtering, compression and limiting can still change level, timbre and transients. It does not measure loudness (LUFS). The table describes current implementation settings, not settings every mix needs.
+`plan_master` defaults to three native devices at the end of the master track: EQ Eight, Glue Compressor, Limiter. Set `low_cut=false` or `glue=false` to omit those stages; both false produces a Limiter-only chain. The defaults remain unchanged. This is a preset to audition, not finished mastering, because MidiBakery does not hear the song. It adds no Limiter input gain, but filtering, compression and limiting can still change level, timbre and transients. It does not measure loudness (LUFS). The table describes preset settings, not settings every mix needs.
 
 | Device | Setting | House, Melodic Techno, Peak-Time Techno | Drum & Bass, Trap |
 |---|---|---|---|
@@ -481,7 +481,7 @@ All cutoff frequencies, resonance values, sends, dynamics settings and section t
 - **Preset choice:** Glue at 2:1, attack 30 ms, release Auto. A slower attack may preserve more transient energy, but the result depends on the signal. If subtle bus compression is wanted, audition around 1–2 dB gain reduction in loud passages; bypassing compression is valid.
 - **Preset choice:** a 150 Hz high-pass in the Glue detector reduces its sensitivity to low frequencies. It does not guarantee the absence of pumping.
 - **Professional guidance:** filter the master only when the result helps. A 20–30 Hz low cut can remove unwanted subsonic energy but can also attenuate wanted bass and change phase and transients; a 30 Hz cut is not inherently inaudible. A 48 dB/octave slope is not automatically preferable for sub-heavy music. Compare level-matched with bypass, and consider a gentler cut, a shelf or no filter.
-- **Implemented constraint:** the preset always enables its low cut and compressor; this review does not change that behavior. No automatic analysis establishes whether either is needed.
+- **Implemented control:** low cut and Glue are included by default but can each be omitted. No automatic analysis establishes whether either is needed.
 - **○** Glue threshold -10 dB is an uncalibrated starting value. Input level determines gain reduction; the threshold alone cannot predict it. Adjust while listening or bypass the compressor.
 - **○** Limiter Input Gain 0 dB is intentional: making it louder without measuring would be guesswork.
 
@@ -508,6 +508,7 @@ Measured in Live 12.4:
 
 The Max for Live device **MidiBakery Loudness Meter** sits as the last device on the master and approximates the ITU-R BS.1770-4 loudness algorithm. `measure_master` reads its values; compliance with the full meter specification has not been established.
 
+- **Identity and status:** every reset and sample-rate change creates a distinct `measurement_id`; readings include `since` and `sample_rate`. `reading_fresh` (and the compatibility alias `measuring`) indicates recent file updates, not playback; `is_playing` comes from Live's transport. A raw reading has unknown scope and `coverage_verified=false`.
 - **K-filter:** two biquad~ per channel (pre-filter as high shelf, then RLB high-pass). `loudness.js` computes the coefficients for the current sample rate using the libebur128 formulas; at 48 kHz they are the table values from BS.1770 (a test checks this).
 - **Blocks:** average~ rms over 100 ms per channel, read every 100 ms. Momentary = the last 4 blocks (400 ms), short-term = the last 30 (3 s), as EBU Tech 3341 defines them.
 - **Integrated:** every 400 ms block (75 % overlap) since the reset; gates at -70 LUFS absolute and 10 LU below the mean of the blocks that pass the absolute gate.
@@ -518,11 +519,15 @@ The Max for Live device **MidiBakery Loudness Meter** sits as the last device on
 ## Loudness targets (`plan_loudness`)
 
 `plan_loudness` proposes Limiter gain adjustments toward a selected loudness reference. This is not an assessment of mastering quality. One round:
-1. Reset the meter and play the **whole song once** for comparison with whole-track integrated references. The current implementation checks only that 30 s have elapsed: it cannot verify full-song coverage. A drop-only reading describes that excerpt, not the whole track, and must not be treated as reaching a whole-track target.
-2. It proposes adding the difference to the target to the Limiter's **Input Gain**, at most 6 dB per round and at most +12 dB total input gain. Above +6 dB it warns about possible heavy limiting; this is an input-gain heuristic, not a gain-reduction measurement.
+1. Reset the meter and play the **whole song once** for comparison with whole-track integrated references, then explicitly declare `scope="whole_song"` in `plan_loudness`. Coverage remains **user-declared, not verified**: elapsed time and repeated loops cannot prove complete playback. Omitted/unknown scope is rejected. An excerpt requires `scope="excerpt"` and an explicit `target_lufs`; named genre/streaming targets cannot be used for excerpts. Excerpts need at least 30 s; a declared complete song can be shorter but needs at least 0.4 s and a finite integrated reading.
+2. It proposes adding the difference to the target to the Limiter's **Input Gain**, at most 6 dB per round and no increases beyond +12 dB total input gain. A pre-existing gain above +12 dB can still be reduced without exceeding the 6 dB step limit. Above +6 dB it warns about possible heavy limiting; this is an input-gain heuristic, not a gain-reduction measurement.
 3. `apply_plan` sets the value (one undo step) and resets the meter; then you play the song again.
 
-Limiting may absorb part of an input gain increase, so the loudness response is signal-dependent. After each change, reset and measure the same complete playback again. The implementation reports `on_target` when the reading is within ±0.5 LU, regardless of which passage was measured; it does not guarantee convergence or acceptable dynamics. The ceiling setting is unchanged, but the sample-peak meter does not independently verify true peak. Stop if transients, distortion or pumping worsen, even if the number is below the reference.
+Limiting may absorb part of an input gain increase, so the loudness response is signal-dependent. After each change, reset and measure the same complete playback again. `on_target` means the reading is within ±0.5 LU for the declared scope; results include `measurement_scope`, `scope_source="user_declared"` and `coverage_verified=false`. It does not guarantee convergence or acceptable dynamics. Planning rejects stale readings and a meter that is not last. Apply rejects a changed measurement identity/sample rate/reset time, pending reset, replaced meter/Limiter, changed Master device list or changed Limiter parameters. New readings from the same session are allowed. The ceiling setting is unchanged, but the sample-peak meter does not independently verify true peak. Stop if transients, distortion or pumping worsen, even if the number is below the reference.
+
+**Upgrade:** update the core, Remote Script and Loudness Meter together and restart Live/reload the device. Older meters lack measurement IDs and older scripts lack device identities; loudness planning reports an explicit upgrade error rather than silently weakening its guards.
+
+**Kick-following limits:** `follow_kick` needs an identifiable named kick pad (including the loaded kit on a new drum track). Copied Session drum clips must be MIDI, start at 0 and have loop start 0 / loop end equal to length; consolidate other clips first. Probabilistic kick notes are rejected because independent trigger probability would not reliably match them. Copied drum notes/timing are rechecked before apply. Use `pumping` for unsupported sources; there is no silent fallback.
 
 The genre presets below are published reference figures, not industry standards. The House and Techno values reproduce a vendor's reported stereo measurements of a selected corpus; the Drum & Bass figure has only partly described methodology, and Trap has no open dataset. The figures have not been independently reproduced here. An excerpt measurement is not interchangeable with their full-track integrated values.
 
@@ -570,19 +575,19 @@ In this reported example the chain reduced integrated loudness by 2.6 LU. The fi
 
 ## Assessment and implementation impact
 
-The October 2026 review supports the engine as a controllable musical sketching assistant, not an autonomous professional composer or mastering engineer. The documentation corrections do not change generated notes, presets, target values or tool schemas.
+The October 2026 review supports the engine as a controllable musical sketching assistant, not an autonomous professional composer or mastering engineer. The follow-up implementation preserves default musical notes, target values and processing presets, adds opt-in controls, and intentionally requires explicit scope for loudness planning.
 
 | Finding | Current implementation | Follow-up |
 |---|---|---|
-| Excerpt versus full-track loudness | `plan_loudness` accepts any reading of at least 30 s and can report `on_target` for that excerpt | **Correctness work needed:** distinguish measurement scope and compare like with like; update runtime prompts that still recommend the loudest 30 s. Never imply verified whole-song coverage from elapsed time alone |
+| Excerpt versus full-track loudness | Explicit declared scope, scope-labelled results and measurement/device guards; no duration-based coverage inference | **Implemented.** Automatic transport/range-based verification remains a separate extension, not claimed here |
 | True peak | The meter reports sample peaks; the Limiter has a configurable true-peak ceiling | **Measurement work needed** to verify dBTP: use a validated true-peak meter or implement and validate oversampling. Until then, do not claim ceiling compliance from the meter |
-| Limiting safeguards | Gain changes are capped at 6 dB per round and +12 dB total; the heavy-limiting warning is based on input gain | Input gain is not measured gain reduction. Do not treat those caps as guarantees of safe dynamics; signal-based assessment and listening remain needed |
-| Master filtering and compression | The recipe always enables both with fixed starting settings | **Design choice, not an algorithmic necessity:** optional/bypassed stages and delivery-specific ceilings would provide more control; defaults remain unchanged pending that decision |
-| Sidechain | Optional ghost-trigger pumping continues even when the audible kick stops | **Optional musical enhancement:** distinguish continuous pumping from ducking that follows the actual kick before changing behavior |
+| Limiting safeguards | Gain changes remain capped at 6 dB per round and +12 dB total; runtime warnings now identify input gain as a heuristic | **Guidance corrected.** Signal-based gain-reduction assessment and listening remain needed |
+| Master filtering and compression | `low_cut` and `glue` can omit stages; existing defaults preserved | **Implemented.** Explicit ceiling control remains; runtime guidance warns about Spotify's louder-master recommendation rather than silently changing settings |
+| Sidechain | Default continuous pumping plus opt-in `follow_kick` from planned MIDI | **Implemented.** This follows planned notes, not actual audio or subsequent edits |
 | Counter melodies and harmony | Conservative register/consonance constraints and named chromatic progressions are intentional | No correction to notes is required by this review; less restrictive counterpoint would be an optional mode, not a silent replacement |
 | Swing, pitch labels and pulse descriptions | The current timing and MIDI numbers are consistent with the corrected explanations | Documentation corrections only; extending swing beyond a triplet feel would be a separate feature |
 | Reference analysis | Section, key and kick-presence labels are estimates, not source separation or musical ground truth | Validate against manually annotated tracks and let producers verify the result before using it as structure |
-| Professional-quality claims | Functional tests and a few listening/measurement examples do not establish release quality | Use level-matched references, producer listening evaluations across substyles and the EBU meter test material before stronger claims |
+| Professional-quality claims | Functional tests and a few listening/measurement examples do not establish release quality | Use level-matched references, producer listening evaluations across substyles and EBU meter tests before stronger claims. Synthetic DSP tests cover 44.1, 48, 88.2, 96 and 192 kHz; the EBU ZIP download returned HTTP 403 during this implementation, so no EBU conformance pass is claimed. Actual Live scheduler/device verification remains outstanding |
 
 ## Review sources
 

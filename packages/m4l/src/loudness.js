@@ -7,12 +7,14 @@
  *   momentary   400 ms (the last 4 blocks)
  *   short-term  3 s (the last 30)
  *   integrated  every 400 ms block (75 % overlap) since the start or a reset, gated at -70 LUFS
- *               absolute and 10 LU below the ungated mean, as BS.1770 gates it
- * Peaks are sample peaks: no oversampling, so a true peak can lie up to ~0.5 dB higher.
+ *               absolute and 10 LU below the mean surviving the absolute gate
+ * Scheduler-read blocks approximate the algorithm; this is not a conformance-validated meter.
+ * Peaks are sample peaks, not true peaks: no fixed bound on intersample overshoot is assumed.
  */
 
 "use strict";
 
+const { randomUUID } = require("crypto");
 const ABSOLUTE_GATE = -70;
 const RELATIVE_GATE = -10;
 const SHORT_BLOCKS = 30;
@@ -62,6 +64,7 @@ class Meter {
     this.peaks = []; // the last SHORT_BLOCKS blocks' peaks
     this.peak = 0; // the highest sample peak since the reset
     this.since = new Date().toISOString();
+    this.measurementId = randomUUID();
     this.count = 0;
   }
 
@@ -99,6 +102,7 @@ class Meter {
       short_term_peak_db: round(db(Math.max(0, ...this.peaks))),
       measured_seconds: Math.round(this.count) / 10,
       since: this.since,
+      measurement_id: this.measurementId,
     };
   }
 }

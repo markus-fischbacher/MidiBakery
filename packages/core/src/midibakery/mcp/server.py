@@ -67,7 +67,9 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
 - A whole song: plan_song, then apply_plan; say which tracks it used and created.
   compose_takes puts variations of a part on take lanes to comp in Live.
 - plan_master + apply_plan: a master chain as a starting point; it cannot hear the song.
-- measure_master: Master LUFS (quote loudness only from it); plan_loudness + apply_plan: a round toward a target.
+- measure_master: approximate LUFS/sample peak, not true peak. plan_loudness needs scope declared by the user
+  after reset/playback; never infer whole_song coverage from elapsed time or from a request to make it louder.
+  Genre targets need whole_song; excerpts need an explicit target_lufs. on_target is not mastering quality.
 - compose writes one part into the track's first free slot (if_exists for occupied ones),
   reproducible by seed. Make parts fit: bass and melody chords_from the chord clip, the bass
   follow_kick the drum clip; a counter melody is kind melody with counter_to = the lead clip (an arrangement lead: its name, e.g.

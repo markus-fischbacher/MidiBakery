@@ -382,7 +382,7 @@ You name the genre, MidiBakery plans the song, shows a **preview** (timeline of 
 - **Markers:** it sets **locators** at the sections.
 - **Mix (on):** a reverb and a delay return (existing ones are reused), levels and sends for new tracks.
 - **Automation (on):** filter sweeps, delay throws.
-- **Sidechain (on):** bass and pads pump to a silent helper track's genre kick pattern, including passages where the audible kick stops. This is continuous rhythmic pumping, not automatic detection of the actual kick; fixed thresholds do not guarantee a particular amount of ducking.
+- **Sidechain (on):** by default bass and pads pump to a silent helper track's genre kick pattern, including kick rests (`sidechain_mode="pumping"`). Request `sidechain_mode="follow_kick"` to follow the planned drum MIDI's kick onsets, including fills and pauses. This is not audio detection and will not follow later edits, track muting or filters. It needs a named kick pad; copied drum clips must start at 0 with loop start 0 / loop end equal to length and deterministic kick notes (consolidate other clips first). Unsupported sources produce an error, not a fallback. Fixed thresholds do not guarantee a particular amount of ducking.
 - **FX (on):** a riser before each drop and an impact on the drop's downbeat.
 - **Start:** after the last clip in the Arrangement, or at a bar you name ("from bar 17"). **It never overwrites existing Arrangement clips**; it tells you the first free bar instead.
 
@@ -479,6 +479,7 @@ MidiBakery can read and set Live parameters. It **hears nothing**. You make the 
 - **Automation:** clip automation for device parameters and the track mixer (volume, pan, sends): ramps, sine, triangle etc. "Sweep the cutoff up over 8 bars." In the Arrangement MidiBakery rebuilds the clip for this; the notes stay, existing envelopes of that clip are replaced.
 - **Sidechain, reverb, delay and filters for whole songs:** handled by `plan_song` (chapter 8).
 - **Master chain:** "Set up a master chain for house" puts EQ Eight, Glue Compressor and Limiter with the genre's settings at the end of the Master track. It is a **starting point, not a finished master**. What the devices do:
+  - Request `low_cut=false` or `glue=false` to omit those stages; both false gives a Limiter-only chain. Defaults remain unchanged.
   - The EQ applies a low cut at 30 Hz, or 20 Hz for drum & bass and trap. It can remove unwanted rumble but also change wanted bass, phase and transients; compare with bypass rather than assuming it is inaudible.
   - The Glue Compressor starts at 2:1, attack 30 ms, release Auto and threshold -10 dB. That does not guarantee gentle compression. If subtle glue is wanted, adjust its **threshold** for about 1–2 dB gain reduction in loud passages; bypass it if it does not help.
   - The Limiter starts with a -1 dB true-peak ceiling and 0 dB Input Gain. The chain adds no intentional loudness gain, but processing can still change loudness and dynamics. For Spotify masters louder than -14 LUFS, its guidance recommends below -2 dBTP; request a lower `ceiling_db` and verify the rendered file with a true-peak meter.
@@ -489,14 +490,16 @@ MidiBakery can read and set Live parameters. It **hears nothing**. You make the 
   - **Momentary** (the last 0.4 s), **Short-term** (the last 3 s) and **Integrated** (everything since the start or a reset) in LUFS, after ITU-R BS.1770 / EBU R 128.
   - **Peak**: the highest sample peak since the reset in dB. True peak can exceed it by more than 0.5 dB; this reading cannot verify a true-peak ceiling.
   - **Reset** restarts Integrated and Peak. For comparison with whole-track integrated references, reset and play the whole song once. A drop-only reading describes just that excerpt.
+  - Readings include a new `measurement_id` after each reset/sample-rate change. `reading_fresh` (and legacy `measuring`) means recent meter updates, not transport playback; `is_playing` is Live's playback state.
   - In the chat: "How loud is the song?" MidiBakery reads the device with `measure_master`. Without the device on the Master, MidiBakery names no LUFS figure.
   - The values are approximate, not a calibrated or conformance-validated meter: Max reads the blocks on its scheduler's 100 ms clock.
 - **Bringing the song to a target loudness:** "Make the song as loud as house" or "to -14 LUFS for Spotify". This needs the master chain and the Loudness Meter on the Master. It works in rounds:
-  1. Reset the meter and play the **whole song once**. The software checks only a 30 s minimum, not whether the whole song was measured; an excerpt cannot establish whole-track loudness.
+  1. Reset the meter and play the **whole song once**, then explicitly declare `scope="whole_song"`. MidiBakery must not infer coverage from duration or from a request to make it louder. For an excerpt, declare `scope="excerpt"` and supply your own `target_lufs`, not a genre/streaming target. Excerpts need 30 s; declared short complete songs need at least 0.4 s and a finite integrated reading.
   2. MidiBakery proposes how many dB to change the Limiter's **Input Gain** (at most 6 dB per round) and writes it with **Apply**. One undo takes it back.
-  3. The meter starts again: repeat the same complete playback before the next round. Within 0.5 LU of the target, MidiBakery reports `on_target` for the reading, even if only an excerpt was measured. It does not verify whole-song coverage or guarantee convergence.
+  3. The meter starts again: repeat the same complete playback and declare scope before the next round. Within 0.5 LU, `on_target` refers to that declared scope; the result explicitly says coverage is user-declared and **not verified**. Repeated loops cannot prove complete playback. Changed measurement sessions, replaced devices or changed Limiter parameters invalidate a pending plan. No convergence or mastering quality is guaranteed.
   - Presets: house -8, melodic techno -8.8, peak-time techno -7.7, drum & bass -6.3, trap -8.4, streaming -14 LUFS. The House/Techno figures are vendor-reported corpus medians; Drum & Bass is less fully documented, and Trap is a weak estimate rather than a verified median. Spotify's -14 is its Normal playback level and mastering recommendation, not a universal delivery requirement. See [sources and limitations](../GENRES.md#loudness-targets-plan_loudness).
   - Higher gain may mean more limiting. Listen for pumping, distortion and flattened drums; stop if the result worsens. The +12 dB input-gain cap and warnings do not measure actual gain reduction or guarantee a good master.
+  - **Upgrade together:** update the core, Remote Script and Loudness Meter, then restart Live/reload the device. Older versions lack the identities required for safe loudness planning and produce an explicit upgrade error.
 
 For ear questions ("sounds muddy") you get hints but no measurement. For accurate audio analysis use Live's own analyzers.
 

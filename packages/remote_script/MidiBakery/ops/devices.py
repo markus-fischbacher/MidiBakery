@@ -41,7 +41,9 @@ def device_insert(ctx, params):
 @op("device.params")
 def device_params(ctx, params):
     device = ctx.device(params)
+    ptr = getattr(device, "_live_ptr", None)
     return {
+        "id": int(ptr) if ptr is not None else None,
         "name": device.name,
         "class_name": device.class_name,
         "parameters": [_param_dict(i, p) for i, p in enumerate(device.parameters)],
