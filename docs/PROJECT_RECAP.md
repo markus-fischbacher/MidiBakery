@@ -13,7 +13,7 @@ The target user is a production beginner. Musical decisions follow sourced conve
 
 ## 2. Architecture
 
-The design rule is "dumb bridge, smart core" (details: `docs/ARCHITEKTUR.md`, German).
+The design rule is "dumb bridge, smart core" (details: `docs/ARCHITECTURE.md`).
 
 | Part | Path | Role |
 |---|---|---|
@@ -22,7 +22,7 @@ The design rule is "dumb bridge, smart core" (details: `docs/ARCHITEKTUR.md`, Ge
 | M4L devices | `packages/m4l` | Chat (HTML in `jweb` plus a native text field), MIDI Tools (Generator, Transform), Reference Analyzer, Loudness Meter (BS.1770, writes `meter.json`). |
 | Packaging | `packaging/` | PyInstaller app, macOS `.pkg`, Windows Inno Setup, signed update manifest. |
 | Update and license service | `services/updates` | Cloudflare Worker + R2 + D1 on `updates.klirrwerk.com`. |
-| Tests | `tests/` | Unit tests plus contract tests: the real Remote Script against a fake Live Object Model over a real socket. 750 passed, 1 skipped. |
+| Tests | `tests/` | Unit tests plus contract tests: the real Remote Script against a fake Live Object Model over a real socket. 752 passed, 1 skipped. |
 
 Key mechanisms:
 
@@ -33,7 +33,7 @@ Key mechanisms:
 
 ## 3. Feature state
 
-Roadmap phases 1–4 are done (`docs/KONZEPT.md`, German):
+Roadmap phases 1–4 are done (`docs/CONCEPT.md`):
 
 - **Session control:** tracks, clips, notes, mixer and routing, devices, racks, the browser, clip envelopes, the arrangement (add, move, swap and delete clips; locators), scenes, transport, undo, `run_batch`.
 - **Composition:**
@@ -147,4 +147,4 @@ None of PRs 64–69 has been heard in Live with a local model (gemma) yet. Resta
 - Is plan/apply with an in-memory `PlanStore` robust enough? Plans are lost on restart, and only stale-clip conflicts are detected.
 - Are 40 tools too many for local models? Would fewer, more general tools work better within the 36,000-character budget?
 - Counter melody: are the rule choices in `resolve()` (lead density to mode and register) musically sound?
-- Do the contract tests (fake Live Object Model) cover enough of Live's real behavior? See the undo quirks noted in `docs/KONZEPT.md`.
+- Do the contract tests (fake Live Object Model) cover enough of Live's real behavior? See the undo quirks noted in `docs/CONCEPT.md`.

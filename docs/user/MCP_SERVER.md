@@ -2,7 +2,7 @@
 
 The **MCP server** lets you control Ableton Live from **Claude Desktop**, **Claude Code** or any other MCP-capable app. You don't need the Chat device: you talk to Claude in its own window, and Claude uses the MidiBakery tools to read and change your Live set.
 
-Deutsche Version: [MCP-SERVER.md](MCP-SERVER.md) · Back to the [User Guide](USER_GUIDE.md)
+Deutsche Version: [MCP_SERVER.de.md](MCP_SERVER.de.md) · Back to the [User Guide](USER_GUIDE.md)
 
 **Contents**
 
@@ -182,5 +182,5 @@ The **Kind** column says: **read** (changes nothing), **write**, **asks first** 
 ### For developers
 
 - Commands: `midibakery mcp` (stdio), `midibakery mcp --http [--port 8765]`.
-- The server is `midibakery.mcp.server.build_server`; the operations on Live are in the catalog `midibakery.catalog` and reach the Remote Script through the bridge (port 47681, token in `bridge.json`). More in [ARCHITEKTUR.md](../ARCHITEKTUR.md) (German).
+- The server is `midibakery.mcp.server.build_server`; the operations on Live are in the catalog `midibakery.catalog` and reach the Remote Script through the bridge (port 47681, token in `bridge.json`). More in [ARCHITECTURE.md](../ARCHITECTURE.md).
 - The chat agent (`midibakery chat` in the terminal, or the Chat device) uses the same tools; they are **not** maintained twice.

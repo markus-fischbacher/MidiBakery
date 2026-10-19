@@ -6,7 +6,7 @@ apply_plan sets the Limiter's Input Gain (one undo step) and resets the meter ->
 less than its gain change; rounds stop within TOLERANCE_LU.
 
 Targets: the median integrated loudness of released tracks of the genre, measured on a stereo BS.1770 meter
-(sources and ratings: docs/GENRES.md, "Lautheitsziele"). Streaming: Spotify's -14 LUFS.
+(sources and ratings: docs/GENRES.md, "Loudness targets"). Streaming: Spotify's -14 LUFS.
 """
 
 from __future__ import annotations

@@ -182,5 +182,5 @@ Die Spalte **Art** zeigt: **lesen** (ändert nichts), **schreiben**, **fragt nac
 ### Für Entwickler
 
 - Befehle: `midibakery mcp` (stdio), `midibakery mcp --http [--port 8765]`.
-- Der Server ist `midibakery.mcp.server.build_server`; die Operationen an Live stehen im Katalog `midibakery.catalog` und werden über die Brücke (Port 47681, Token in `bridge.json`) an das Remote Script gegeben. Mehr in [ARCHITEKTUR.md](../ARCHITEKTUR.md).
+- Der Server ist `midibakery.mcp.server.build_server`; die Operationen an Live stehen im Katalog `midibakery.catalog` und werden über die Brücke (Port 47681, Token in `bridge.json`) an das Remote Script gegeben. Mehr in [ARCHITECTURE.md](../ARCHITECTURE.md) (Englisch).
 - Dieselben Werkzeuge nutzt der Chat-Agent (`midibakery chat` im Terminal, oder das Chat-Gerät); sie sind **nicht** doppelt gepflegt.

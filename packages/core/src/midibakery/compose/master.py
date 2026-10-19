@@ -4,7 +4,7 @@ A starting point, not a finished master: nothing here hears the song. The Glue C
 threshold is a convention to set by ear (1-2 dB of gain reduction on the loudest parts) and the
 Limiter only catches peaks (no input gain), so the song gets no louder than the mix.
 
-Sources and ratings: docs/GENRES.md, "Master-Kette". Measured in Live 12.4: the parameter names
+Sources and ratings: docs/GENRES.md, "Master chain". Measured in Live 12.4: the parameter names
 below; Glue's Attack, Ratio and Release are steps (raw 0..6, 0..2, 0..6, shown as the values in
 GLUE_*); a batch that inserts devices and then sets their parameters leaves two undo steps, so
 apply runs two batches, one step each.

@@ -1,12 +1,12 @@
 name: CI
 
-# Markdown-only changes (docs, READMEs) run nothing: no test or build reads them.
+# Markdown-only changes run nothing, except README.md and docs/: tests/test_docs.py checks their tool lists and counts.
 on:
   push:
     branches: [main]
-    paths-ignore: ["**.md"]
+    paths: ["**", "!**.md", "README.md", "docs/**.md"]
   pull_request:
-    paths-ignore: ["**.md"]
+    paths: ["**", "!**.md", "README.md", "docs/**.md"]
 
 concurrency:
   group: ci-${{ github.ref }}
