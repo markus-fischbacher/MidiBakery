@@ -33,9 +33,8 @@ from midibakery.compose.counter import resolve as resolve_counter
 from midibakery.compose.drums import DrumMap, kick_times, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
-from midibakery.compose.chord_templates import template_scale
 from midibakery.compose.parts import generate_part
-from midibakery.compose.patterns import mood_template
+from midibakery.compose.patterns import mood_harmony
 from midibakery.compose.rollback import undo_batch
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.specs import (
@@ -524,9 +523,8 @@ async def _harmony(session: Session, spec: Harmonic, rng: random.Random, main: l
         if spec.progression:
             result = harmony_mod.from_progression(spec.progression, scale, meter, spec.bars, spec.chords_per_bar)
         elif isinstance(spec, ChordsSpec) and spec.pattern:
-            template = mood_template(spec.pattern)
-            per_bar = template.chords_per_bar if "chords_per_bar" not in spec.model_fields_set else spec.chords_per_bar
-            result = harmony_mod.from_progression(template.progression, template_scale(template, scale), meter, spec.bars, per_bar)
+            explicit = spec.chords_per_bar if "chords_per_bar" in spec.model_fields_set else None
+            result = mood_harmony(spec.pattern, scale, meter, spec.bars, explicit)
         elif spec.chords_from is not None:
             _not_drums(session, spec.chords_from.track)
             where = Place.of(spec.chords_from)

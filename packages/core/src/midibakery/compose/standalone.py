@@ -20,7 +20,8 @@ from midibakery.compose.drums import map_pads
 from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.parts import generate_part
 from midibakery.compose.rhythm import Grid, Meter
-from midibakery.compose.specs import PART_SPECS, SWING_UNITS, TransformSpec
+from midibakery.compose.patterns import mood_harmony
+from midibakery.compose.specs import PART_SPECS, SWING_UNITS, ChordsSpec, TransformSpec
 from midibakery.compose.theory import MAJOR, Scale
 
 
@@ -144,6 +145,9 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
     else:
         if spec.progression:
             harmony = harmony_mod.from_progression(spec.progression, scale, meter, bars, spec.chords_per_bar)
+        elif isinstance(spec, ChordsSpec) and spec.pattern:
+            explicit = spec.chords_per_bar if "chords_per_bar" in spec.model_fields_set else None
+            harmony = mood_harmony(spec.pattern, scale, meter, bars, explicit)
         else:
             harmony = harmony_mod.auto(scale, meter, bars, spec.chords_per_bar, rng, getattr(spec, "sevenths", False))
         info["chords"] = harmony.describe()
