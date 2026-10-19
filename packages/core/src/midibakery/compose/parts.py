@@ -32,6 +32,7 @@ def generate_part(
     drum_map: DrumMap | None = None,
     kick: list[float] | None = None,
     main: list[Note] | None = None,
+    main_length: float | None = None,
 ) -> list[Note]:
     """Drums need no harmony (`drum_map` defaults to General MIDI); the others need one."""
     unit = SWING_UNITS[spec.swing_unit]  # type: ignore[attr-defined]
@@ -62,6 +63,7 @@ def generate_part(
             return generate_counter(
                 main, harmony, scale, meter, bars, rng, spec.counter_mode, spec.counter_register,
                 density=spec.density if "density" in spec.model_fields_set else None, swing=spec.swing,
+                source_length=main_length,
             )
         if spec.pattern:
             parts = generate_lead_template(lead_template(spec.pattern), harmony, scale, meter, bars, spec.swing)

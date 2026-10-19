@@ -137,14 +137,17 @@ def phrase_rests(notes: tuple[Note, ...] | list[Note], length: float, min_gap: f
     return rests
 
 
-def analyze(main: list[Note], meter: Meter, bars: int) -> MainLine:
-    """The main melody as a line of `bars` bars: it loops when shorter, is cut when longer."""
+def analyze(main: list[Note], meter: Meter, bars: int, source_length: float | None = None) -> MainLine:
+    """The main melody as a line of `bars` bars: it loops when shorter, is cut when longer.
+    With the length of the clip it comes from, that length is the loop (so its trailing rests
+    stay rests); without it, the loop ends with the last note."""
     notes = sorted((n for n in main if not n.mute), key=lambda n: (n.start_time, n.pitch))
     if not notes:
         raise ValueError("the main melody has no notes to answer")
     bpb = meter.beats_per_bar
     total = bpb * bars
-    cycle = max(1, math.ceil(max(n.end_time for n in notes) / bpb - EPS)) * bpb  # whole bars
+    reach = max(n.end_time for n in notes)
+    cycle = max(1, math.ceil(max(reach, source_length or 0.0) / bpb - EPS)) * bpb  # whole bars
     looped: list[Note] = []
     for k in range(int(total // cycle) + 1):
         for n in notes:
@@ -518,9 +521,10 @@ FIGURE_BUILDERS = {
 }
 
 
-def resolve(main: list[Note], meter: Meter, bars: int, mode: str | None = None, register: str | None = None) -> tuple[str, str, str]:
+def resolve(main: list[Note], meter: Meter, bars: int, mode: str | None = None, register: str | None = None,
+            source_length: float | None = None) -> tuple[str, str, str]:
     """The mode and register a counter melody uses, and why (empty when both were given)."""
-    line = analyze(main, meter, bars)
+    line = analyze(main, meter, bars, source_length)
     reasons = []
     if mode is None:
         rests = line.phrase_rests()
@@ -553,13 +557,14 @@ def generate_counter(
     register: str | None = None,
     density: float | None = None,
     swing: float = 0.0,
+    source_length: float | None = None,
 ) -> list[Note]:
-    mode, register, _ = resolve(main, meter, bars, mode, register)
+    mode, register, _ = resolve(main, meter, bars, mode, register, source_length)
     if mode not in MODES:
         raise ValueError(f"unknown counter melody mode {mode!r}; use one of {', '.join(MODES)}")
     if register not in REGISTERS:
         raise ValueError(f"unknown register {register!r}; use above, below or same")
-    line = analyze(main, meter, bars)
+    line = analyze(main, meter, bars, source_length)
     grid = Grid(meter, STEP, swing)
     spb = grid.steps_per_bar
     if mode in FIGURE_BUILDERS:

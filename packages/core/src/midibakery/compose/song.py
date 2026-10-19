@@ -932,7 +932,7 @@ def _counter_clips(actions: list[dict[str, Any]], roles: dict[str, RoleTrack], s
         harmony = _from((alt if section.kind == "break" else main).for_length(meter, section.bars), action["start"] - at, length)
         lead_notes = [Note(n["pitch"], n["start_time"], n["duration"], n.get("velocity", 100)) for n in action["notes"]]
         notes = fit_to_length(generate_counter(lead_notes, harmony.for_length(meter, bars), scale, meter, bars,
-                                               rng("counter", section.name, action["start"])), length)
+                                               rng("counter", section.name, action["start"]), source_length=length), length)
         if notes:
             counts["counter"] += len(notes)
             clips.append({"action": "add_clip", "track": counter, "start": action["start"], "length": length,

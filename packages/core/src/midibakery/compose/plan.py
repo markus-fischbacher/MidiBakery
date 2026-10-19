@@ -588,7 +588,7 @@ async def _melodic(session: Session, index: int) -> None:
                       f"(a sidechain trigger, riser or impact).{hint}", {"track": index})
 
 
-async def _counter_main(session: Session, spec: MelodySpec) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+async def _counter_main(session: Session, spec: MelodySpec) -> tuple[list[dict[str, Any]], dict[str, Any], float | None]:
     """The main melody a counter melody answers: its notes (as Live lists them) and what the preview says about it."""
     location = spec.counter_to
     assert location is not None
@@ -604,7 +604,7 @@ async def _counter_main(session: Session, spec: MelodySpec) -> tuple[list[dict[s
     notes = [n for n in source.notes or [] if not n.get("mute")]
     if not notes:
         raise BridgeError("NOT_FOUND", f"counter_to: the clip in {where} has no notes to answer")
-    return notes, {"counter_to": str(where), "main_notes": len(notes)}
+    return notes, {"counter_to": str(where), "main_notes": len(notes)}, source.length or None
 
 
 def _main_notes(notes: list[dict[str, Any]]) -> list[Note]:
@@ -717,7 +717,7 @@ async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
     target = await _target(session, spec)
     seed = spec.seed if spec.seed is not None else new_seed()
     rng = random.Random(seed)
-    main, counter = (await _counter_main(session, spec)) if spec.counter_to is not None else (None, {})
+    main, counter, main_length = (await _counter_main(session, spec)) if spec.counter_to is not None else (None, {}, None)
     had_chords = session.harmony is not None
     arranged = main and spec._at is not None and not spec.progression and spec.chords_from is None
     if arranged:
@@ -727,13 +727,13 @@ async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
         harmony = await _harmony(session, spec, rng, main)
     try:
         notes = generate_part(spec, harmony, session.scale, session.meter, spec.bars, rng,
-                              main=_main_notes(main) if main else None)
+                              main=_main_notes(main) if main else None, main_length=main_length)
     except ValueError as exc:
         raise BridgeError("INVALID_PARAMS", str(exc)) from None
     info = {"chords": harmony.describe(), "chords_source": harmony.source, **counter}
     if counter:
         assert main is not None
-        mode, register, why = resolve_counter(_main_notes(main), session.meter, spec.bars, spec.counter_mode, spec.counter_register)
+        mode, register, why = resolve_counter(_main_notes(main), session.meter, spec.bars, spec.counter_mode, spec.counter_register, main_length)
         info["counter_mode"], info["counter_register"] = mode, register
         if why:
             info["counter_choice"] = why
