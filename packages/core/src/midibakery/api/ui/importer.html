@@ -112,8 +112,15 @@ function el(tag, props, ...children) {
 }
 
 async function addPath(path) {
-  path = (path || "").trim();
-  if (!path || !/^([/~]|[A-Za-z]:[\\/])/.test(path)) return;  // dialogs may report "cancel"
+  const raw = (path || "").trim();
+  path = raw.replace(/^file:\/\//, "");
+  if (/^file:/.test(raw)) { try { path = decodeURI(path); } catch (_) {} }
+  path = path.replace(/^[^/:\\]{2,}:(?=\/)/, "");  // Max can hand over "Macintosh HD:/Users/..."
+  if (!path) return;
+  if (!/^([/~]|[A-Za-z]:[\\/])/.test(path)) {
+    if (raw !== "cancel") setStatus("Not a file path: " + raw);  // a dialog reports "cancel" when dismissed
+    return;
+  }
   setStatus("Looking for Sets in " + path, true);
   try {
     const { sets: found } = await api("/import/scan", { path });
