@@ -620,6 +620,7 @@ class ClipSource:
     timing: dict[str, Any]
     window: float  # where the playing window starts inside the clip's own time
     notes: tuple[dict[str, Any], ...]  # shifted so the window starts at 0
+    has_envelopes: bool | None  # None: the Remote Script cannot say
     start_offset: bool  # it begins playing away from the loop start: copies are not the window's notes
 
     @property
@@ -642,7 +643,7 @@ async def _read_source(call: Call, track: int, slot: int) -> ClipSource:
         if window - EPSILON <= n["start_time"] < window + length - EPSILON:
             inside.append({k: n[k] for k in NOTE_KEYS if k in n} | {"start_time": round(n["start_time"] - window, 6)})
     start_offset = looping and abs(float(clip["start_marker"]) - float(clip["loop_start"])) > EPSILON
-    return ClipSource(track, slot, length, {k: clip.get(k) for k in SOURCE_TIMING}, window, tuple(inside), start_offset)
+    return ClipSource(track, slot, length, {k: clip.get(k) for k in SOURCE_TIMING}, window, tuple(inside), clip.get("has_envelopes"), start_offset)
 
 
 def _fragment(source: ClipSource, length: float) -> list[dict[str, Any]]:
@@ -941,20 +942,20 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                     rest = span - copies * loop
                     if rest <= EPSILON:
                         continue
+                    where = f"clips.{role}: the {loop:g}-beat clip would be cut to {rest:g} beats for the end of the {span:g}-beat '{section.name}' part"
                     if source.start_offset:
-                        reuse[role]["uncovered_beats"] += rest
-                        message = (f"clips.{role}: the {loop:g}-beat clip starts playing away from its loop start, so only whole copies are placed; "
-                                   f"{rest:g} beats of the '{section.name}' part stay empty")
-                        if message not in warnings:
-                            warnings.append(message)
-                        continue
+                        raise BridgeError("UNSUPPORTED", f"{where}, but it starts playing away from its loop start, so the cut's content cannot be "
+                                          "determined reliably; set its start marker to its loop start, or pick a clip that divides the span")
+                    if source.has_envelopes is not False:
+                        raise BridgeError("UNSUPPORTED", f"{where}, but " + ("it has envelopes/automation a cut cannot carry"
+                                          if source.has_envelopes else "the Remote Script cannot tell whether it has envelopes (update it)")
+                                          + "; use a clip without automation or one whose length divides the span")
                     fragment = _fragment(source, rest)
                     reuse[role]["fragments"] += 1
                     if fragment:
                         actions.append({"action": "add_clip", "track": target.index, "start": begin + copies * loop, "length": rest,
                                         "name": f"{section.name} {role.title()} (cut)", "notes": fragment})
-                    message = (f"clips.{role}: the {loop:g}-beat clip is cut to {rest:g} beats for the end of the {span:g}-beat '{section.name}' part; "
-                               "the cut keeps its notes, not clip envelopes or automation")
+                    message = (f"clips.{role}: the {loop:g}-beat clip is cut to {rest:g} beats for the end of the {span:g}-beat '{section.name}' part")
                     if message not in warnings:
                         warnings.append(message)
                 continue

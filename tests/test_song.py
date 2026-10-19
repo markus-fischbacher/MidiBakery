@@ -375,14 +375,30 @@ async def test_reused_clip_loop_window_sets_the_cut_notes(client, live):
     assert spans[-1] == (216.0, 224.0)
 
 
-async def test_reused_clip_playing_from_inside_its_loop_is_not_cut(client, live):
+async def test_reused_clip_playing_from_inside_its_loop_is_refused_when_it_needs_a_cut(client, live):
     _studio(live)
     await _clip_with(client, 20, [{"pitch": 40, "start_time": 0.0, "duration": 1.0, "velocity": 100}])
     live.on_main(lambda: setattr(live.song.tracks[1].clip_slots[0].clip, "start_marker", 4.0))
     server = build_server(client)
-    preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
-    assert preview["reuse"]["bass"]["fragments"] == 0 and preview["reuse"]["bass"]["uncovered_beats"] > 0
-    assert any("away from its loop start" in w for w in preview["warnings"])
+    with pytest.raises(ToolError) as exc:
+        await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
+    assert "away from its loop start" in str(exc.value)
+    assert not (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"]
+
+
+async def test_reused_clip_with_envelopes_is_refused_when_it_needs_a_cut(client, live):
+    _studio(live)
+    await _clip_with(client, 20, [{"pitch": 40, "start_time": 0.0, "duration": 1.0, "velocity": 100}])
+    live.on_main(lambda: live.song.tracks[1].clip_slots[0].clip.envelopes.update({1: object()}))
+    server = build_server(client)
+    with pytest.raises(ToolError) as exc:
+        await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
+    assert "envelopes" in str(exc.value)
+    # a clip that divides every span needs no cut, so it is still copied
+    await client.call("clip.delete", {"track": 1, "slot": 0})
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 16})
+    live.on_main(lambda: live.song.tracks[1].clip_slots[0].clip.envelopes.update({1: object()}))
+    assert (await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}]))["reuse"]["bass"]["fragments"] == 0
 
 
 async def test_reused_clip_notes_changed_after_planning(client, live):

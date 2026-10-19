@@ -356,6 +356,10 @@ class Clip(LiveObject):
             raise RuntimeError("Invalid loop end")
         self._loop[1] = value
 
+    @property
+    def has_envelopes(self):
+        return bool(self.envelopes)
+
     def automation_envelope(self, parameter):
         if self.is_arrangement_clip:  # Live 12.4 shows scripts no arrangement clip envelopes
             return None
