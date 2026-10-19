@@ -123,7 +123,7 @@ async function addPath(path) {
     render();
     for (const s of found) queue = queue.then(() => read(sets.get(s.file)));
     await queue;
-    setStatus(`${sets.size} Set${sets.size === 1 ? "" : "s"} - tick the ones to import`);
+    setStatus(`${sets.size} Set${sets.size === 1 ? "" : "s"} - untick any you do not want, then Import`);
   } catch (exc) {
     setStatus(String(exc.message || exc));
   }
@@ -133,6 +133,7 @@ async function read(set) {
   if (set.info || set.error) return;
   try {
     set.info = await api("/import/preview", { file: set.file });
+    set.selected = !set.imported;  // a Set that reads fine is ready to import; untick the ones you do not want
   } catch (exc) {
     set.error = String(exc.message || exc);
   }
