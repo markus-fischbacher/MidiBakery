@@ -100,7 +100,8 @@ class SongRequest(BaseModel):
     sounds: bool = Field(True, description="New tracks get the genre's kit and presets; false: empty Drum Rack and native synths")
     mix: bool = Field(True, description="Reverb and Delay returns, sends and fader levels for new tracks")
     fx: bool = Field(True, description="A riser before each drop and an impact on its first beat (needs sounds)")
-    sidechain: bool = Field(True, description="Bass and pads duck under the kick: Compressors keyed from a silent trigger track")
+    sidechain: bool = Field(True, description="Enable silent-trigger ducking; default pumps through kick rests")
+    sidechain_mode: Literal["pumping", "follow_kick"] = Field("pumping", description="Continuous genre pulse or planned drum MIDI kick onsets")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
     counter: bool = Field(False, description="Also a counter melody: a Counter track answering every lead clip in its rests")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174); with a reference its tempo and key")
@@ -161,6 +162,8 @@ class SongPlan:
     fx: dict[str, dict[str, str]] = field(default_factory=dict)  # section name -> FX role -> what plays
     key: Scale | None = None  # set in Live with the plan (a reference's key with set_tempo)
     reference: str | None = None  # the analyzed song the sections follow
+    sidechain_mode: str = "pumping"
+    sidechain_source: dict[str, Any] | None = None
 
     def mix_info(self) -> dict[str, Any]:
         if self.mix is None:
@@ -245,6 +248,7 @@ class SongPlan:
             "from_bar": int(self.start / bpb) + 1,
             "seed": self.seed,
             "tracks": {r: {"track": t.index, "name": t.name, **({"new": True, "device": _sound_name(t.sound) if t.sound else t.device} if t.new else {}), **_filter_info(t)} for r, t in self.roles.items()},
+            **({"sidechain_mode": self.sidechain_mode} if "sidechain" in self.roles else {}),
             **self.mix_info(),
             "sections": sections,
             "harmony": self.harmony,
@@ -347,7 +351,7 @@ def _filter_info(t: RoleTrack) -> dict[str, str]:
 
 def _automation_info(t: RoleTrack) -> dict[str, str]:
     if t.role == "sidechain":
-        return {"plays": "1/16 notes on the kick steps through the whole song, silent (fader -inf); the Compressors listen Post FX"}
+        return {"plays": "Silent trigger notes (fader -inf); sidechain_mode selects continuous pumping or planned kick onsets; Compressors listen Post FX"}
     if t.filter is None:
         return {"throws": f"delay on the last beat of every {PHRASE} bars in {', '.join(t.throws)}"} if t.throws else {}
     info = {"automation": f"Auto Filter {t.filter} cutoff" + (" and resonance" if t.resonance else "") + (" (new device)" if t.filter_new and not t.new else "")}
@@ -412,6 +416,41 @@ def _trigger_clip(t: RoleTrack, genre: str, start: float, end: float, bpb: float
     steps = pump_steps(genre)
     notes = [Note(TRIGGER_PITCH, bar * bpb + step * 0.25, 0.25, 127).to_spec() for bar in range(round((end - start) / bpb)) for step in steps]
     return {"action": "add_clip", "track": t.index, "start": start, "length": end - start, "name": "Sidechain", "notes": notes}
+
+
+def _kick_trigger_clip(t: RoleTrack, drums: RoleTrack, actions: list[dict[str, Any]], kick: int,
+                       source: dict[str, Any] | None, start: float, end: float) -> dict[str, Any]:
+    """Follow the final planned drum notes, including pauses, fills and copied Session clips."""
+    onsets: set[float] = set()
+    for action in actions:
+        if action.get("track") != drums.index:
+            continue
+        copied = action["action"] == "copy_session_clip"
+        notes = source["notes"] if copied and source is not None else action.get("notes", [])
+        length = source["clip"]["length"] if copied and source is not None else action.get("length", 0)
+        for note in notes:
+            if note["pitch"] != kick or note.get("mute") or note.get("velocity", 100) <= 0:
+                continue
+            if note.get("probability", 1) != 1:
+                raise BridgeError("UNSUPPORTED", "follow_kick needs deterministic kick notes: remove note probability "
+                                  "from the source clip or use sidechain_mode='pumping'")
+            time = note["start_time"]
+            if 0 <= time < length - EPSILON:
+                onsets.add(round(action["start"] + time - start, 6))
+    notes = [Note(TRIGGER_PITCH, at, min(0.25, end - start - at), 127).to_spec()
+             for at in sorted(onsets) if 0 <= at < end - start - EPSILON]
+    return {"action": "add_clip", "track": t.index, "start": start, "length": end - start,
+            "name": "Sidechain", "notes": notes}
+
+
+async def _kick_source(call: Call, track: int, slot: int) -> dict[str, Any]:
+    clip = await call("clip.get", {"track": track, "slot": slot})
+    if (not clip["is_midi"] or abs(clip["start_marker"]) > EPSILON or abs(clip["loop_start"]) > EPSILON
+            or abs(clip["loop_end"] - clip["length"]) > EPSILON):
+        raise BridgeError("UNSUPPORTED", "follow_kick needs a MIDI source clip starting at 0 with loop_end=length; "
+                          "consolidate the clip first or use sidechain_mode='pumping'")
+    return {"track": track, "slot": slot, "clip": clip,
+            "notes": (await call("notes.get", {"track": track, "slot": slot}))["notes"]}
 
 
 def _compressor(track: dict[str, Any]) -> int | None:
@@ -664,6 +703,14 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     kick_pitch = drum_map.note("kick")
 
     use = {c.role: c for c in request.clips}
+    sidechain_source = None
+    trigger_needed = request.sidechain and request.sidechain_mode == "follow_kick" and "sidechain" in roles
+    if trigger_needed:
+        if (drums is None or kick_pitch is None or not drums.new and "kick" not in drum_map.detected
+                or drums.new and drums.sound is None):
+            raise BridgeError("INVALID_PARAMS", "follow_kick needs a drum track with an identifiable kick pad")
+        if "drums" in use:
+            sidechain_source = await _kick_source(call, use["drums"].track, use["drums"].slot)
     for role, target in roles.items():
         if role in use:
             continue
@@ -814,8 +861,13 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         riser.sound is not None or not riser.new and [d.get("name") for d in session.track(riser.index).get("devices", [])][:1] == [_sound_name(preset)])
     fx_plays = _fx(actions, counts, roles, sections, starts, bpb, scale, style.mix.volume.get("riser", -12.0), riser_macro)
     if trigger is not None:
-        actions.append(_trigger_clip(trigger, request.genre, start, end, bpb))
-        counts["sidechain"] += 1
+        if trigger_needed:
+            assert drums is not None and kick_pitch is not None
+            trigger_action = _kick_trigger_clip(trigger, drums, actions, kick_pitch, sidechain_source, start, end)
+        else:
+            trigger_action = _trigger_clip(trigger, request.genre, start, end, bpb)
+        actions.append(trigger_action)
+        counts["sidechain"] += len(trigger_action["notes"]) if trigger_needed else 1
     locators = [{"action": "set_locator", "time": at, "name": section.name} for section, at in zip(sections, starts)]
     if len(actions) > 256:
         raise BridgeError("INVALID_PARAMS", f"The song needs {len(actions)} clips; use a shorter length or fewer copied clips (max 256)")
@@ -832,6 +884,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         fx_plays,
         key,
         str(reference.get("name")) if reference is not None else None,
+        request.sidechain_mode,
+        sidechain_source,
     )
 
 
@@ -930,6 +984,7 @@ def _breathe(notes: list[Note], role: str, every: int, first_bar: int, bpb: floa
 async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     """New tracks, returns and mix (one undo step), the kits and presets (one step each), then
     tempo, all clips (one undo step) and locators."""
+    follow_kick = plan.sidechain_mode == "follow_kick" and "sidechain" in plan.roles
     listed, arrangement, song, mixer = await asyncio.gather(
         call("tracks.list", {}), call("arrangement.get", {}), call("song.get", {}), call("mixer.get", {}))
     tracks = listed["tracks"]
@@ -940,6 +995,13 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     for role_track in plan.roles.values():
         if not role_track.new and _overlap(arrangement, role_track.index, plan.start, plan.end) is not None:
             raise BridgeError("CONFLICT", f"Track index {role_track.index} '{role_track.name}' has new arrangement clips in the song's range; plan again")
+    if plan.sidechain_source is not None:
+        source = plan.sidechain_source
+        current = await _kick_source(call, source["track"], source["slot"])
+        # Playback flags may change without changing the copied notes or their placement.
+        timing = ("length", "looping", "loop_start", "loop_end", "start_marker", "end_marker")
+        if current["notes"] != source["notes"] or any(current["clip"][k] != source["clip"][k] for k in timing):
+            raise BridgeError("CONFLICT", "The copied drum clip changed since the kick-following plan; plan again")
     _trigger_first(plan)
     undo_steps = 0
     warnings: list[str] = []
@@ -972,6 +1034,8 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
             try:
                 await call("browser.load", {"track": t.index, "path": list(t.sound)})
             except BridgeError as exc:
+                if t.role == "drums" and follow_kick:
+                    raise  # do not create a kick-following trigger for an unloaded kit
                 if exc.code == "LIVE_ERROR" and exc.message.startswith("Live did not load"):
                     raise  # it may still land later: roll back rather than guess
                 if t.role in FX_ROLES:  # a sine instead of a riser: better none
@@ -986,8 +1050,13 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
                 try:
                     kit = map_pads((await call("drum_rack.pads", {"track": t.index, "device": 0}))["pads"])
                 except BridgeError as exc:  # e.g. a kit wrapped in an Instrument Rack
+                    if follow_kick:
+                        raise
                     warnings.append(f"{_sound_name(t.sound)}: pads not readable ({exc.message}); the drums keep General MIDI notes")
                 else:
+                    if follow_kick and "kick" not in kit.detected:
+                        raise BridgeError("CONFLICT", "The loaded kit has no identifiable kick pad; choose a kit "
+                                          "with a named kick or use sidechain_mode='pumping'")
                     actions = _move_to_kit(actions, t.index, kit)
         undo_steps += await _route_sidechains(call, plan, warnings)
         song_set: dict[str, Any] = {"tempo": plan.tempo} if plan.tempo is not None else {}

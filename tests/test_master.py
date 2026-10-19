@@ -142,10 +142,11 @@ async def test_measure_master_reads_the_meter(client, live, bridge_env):
     _reading(bridge_env)
     measured = _payload(await server.call_tool("measure_master", {}))
     assert measured["integrated_lufs"] == -9.4 and measured["peak_db"] == -1.1 and measured["measuring"]
-    assert not measured["warnings"]
+    assert not measured["warnings"] and measured["reading_fresh"] and not measured["is_playing"]
+    assert measured["measurement_scope"] == "unknown" and not measured["coverage_verified"]
     _reading(bridge_env, seconds_ago=20)
     stopped = _payload(await server.call_tool("measure_master", {}))
-    assert not stopped["measuring"] and "stopped 20 s ago" in stopped["warnings"][0]
+    assert not stopped["measuring"] and "last updated 20 s ago" in stopped["warnings"][0]
 
 
 async def test_measure_master_reset_and_a_meter_that_is_not_last(client, live, bridge_env):
@@ -155,3 +156,50 @@ async def test_measure_master_reset_and_a_meter_that_is_not_last(client, live, b
     reset = _payload(await server.call_tool("measure_master", {"reset": True}))
     assert reset["reset"] and (bridge_env / "meter-reset").exists()
     assert "does not hear Limiter" in reset["warnings"][0]
+
+
+@pytest.mark.parametrize("low_cut,glue", [(False, False), (False, True), (True, False), (True, True)])
+async def test_selected_master_stages_have_consistent_indices(client, live, low_cut, glue):
+    server = build_server(client)
+    await client.call("device.insert", {"master": True, "name": "Reverb"})
+    _drag_meter(live)
+    expected = (["EQ Eight"] if low_cut else []) + (["Glue Compressor"] if glue else []) + ["Limiter"]
+    preview = _payload(await server.call_tool("plan_master", {"low_cut": low_cut, "glue": glue}))
+    assert [d["device"] for d in preview["master_chain"]] == expected
+    result = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    assert _master_names(live) == ["Reverb", *expected, "MidiBakery Loudness Meter"]
+    assert result["devices"] == {name: i + 1 for i, name in enumerate(expected)}
+    assert _shown(live, len(expected))["Mode"] == "True Peak"
+    before = live.on_main(lambda: live.song.undo_calls)
+    await client.call("history.step", {"action": "undo"})
+    await client.call("history.step", {"action": "undo"})
+    assert live.on_main(lambda: live.song.undo_calls) == before + 2
+
+
+@pytest.mark.parametrize("low_cut,glue", [(False, False), (False, True), (True, False), (True, True)])
+async def test_selected_master_stages_roll_back_when_settings_fail(client, live, low_cut, glue):
+    from midibakery.bridge import BridgeError
+    from midibakery.compose.master import MasterRequest, apply_master, build_master
+
+    _drag_meter(live)
+    plan = await build_master(client.call, MasterRequest(low_cut=low_cut, glue=glue))
+
+    async def failing(op, params):
+        if op == "batch" and ": settings" in params.get("label", ""):
+            raise BridgeError("LIVE_ERROR", "settings failed")
+        return await client.call(op, params)
+
+    before = live.on_main(lambda: live.song.undo_calls)
+    with pytest.raises(BridgeError, match="settings failed") as exc:
+        await apply_master(failing, plan)
+    assert exc.value.details["rolled_back"] and live.on_main(lambda: live.song.undo_calls) == before + 1
+
+
+async def test_device_identity_is_stable_until_replacement(client, live):
+    from fake_song import make_device
+
+    await client.call("device.insert", {"master": True, "name": "Limiter"})
+    first = await client.call("device.params", {"master": True, "device": 0})
+    assert first["id"] == (await client.call("device.params", {"master": True, "device": 0}))["id"]
+    live.on_main(lambda: live.song.master_track.devices.__setitem__(0, make_device("Limiter")))
+    assert first["id"] != (await client.call("device.params", {"master": True, "device": 0}))["id"]

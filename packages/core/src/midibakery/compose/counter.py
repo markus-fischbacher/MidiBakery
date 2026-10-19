@@ -9,7 +9,7 @@ after the last one ended. The short silence between the staccato hits of an arp 
 
 Without a mode the main picks it (`resolve`): long phrase rests -> call_and_response, some rests or held notes
 -> fill_the_gaps, a main without any -> passive_over_active (few long notes, no room to fill). Without a
-register: above the main, unless that would go past C7 (pitch 96); then below.
+register: above the main when there is room below MIDI 96 (Live C6); otherwise below.
 
 Modes (rhythm and placement, then pitch):
 - fill_the_gaps: starts only inside the main's phrase rests and held notes (a beat or longer).
@@ -56,7 +56,7 @@ REGISTERS = ("above", "below", "same")
 STEP = 0.25  # one 16th, in beats
 EPS = 1e-6
 WINDOW = 14  # semitones the counter line may span above/below the main's range
-CEILING, FLOOR = 96, 36  # C7 and C2: a counter line higher or lower is shrill or mud
+CEILING, FLOOR = 96, 36  # Live C6 and C1: conservative preset range, not a musical requirement
 MIN_ROOM = 9  # semitones the line needs; less room above the main puts it below
 REST = 1.0  # beats of silence before the next main note that make a phrase rest
 CONSONANT = frozenset({3, 4, 7, 8, 9})  # thirds, fifths, sixths (octaves and unisons are handled apart)

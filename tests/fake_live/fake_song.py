@@ -63,8 +63,10 @@ class Parameter(LiveObject):
 class Device(LiveObject):
     can_have_drum_pads = False
     can_have_chains = False
+    _ptrs = itertools.count(0x9000)
 
     def __init__(self, name):
+        self._live_ptr = next(Device._ptrs)
         self.name = name
         self.class_name = name.replace(" ", "")
         self.parameters = [

@@ -135,3 +135,85 @@ async def test_an_existing_trigger_track_and_compressor_are_reused(client, live)
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     assert _compressors(live)["Bass"][:3] == (0, "Sidechain", "Post FX")
     assert live.on_main(lambda: [d.name for d in live.song.tracks[2].devices]) == ["Operator"]
+
+
+def _kick_and_trigger_times(live, kick):
+    def read():
+        drum_track = next(t for t in live.song.tracks if t.name == "Drums")
+        trigger = next(t for t in live.song.tracks if t.name == "Sidechain")
+        kicks = {round(c.start_time + n["start_time"], 6) for c in drum_track.arrangement_clips
+                 for n in c.notes.values() if n["pitch"] == kick and not n.get("mute")}
+        triggers = {round(c.start_time + n["start_time"], 6) for c in trigger.arrangement_clips for n in c.notes.values()}
+        return kicks, triggers
+    return live.on_main(read)
+
+
+@pytest.mark.parametrize("genre", ["house", "peak_time_techno", "drum_and_bass", "trap", "melodic_techno"])
+async def test_kick_following_matches_generated_drums_including_rests_and_variations(client, live, genre):
+    _studio(live)
+    server = build_server(client)
+    preview = _payload(await server.call_tool("plan_song", {"genre": genre, "seed": 7, "fx": False,
+                                                          "sidechain_mode": "follow_kick", "start_bar": 5}))
+    assert preview["sidechain_mode"] == "follow_kick"
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    kicks, triggers = _kick_and_trigger_times(live, 36)
+    assert kicks and triggers == kicks and min(triggers) >= 16
+
+
+async def test_follow_kick_works_after_new_kit_remaps_pitches(client, live):
+    server = build_server(client)
+    preview = await _house(server, sidechain_mode="follow_kick")
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    track = next(t["track"] for t in applied["new_tracks"] if t["name"] == "Drums")
+    pads = (await client.call("drum_rack.pads", {"track": track}))["pads"]
+    from midibakery.compose.drums import map_pads
+    kick = map_pads(pads).note("kick")
+    kicks, triggers = _kick_and_trigger_times(live, kick)
+    assert kicks and kicks == triggers
+
+
+async def _copied_kick_plan(client, live, **note_values):
+    _studio(live)
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 4})
+    await client.call("notes.apply", {"track": 0, "slot": 0, "add": [
+        {"pitch": 36, "start_time": 0.5, "duration": 0.25, **note_values},
+        {"pitch": 36, "start_time": 1.5, "duration": 0.25, "mute": True},
+        {"pitch": 42, "start_time": 2, "duration": 0.25},
+    ]})
+    server = build_server(client)
+    preview = await _house(server, clips=[{"role": "drums", "track": 0, "slot": 0}], sidechain_mode="follow_kick")
+    return server, preview
+
+
+async def test_follow_kick_copies_source_onsets_not_a_genre_grid(client, live):
+    server, preview = await _copied_kick_plan(client, live)
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    kicks, triggers = _kick_and_trigger_times(live, 36)
+    assert kicks and kicks == triggers and all(t % 4 == 0.5 for t in triggers)
+
+
+async def test_follow_kick_rejects_changed_source_before_writing(client, live):
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    server, preview = await _copied_kick_plan(client, live)
+    await client.call("notes.apply", {"track": 0, "slot": 0, "add": [{"pitch": 36, "start_time": 3, "duration": 0.25}]})
+    before = live.on_main(lambda: live.song.undo_steps)
+    with pytest.raises(ToolError, match="copied drum clip changed"):
+        await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    assert live.on_main(lambda: live.song.undo_steps) == before
+
+
+async def test_follow_kick_rejects_unpredictable_note_probability(client, live):
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    with pytest.raises(ToolError, match="deterministic kick"):
+        await _copied_kick_plan(client, live, probability=0.5)
+
+
+async def test_follow_kick_needs_a_known_kick_pad(client, live):
+    from mcp.server.mcpserver.exceptions import ToolError
+
+    _studio(live)
+    live.on_main(lambda: live.song.tracks[0].devices.__setitem__(0, DrumRackDevice()))
+    with pytest.raises(ToolError, match="identifiable kick"):
+        await _house(build_server(client), sidechain_mode="follow_kick")

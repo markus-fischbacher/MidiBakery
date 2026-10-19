@@ -1,8 +1,7 @@
-"""A master chain from sourced genre settings: EQ Eight (low cut), Glue Compressor, Limiter.
+"""A master-chain preset: optional EQ Eight low cut and Glue Compressor, then Limiter.
 
 A starting point, not a finished master: nothing here hears the song. The Glue Compressor's
-threshold is a convention to set by ear (1-2 dB of gain reduction on the loudest parts) and the
-Limiter only catches peaks (no input gain), so the song gets no louder than the mix.
+threshold must be set by ear. Zero Limiter input gain does not guarantee unchanged loudness.
 
 Sources and ratings: docs/GENRES.md, "Master chain". Measured in Live 12.4: the parameter names
 below; Glue's Attack, Ratio and Release are steps (raw 0..6, 0..2, 0..6, shown as the values in
@@ -42,12 +41,11 @@ class MasterStyle:
     glue_attack_ms: float = 30
     glue_ratio: int = 2
     glue_release: float | str = "auto"
-    glue_sidechain_hz: float = 150.0  # the kick and sub do not pump the whole mix
+    glue_sidechain_hz: float = 150.0  # reduces the detector's sensitivity to low frequencies
     ceiling_db: float = -1.0
 
 
-# Four-on-the-floor genres: a gentle cut, inaudible at 30 Hz. Sub-heavy genres (808s, Reese subs
-# down to 25 Hz): a steep cut lower down, so the sub keeps its weight.
+# Preset choices, not universally required or inaudible filtering.
 STYLES: dict[str, MasterStyle] = {
     "house": MasterStyle("House", 30, "High Pass 12dB"),
     "melodic_techno": MasterStyle("Melodic Techno", 30, "High Pass 12dB"),
@@ -59,12 +57,14 @@ GENERIC = MasterStyle("any genre", 30, "High Pass 12dB")
 
 
 class MasterRequest(BaseModel):
-    """A master chain (EQ Eight low cut, Glue Compressor, Limiter) with the genre's settings."""
+    """Master-chain preset, not finished mastering; optional low cut/Glue, then True Peak Limiter."""
 
     model_config = ConfigDict(extra="forbid")
 
-    genre: Genre | None = None  # omitted: settings that suit any genre
-    ceiling_db: float = Field(-1.0, ge=-3.0, le=-0.1)  # Limiter ceiling, true peak; -1 dB suits streaming
+    genre: Genre | None = None
+    ceiling_db: float = Field(-1.0, ge=-3.0, le=-0.1)
+    low_cut: bool = Field(True, description="Include EQ Eight low cut; audition bass/transients")
+    glue: bool = Field(True, description="Include Glue Compressor; threshold needs listening")
 
 
 @dataclass
@@ -73,6 +73,8 @@ class MasterPlan:
     style: MasterStyle
     ceiling_db: float
     existing: tuple[str, ...]  # the master's devices when planned: apply checks they did not change
+    low_cut: bool = True
+    glue: bool = True
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -83,7 +85,7 @@ class MasterPlan:
     def settings(self) -> list[tuple[str, list[tuple[str, dict[str, Any]]]]]:
         """(device, [(parameter, value or display)]) as device.set_param takes them."""
         s = self.style
-        return [
+        settings = [
             ("EQ Eight", [("1 Filter On A", {"display": "On"}), ("1 Filter Type A", {"display": s.low_cut_slope}),
                           ("1 Frequency A", {"display": s.low_cut_hz})]),
             ("Glue Compressor", [("Threshold", {"display": s.glue_threshold_db}),
@@ -94,10 +96,12 @@ class MasterPlan:
                                  ("S/C EQ Freq", {"display": s.glue_sidechain_hz})]),
             ("Limiter", [("Ceiling", {"display": self.ceiling_db}), ("Mode", {"display": "True Peak"})]),
         ]
+        return [(name, params) for name, params in settings
+                if (name != "EQ Eight" or self.low_cut) and (name != "Glue Compressor" or self.glue)]
 
     def insert_ops(self) -> list[dict[str, Any]]:
         return [{"op": "device.insert", "params": {"master": True, "name": name, "index": self.first + i}}
-                for i, name in enumerate(CHAIN)]
+                for i, (name, _) in enumerate(self.settings())]
 
     def param_ops(self) -> list[dict[str, Any]]:
         return [{"op": "device.set_param", "params": {"master": True, "device": self.first + i, "parameter": p, **v}}
@@ -106,12 +110,14 @@ class MasterPlan:
     def chain(self) -> list[dict[str, Any]]:
         s = self.style
         release = "Auto" if s.glue_release == "auto" else f"{s.glue_release} s"
-        return [
+        descriptions = [
             {"device": "EQ Eight", "settings": f"low cut {s.low_cut_hz:g} Hz, {s.low_cut_slope.removeprefix('High Pass ')}/oct slope"},
             {"device": "Glue Compressor", "settings": f"ratio {s.glue_ratio}:1, attack {s.glue_attack_ms:g} ms, release {release}, "
                                                       f"threshold {s.glue_threshold_db:g} dB, sidechain high pass {s.glue_sidechain_hz:g} Hz"},
             {"device": "Limiter", "settings": f"ceiling {self.ceiling_db:g} dB true peak, input gain 0 dB"},
         ]
+        return [d for d in descriptions
+                if (d["device"] != "EQ Eight" or self.low_cut) and (d["device"] != "Glue Compressor" or self.glue)]
 
     def preview(self) -> dict[str, Any]:
         return {
@@ -121,8 +127,12 @@ class MasterPlan:
             **({"after": list(self.existing)} if self.existing else {}),
             "notes": [
                 "A starting point, not a finished master: MidiBakery cannot hear the song.",
-                "Play the loudest part and turn the Glue Compressor's threshold until its needle shows 1-2 dB.",
-                "The Limiter only catches peaks (input gain 0 dB); the song gets no louder than the mix.",
+                "Audition the low cut if included: it can change wanted bass, phase and transients.",
+                "If Glue is included and subtle compression is wanted, set its threshold by listening; "
+                "the preset does not guarantee 1-2 dB gain reduction.",
+                "Limiter input gain starts at 0 dB; filtering and dynamics can still change loudness.",
+                "For Spotify masters louder than -14 LUFS, use a ceiling below -2 dBTP and verify the render "
+                "with a true-peak meter; no delivery compliance is verified here.",
             ],
             "warnings": self.warnings,
             "next": "apply_plan(plan_id) puts the chain on the Master; two undo steps remove it",
@@ -145,7 +155,7 @@ async def build_master(call: Call, request: MasterRequest) -> MasterPlan:
                           "on a Master without one. Delete those devices in Live first, or adjust them yourself.",
                           {"master_devices": list(existing)})
     style = STYLES[request.genre] if request.genre else GENERIC
-    plan = MasterPlan(secrets.token_hex(4), style, request.ceiling_db, existing)
+    plan = MasterPlan(secrets.token_hex(4), style, request.ceiling_db, existing, request.low_cut, request.glue)
     if before := existing[:plan.first]:
         plan.warnings.append(f"The Master's {', '.join(before)} stay(s) before the new chain")
     return plan
@@ -168,7 +178,7 @@ async def apply_master(call: Call, plan: MasterPlan) -> dict[str, Any]:
     return {
         "ok": True,
         "master_chain": plan.chain(),
-        "devices": {name: plan.first + i for i, name in enumerate(CHAIN)},
+        "devices": {name: plan.first + i for i, (name, _) in enumerate(plan.settings())},
         "undo": "2 undo steps remove the chain (settings, then devices)",
-        "next": "Play the loudest part and set the Glue Compressor's threshold for 1-2 dB of gain reduction",
+        "next": "Audition the processing against bypass; adjust Glue if included. Reset the meter and play the whole song.",
     }

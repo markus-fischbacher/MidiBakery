@@ -44,15 +44,16 @@ async function show(Max, reading) {
   for (const [name, value] of display(reading)) await Max.outlet(name, value);
 }
 
-function write() {
+async function write(Max) {
   try {
     fs.mkdirSync(configDir(), { recursive: true });
     const reading = { ...meter.reading(), sample_rate: sampleRate, updated: new Date().toISOString() };
     fs.writeFileSync(`${READING}.tmp`, JSON.stringify(reading, null, 1));
     fs.renameSync(`${READING}.tmp`, READING); // a reader never sees half a file
     return reading;
-  } catch (_) {
-    return null; // the meter keeps measuring when the folder is not writable
+  } catch (error) {
+    await Max.outlet("status", `Cannot write loudness reading: ${error.message}`);
+    return null;
   }
 }
 
@@ -69,18 +70,19 @@ async function onBlock(Max, rmsLeft, rmsRight, peakLeft, peakRight) {
     settle -= 1;
     return;
   }
-  if (fs.existsSync(RESET)) {
+  const resetting = fs.existsSync(RESET);
+  if (resetting) meter.reset();
+  meter.block(+rmsLeft || 0, +rmsRight || 0, +peakLeft || 0, +peakRight || 0);
+  if (!resetting && now - written < WRITE_EVERY_MS) return;
+  written = now;
+  const reading = await write(Max);
+  if (reading && resetting) {
     try {
       fs.unlinkSync(RESET);
-    } catch (_) {
-      // another reset request in the same moment: one reset is enough
+    } catch (error) {
+      if (error.code !== "ENOENT") await Max.outlet("status", `Cannot acknowledge loudness reset: ${error.message}`);
     }
-    meter.reset();
   }
-  meter.block(+rmsLeft || 0, +rmsRight || 0, +peakLeft || 0, +peakRight || 0);
-  if (now - written < WRITE_EVERY_MS) return;
-  written = now;
-  const reading = write();
   if (reading) await show(Max, reading);
 }
 
@@ -88,12 +90,13 @@ async function onSampleRate(Max, rate) {
   if (!(+rate > 0)) return;
   if (+rate !== sampleRate) meter.reset(); // a reading spans one sample rate
   sampleRate = +rate;
+  const reading = await write(Max);
   settle = SETTLE_BLOCKS;
   const { pre, rlb } = kWeighting(sampleRate);
   await Max.outlet("coeff", "pre", ...pre);
   await Max.outlet("coeff", "rlb", ...rlb);
   await Max.outlet("window", Math.round(sampleRate / 10));
-  await Max.outlet("status", `Measuring at ${sampleRate / 1000} kHz. Reset, then play the song.`);
+  if (reading) await Max.outlet("status", `Measuring at ${sampleRate / 1000} kHz. Reset, then play the song.`);
 }
 
 let Max = null;
@@ -107,7 +110,7 @@ if (Max) {
   Max.addHandler("block", (...values) => onBlock(Max, ...values));
   Max.addHandler("reset", async () => {
     meter.reset();
-    const reading = write();
+    const reading = await write(Max);
     if (reading) await show(Max, reading);
   });
   Max.addHandler("about", async (version) => Max.outlet("status", await about(version)));
