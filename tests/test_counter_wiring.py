@@ -212,3 +212,21 @@ async def test_arrangement_counter_clips_need_a_free_track(client, live):
         await server.call_tool("compose", {"kind": "melody", "track": 2, "counter_to": {"track": 1, "arrangement_clip": "Breakdown Lead"}})
     with pytest.raises(ToolError, match="No arrangement clip named 'Outro Lead'"):
         await server.call_tool("compose", {"kind": "melody", "track": 0, "counter_to": {"track": 1, "arrangement_clip": "Outro Lead"}})
+
+
+async def test_the_sidechain_track_is_no_lead(client, live):
+    # gemma took track 7, the sidechain trigger, for the lead: "The lead clip 'Sidechain' is 92 bars long", three times
+    await _song(client, live)
+    live.on_main(lambda: live.song.create_midi_track(-1))
+    live.on_main(lambda: setattr(live.song.tracks[1], "name", "Peak-Time Techno Lead"))
+    live.on_main(lambda: setattr(live.song.tracks[3], "name", "Peak-Time Techno Sidechain"))
+    await client.call("arrangement.edit", {"actions": [_arranged(3, 0, "Sidechain", [(48, 0.0, 0.25)])]})
+    server = build_server(client)
+    with pytest.raises(ToolError, match=r"plays no melody.*The lead is track index 1 'Peak-Time Techno Lead' \(arrangement clips: "
+                                        r"'Drop Lead', 'Breakdown Lead'\)"):
+        await server.call_tool("compose", {"kind": "melody", "track": 0, "counter_to": {"track": 3}})
+    # the clip name finds its track
+    changes = _payload(await server.call_tool("compose", {
+        "kind": "melody", "track": 0, "seed": 1, "counter_to": {"track": 3, "arrangement_clip": "Breakdown Lead"}}))["changes"]
+    assert [(c["start"], c["counter_to"]) for c in changes] == [
+        (32.0, "arrangement clip index 1 on track index 1"), (64.0, "arrangement clip index 2 on track index 1")]

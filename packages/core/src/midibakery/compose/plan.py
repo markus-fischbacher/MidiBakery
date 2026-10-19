@@ -546,6 +546,31 @@ async def _kick(session: Session, location: ClipLocation, length: float) -> tupl
     return times, {"kick_pitch": kick_pitch, "kick_hits": len(times)}
 
 
+_NO_MELODY = ("sidechain", "trigger", "riser", "uplift", "impact", "boom")
+
+
+async def _melodic(session: Session, index: int) -> None:
+    """counter_to on a drum, sidechain trigger, riser or impact track: a small model took "track 7" for the lead.
+    The error names the lead track and its clips, so the next call can get it right."""
+    from midibakery.compose.song import ROLE_WORDS  # song imports this module
+
+    _not_drums(session, index, "counter_to", "the lead melody's")
+    name = str(session.track(index).get("name", ""))
+    if not any(w in name.lower() for w in _NO_MELODY):
+        return
+    leads = []
+    for t in session.tracks:
+        if t.get("kind") != "midi" or is_drum_track(t) or not any(w in str(t.get("name", "")).lower() for w in ROLE_WORDS["lead"]):
+            continue
+        names = list(dict.fromkeys(str(c.get("name", "")) for c in await session._arrangement_clips(t["index"]) if c.get("is_midi")))
+        clips = f" (arrangement clips: {', '.join(repr(n) for n in names[:8])})" if names else ""
+        leads.append((t["index"], f"track index {t['index']} '{t.get('name')}'{clips}"))
+    hint = (f" The lead is {leads[0][1]}: pass counter_to {{\"track\": {leads[0][0]}, \"arrangement_clip\": <clip name>}}."
+            if len(leads) == 1 else f" Lead tracks: {'; '.join(text for _, text in leads[:3])}." if leads else "")
+    raise BridgeError("INVALID_PARAMS", f"counter_to points to track index {index} '{name}', which plays no melody "
+                      f"(a sidechain trigger, riser or impact).{hint}", {"track": index})
+
+
 async def _counter_main(session: Session, spec: MelodySpec) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """The main melody a counter melody answers: its notes (as Live lists them) and what the preview says about it."""
     location = spec.counter_to
@@ -554,7 +579,7 @@ async def _counter_main(session: Session, spec: MelodySpec) -> tuple[list[dict[s
     if where == Place.of(spec):
         raise BridgeError("INVALID_PARAMS", f"counter_to points to the clip being written ({where}); "
                           "give the lead's clip and put the counter melody in another slot or track")
-    _not_drums(session, location.track, "counter_to", "the lead melody's")
+    await _melodic(session, location.track)
     source = await session.clip(where, include_planned=True)
     if not source.exists or not source.is_midi:
         raise BridgeError("NOT_FOUND", f"counter_to: no MIDI clip in {where}; give the lead's track and slot "
@@ -794,6 +819,15 @@ def _counter_name(lead: str) -> str:
     return f"{lead} Counter".strip()
 
 
+def _clip_match(clips: list[dict[str, Any]], ref: str) -> list[dict[str, Any]]:
+    """Clips named `ref` (any case), else those whose name contains it; none for an index or a listed "1 'Name'"."""
+    if ref.strip().isdigit() or re.fullmatch(r"\s*\d+\s+.+", ref):
+        return []
+    wanted = ref.strip().strip("'\"").casefold()
+    return ([c for c in clips if str(c.get("name", "")).strip().casefold() == wanted]
+            or [c for c in clips if wanted in str(c.get("name", "")).casefold()])
+
+
 async def _arranged_counter(session: Session, step: Spec) -> list[Spec]:
     """A counter melody to a lead in the Arrangement, without a slot or arrangement clip to write to: one new clip
     per lead clip, at the same beat and length on the step's track ("a counter melody to the Breakdown Lead clips,
@@ -804,15 +838,21 @@ async def _arranged_counter(session: Session, step: Spec) -> list[Spec]:
     lead = step.counter_to
     ref = lead.arrangement_clip
     clips = [c for c in await session._arrangement_clips(lead.track) if c.get("is_midi")]
+    if isinstance(ref, str) and not _clip_match(clips, ref):
+        # 'Lift Lead' on the wrong track: the one track whose clips carry that name
+        owners = [t["index"] for t in await session.arrangement_tracks()
+                  if t["index"] != step.track and _clip_match([c for c in t["clips"] if c.get("is_midi")], ref)]
+        if len(owners) == 1:
+            lead = ClipLocation(track=owners[0], arrangement_clip=ref)
+            clips = [c for c in await session._arrangement_clips(lead.track) if c.get("is_midi")]
+    await _melodic(session, lead.track)
     if ref is None:
         if not clips or any(p.track == lead.track for p in session.planned) or any(
                 c.get("is_midi") for c in session.track(lead.track).get("clips", [])):
             return [step]  # a Session View lead: answered in a slot
         chosen = clips
     elif isinstance(ref, str) and not ref.strip().isdigit() and not re.fullmatch(r"\s*\d+\s+.+", ref):
-        wanted = ref.strip().strip("'\"").casefold()
-        chosen = ([c for c in clips if str(c.get("name", "")).strip().casefold() == wanted]
-                  or [c for c in clips if wanted in str(c.get("name", "")).casefold()])
+        chosen = _clip_match(clips, ref)
         if not chosen:
             await session.arrangement_index(lead.track, ref)  # says which clips there are
     else:
