@@ -22,7 +22,7 @@ The design rule is "dumb bridge, smart core" (details: `docs/ARCHITECTURE.md`).
 | M4L devices | `packages/m4l` | Chat (HTML in `jweb` plus a native text field), MIDI Tools (Generator, Transform), Reference Analyzer, Loudness Meter (BS.1770, writes `meter.json`). |
 | Packaging | `packaging/` | PyInstaller app, macOS `.pkg`, Windows Inno Setup, signed update manifest. |
 | Update and license service | `services/updates` | Cloudflare Worker + R2 + D1 on `updates.klirrwerk.com`. |
-| Tests | `tests/` | Unit tests plus contract tests: the real Remote Script against a fake Live Object Model over a real socket. 752 passed, 1 skipped. |
+| Tests | `tests/` | Unit tests plus contract tests: the real Remote Script against a fake Live Object Model over a real socket. 759 passed, 1 skipped. |
 
 Key mechanisms:
 

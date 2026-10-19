@@ -22,6 +22,7 @@ from midibakery.bridge.client import BridgeError
 from midibakery.compose.structures import Genre
 
 from .plan import Call
+from .rollback import completed, undo
 
 CHAIN = ("EQ Eight", "Glue Compressor", "Limiter")
 GLUE_ATTACK_MS = (0.01, 0.1, 0.3, 1, 3, 10, 30)
@@ -157,12 +158,12 @@ async def apply_master(call: Call, plan: MasterPlan) -> dict[str, Any]:
     try:
         await call("batch", {"ops": plan.insert_ops(), "label": f"MidiBakery master {plan.id}: devices"})
     except BridgeError as exc:
-        await _undo(call, exc, 1 if exc.details.get("completed") else 0)
+        await undo(call, exc, 1 if completed(exc) else 0, "the Master is unchanged")
         raise
     try:
         await call("batch", {"ops": plan.param_ops(), "label": f"MidiBakery master {plan.id}: settings"})
     except BridgeError as exc:
-        await _undo(call, exc, 1 + (1 if exc.details.get("completed") else 0))
+        await undo(call, exc, 1 + (1 if completed(exc) else 0), "the Master is unchanged")
         raise
     return {
         "ok": True,
@@ -171,15 +172,3 @@ async def apply_master(call: Call, plan: MasterPlan) -> dict[str, Any]:
         "undo": "2 undo steps remove the chain (settings, then devices)",
         "next": "Play the loudest part and set the Glue Compressor's threshold for 1-2 dB of gain reduction",
     }
-
-
-async def _undo(call: Call, error: BridgeError, steps: int) -> None:
-    error.details["rolled_back"] = True
-    try:
-        for _ in range(steps):
-            await call("history.step", {"action": "undo"})
-    except BridgeError as undo_error:
-        error.message += f" (undoing {steps} step(s) failed: {undo_error.message}; check Live's undo history)"
-        return
-    if steps:
-        error.message += f"; the {steps} step(s) that had already run were undone, the Master is unchanged"

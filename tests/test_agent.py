@@ -466,8 +466,23 @@ def test_compact_schema():
         "properties": {
             "title": {"type": "string"},
             "seed": {"type": "integer", "description": "Same seed, same notes."},
-            "bars": {"type": "integer", "default": 4},
+            "bars": {"type": "integer"},
         },
+    }
+
+
+def test_compact_schema_drops_enum_listings_and_dangling_examples():
+    schema = {"properties": {
+        "rhythm": {"enum": ["sustain", "pulse"], "description": "(chords) sustain (default) or pulse"},
+        "voices": {"enum": [3, 4], "description": "3 (default) or 4"},
+        "mode": {"enum": ["a", "b"], "description": "How it plays. a or b."},
+        "clip": {"type": "string", "description": "A clip in the Arrangement, e.g. 'Verse'. Or its index."},
+    }}
+    assert compact_schema(schema)["properties"] == {
+        "rhythm": {"enum": ["sustain", "pulse"], "description": "(chords)"},
+        "voices": {"enum": [3, 4]},
+        "mode": {"enum": ["a", "b"], "description": "How it plays."},
+        "clip": {"type": "string", "description": "A clip in the Arrangement."},
     }
 
 

@@ -50,11 +50,34 @@ async def test_delete_is_cancelled_when_user_says_no(client, live, answer):
     assert _tracks(live) == ["1-MIDI", "2-MIDI"]
 
 
-async def test_clients_without_elicitation_are_not_asked(client, live):
+async def test_clients_without_elicitation_get_a_plan_instead(client, live):
     async with Client(build_server(client)) as mcp:
         result = await mcp.call_tool("delete_track", {"track": 0})
-    assert not result.is_error
+        assert not result.is_error and _tracks(live) == ["1-MIDI", "2-MIDI"]  # nothing deleted yet
+        pending = json.loads(result.content[0].text)
+        assert pending["not_applied"] == "Delete track 1 '1-MIDI' with 0 clip(s)?" and "apply_plan" in pending["next"]
+        assert not (await mcp.call_tool("apply_plan", {"plan_id": pending["plan_id"]})).is_error
     assert _tracks(live) == ["2-MIDI"]
+
+
+async def test_a_deferred_delete_is_refused_when_the_tracks_changed(client, live):
+    async with Client(build_server(client)) as mcp:
+        pending = json.loads((await mcp.call_tool("delete_track", {"track": 1})).content[0].text)
+        await client.call("track.delete", {"track": 0})  # index 1 is gone, '2-MIDI' is index 0 now
+        result = await mcp.call_tool("apply_plan", {"plan_id": pending["plan_id"]})
+    assert result.is_error and "CONFLICT" in result.content[0].text
+    assert _tracks(live) == ["2-MIDI"]
+
+
+async def test_replacing_without_elicitation_waits_for_apply_plan(client, live):
+    async with Client(build_server(client)) as mcp:
+        await mcp.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 3})
+        before = _notes(live, 1, 0)
+        result = await mcp.call_tool("compose", {"kind": "melody", "track": 1, "slot": 0, "seed": 4, "if_exists": "replace"})
+        assert not result.is_error and _notes(live, 1, 0) == before
+        assert result.structured_content["not_applied"] == f"Replace {len(before)} existing note(s) in track 2 slot 1?"
+        assert not (await mcp.call_tool("apply_plan", {"plan_id": result.structured_content["plan_id"]})).is_error
+    assert _notes(live, 1, 0) != before
 
 
 async def test_batch_with_delete_asks_once(client, live):

@@ -266,3 +266,47 @@ async def test_clip_ops_take_arrangement_clips_by_name(client):
     assert [c["name"] for c in (await client.call("arrangement.get", {}))["tracks"][0]["clips"]] == ["Main Bass"]
     with pytest.raises(BridgeError, match="No arrangement clip named 'Outro'.*0 'Main Bass'"):
         await client.call("clip.get", {"track": 0, "arrangement_clip": "Outro"})
+
+
+async def test_a_failed_run_batch_is_undone(client, live):
+    from midibakery.mcp import build_server
+
+    before = live.on_main(lambda: live.song.undo_calls)
+    with pytest.raises(Exception) as exc:
+        await build_server(client).call_tool("run_batch", {"ops": [
+            {"op": "song.set", "params": {"tempo": 99}},
+            {"op": "clip.delete", "params": {"track": 0, "slot": 5}},  # no clip there
+        ]})
+    assert "were undone" in str(exc.value)
+    assert live.on_main(lambda: live.song.undo_calls) == before + 1
+
+
+async def test_a_failed_edit_arrangement_takes_back_clips_and_locators(client, live):
+    from midibakery.mcp import build_server
+
+    await client.call("arrangement.locators", {"actions": [{"action": "set_locator", "time": 0, "name": "Intro"}]})
+    before = live.on_main(lambda: live.song.undo_calls)
+    with pytest.raises(Exception) as exc:
+        await build_server(client).call_tool("edit_arrangement", {"actions": [
+            {"action": "set_locator", "time": 0, "name": "Start"},
+            {"action": "set_locator", "time": 32, "name": "Drop"},
+            {"action": "add_clip", "track": 0, "start": 0, "length": 4},
+            {"action": "add_clip", "track": 99, "start": 0, "length": 4},
+        ]})
+    assert "were undone" in str(exc.value) and "locators were put back" in str(exc.value)
+    assert live.on_main(lambda: live.song.undo_calls) == before + 1  # the clip edit; locators are restored, not undone
+    assert [(l["name"], l["time"]) for l in (await client.call("arrangement.get", {}))["locators"]] == [("Intro", 0.0)]
+
+
+async def test_failing_locators_change_nothing(client, live):
+    from midibakery.mcp import build_server
+
+    with pytest.raises(Exception) as exc:
+        await build_server(client).call_tool("edit_arrangement", {"actions": [
+            {"action": "add_clip", "track": 0, "start": 0, "length": 4},
+            {"action": "set_locator", "time": 16, "name": "Drop"},
+            {"action": "delete_locator", "time": 48},  # there is none
+        ]})
+    assert "NOT_FOUND" in str(exc.value) or "No locator" in str(exc.value)
+    arrangement = await client.call("arrangement.get", {})
+    assert arrangement["locators"] == [] and arrangement["tracks"][0]["clips"] == []  # the clips come after the locators

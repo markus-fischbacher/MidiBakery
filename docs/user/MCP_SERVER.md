@@ -84,7 +84,7 @@ The difference from the Chat device: Claude Desktop and Claude Code can do **mor
 
 - **Undo:** every change is a step in Live's undo list (⌘Z / Ctrl+Z). Claude can call the `undo` tool itself.
 - **Asking first:** before **deleting tracks or clips** and before **replacing existing notes** (`compose`, `transform_notes`, `apply_plan`) MidiBakery asks. Apps that support questions (most do) show you a confirmation. If you decline, nothing changes and Claude receives `CANCELLED`. A song plan never overwrites existing Arrangement clips.
-- **Apps without question support** are not asked. There only undo and the "destructive" hint that some apps display protect you. In such an app, check what Claude plans to do.
+- **Apps without question support** cannot show the confirmation, so nothing is deleted or replaced right away: Claude gets the question and a `plan_id` back, has to ask you in the chat, and only `apply_plan` then does it. If tracks or clips changed in between, `apply_plan` refuses with `CONFLICT`.
 - **Preview before change:** whole songs (`plan_song`) and plans (`plan_changes`) change **nothing** until `apply_plan` is called.
 - **What stays on your computer:** the server only talks to Live. The app you are in (Claude) does see what the tools return: track and clip names, notes, tempo.
 
@@ -138,7 +138,7 @@ The **Kind** column says: **read** (changes nothing), **write**, **asks first** 
 | `delete_clip` | **asks first** | Delete one clip (Session by `slot`, Arrangement by `arrangement_clip`). |
 | `edit_notes` | write (marked "destructive", no question) | Add (`add`), modify (`modify`) or remove (`remove`) notes **as a diff** by `note_id`. Untouched notes keep their data and ids. |
 | `write_clip_envelope` | write | Write clip automation (points or shapes) onto an existing clip; device parameters and the track mixer (volume, pan, sends). `clear`, `replace_envelopes`. |
-| `edit_arrangement` | write | In the Arrangement: add MIDI clips with notes, copy session clips, **move, swap, delete** clips, set or delete locators. Clip actions first (one undo step), then locators (transport must be stopped). A clip never lands on another one. Take lanes: `compose_takes`. |
+| `edit_arrangement` | write | In the Arrangement: add MIDI clips with notes, copy session clips, **move, swap, delete** clips, set or delete locators. Locators first (transport must be stopped), then the clip actions (one undo step). All or nothing: if an action fails, the clips are undone and the locators put back as they were. A clip never lands on another one. Take lanes: `compose_takes`. |
 
 ### Mixer, devices, sounds
 
@@ -150,7 +150,7 @@ The **Kind** column says: **read** (changes nothing), **write**, **asks first** 
 | `load_browser_item` | write | Load a browser item onto a track (`path`); an instrument or kit replaces the existing instrument. |
 | `set_device_parameter` | write | Set one device parameter (`parameter`, `value` or `display`). |
 | `update_rack` | write | Set macros, edit chains or add a chain. |
-| `run_batch` | **asks first** if it contains a deletion | Several operations **atomically as one undo step** (`ops`, `label`). |
+| `run_batch` | **asks first** if it contains a deletion | Several operations **atomically as one undo step** (`ops`, `label`). If one fails, the ones that already ran are undone. |
 
 ### Composing and editing
 
@@ -163,7 +163,7 @@ The **Kind** column says: **read** (changes nothing), **write**, **asks first** 
 | `measure_master` | read | Reads the **Master's loudness** from the MidiBakery Loudness Meter device (last device on the Master): momentary, short-term and integrated LUFS (BS.1770), sample peak, seconds measured, whether Live is playing. `reset=true` restarts integrated and peak. Without the device: an error saying where it is in the browser. |
 | `plan_loudness` | read | One **round toward a target loudness**: reads the Loudness Meter's integrated value (at least 30 s since the reset) and plans the Master Limiter's input gain (at most 6 dB per round, +12 dB in total). `target`: a genre or `streaming` (-14 LUFS), or `target_lufs`. Within 0.5 LU it reports `on_target`. `apply_plan` sets the value in one undo step and resets the meter. |
 | `plan_master` | read | Plans a **master chain** (EQ Eight low cut, Glue Compressor, Limiter at -1 dB true peak) with the genre's settings (`genre`, optional; `ceiling_db`). A starting point: it hears nothing and makes nothing louder. Returns a preview and a `plan_id`; `apply_plan` writes it in two undo steps. A Master that has a Limiter, EQ Eight or Glue Compressor is left alone. |
-| `apply_plan` | **asks first** (when replacing notes) | Writes a plan to Live as **one undo step**. Fails with `CONFLICT` if a target clip changed since planning; then plan again. |
+| `apply_plan` | **asks first** (when replacing notes) | Writes a plan to Live as **one undo step**, or runs a deletion or replacement that waited for your OK (apps without question support). Fails with `CONFLICT` if a target clip changed since planning; then plan again. A failed write is undone. Plans live in the server's memory (the last 32): after a restart, plan again. |
 | `compose_takes` | write | Several **variations** of one part (`kind`: hook, melody, bass, chords, drums; `count`) over the same chords, each on its own **take lane** in the Arrangement (Live 12.2+), to comp in Live. One undo step. |
 
 ### Preview (piano roll)
