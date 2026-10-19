@@ -212,6 +212,74 @@ function showStyleMenu() {
   outlet(4, "script", "sendbox", "chance_dial", "hidden", kind === "drums" ? 0 : 1);
 }
 
+// Drum Rack pads of the detail clip's track, read through the Live Object Model the same way the
+// Remote Script does (drum_rack.pads): clip path -> track -> first Drum Rack, one level into Instrument
+// Racks; pads are the chains with their trigger note. UNVERIFIED in real Live: that the clip path
+// and these properties are readable from a MIDI Tool. Anything missing means "not read" with a reason.
+var padsReason = "";
+
+function listIds(api, prop) {
+  var raw = api.get(prop) || [];
+  var out = [];
+  for (var i = 0; i + 1 < raw.length; i++) if (raw[i] === "id") out.push(raw[i + 1]);
+  return out;
+}
+
+function firstValue(api, prop) {
+  var v = api.get(prop);
+  return Array.isArray(v) ? v[0] : v;
+}
+
+function findRack(deviceIds, depth) {
+  for (var i = 0; i < deviceIds.length; i++) {
+    var device = new LiveAPI("id " + deviceIds[i]);
+    if (Number(firstValue(device, "can_have_drum_pads")) === 1) return device;
+    if (depth < 1 && Number(firstValue(device, "can_have_chains")) === 1) {
+      var chains = listIds(device, "chains");
+      for (var c = 0; c < chains.length; c++) {
+        var inner = findRack(listIds(new LiveAPI("id " + chains[c]), "devices"), depth + 1);
+        if (inner) return inner;
+      }
+    }
+  }
+  return null;
+}
+
+function rackPads(rack) {
+  var pads = [];
+  var chains = listIds(rack, "chains");
+  var probe = chains.length ? Number(firstValue(new LiveAPI("id " + chains[0]), "in_note")) : NaN;
+  if (!isNaN(probe)) {
+    // Live 12.3+: a drum chain's in_note is the note that triggers it.
+    chains.forEach(function (id) {
+      var chain = new LiveAPI("id " + id);
+      var note = Number(firstValue(chain, "in_note"));
+      if (note >= 0 && note <= 127) pads.push({ note: note, name: String(firstValue(chain, "name")) });
+    });
+  } else {
+    listIds(rack, "drum_pads").forEach(function (id) {
+      var pad = new LiveAPI("id " + id);
+      if (listIds(pad, "chains").length) pads.push({ note: Number(firstValue(pad, "note")), name: String(firstValue(pad, "name")) });
+    });
+  }
+  return pads;
+}
+
+function readPads() {
+  try {
+    var clip = new LiveAPI("live_set view detail_clip");
+    var match = String(clip.unquotedpath || clip.path || "").replace(/"/g, "").match(/^live_set tracks (\d+)/);
+    if (!match) return { pads: null, reason: "clip's track not readable" };
+    var rack = findRack(listIds(new LiveAPI("live_set tracks " + match[1]), "devices"), 0);
+    if (!rack) return { pads: null, reason: "no Drum Rack on the track" };
+    var pads = rackPads(rack);
+    pads.sort(function (a, b) { return a.note - b.note; });
+    return pads.length ? { pads: pads, reason: "" } : { pads: null, reason: "Drum Rack has no populated pads" };
+  } catch (e) {
+    return { pads: null, reason: "Drum Rack not readable" };
+  }
+}
+
 function buildContext(d) {
   var clip = d.clip || {};
   var start = Number(clip.time_selection_start) || 0;
@@ -222,8 +290,8 @@ function buildContext(d) {
     seed: params.seed
   };
   // Meter: read from the tool context when Live provides it; otherwise omitted, so the server
-  // assumes 4/4. UNVERIFIED which of these fields real Live fills in. Drum Rack pad context is not
-  // sent (no verified interface), so drums use General MIDI pitches.
+  // assumes 4/4. UNVERIFIED which of these fields real Live fills in. Without readable Drum Rack
+  // pads (see readPads) drums use General MIDI pitches, and the status says so.
   var numerator = Number(clip.signature_numerator);
   var denominator = Number(clip.signature_denominator);
   if (numerator >= 1 && numerator <= 99 && [1, 2, 4, 8, 16].indexOf(denominator) >= 0) {
@@ -235,6 +303,12 @@ function buildContext(d) {
   // Live reports "Chromatic" when the clip has no scale; generators need a real one.
   if (scale.scale_mode && intervals.length && intervals.length < 12) {
     context.scale = { root: Number(scale.root_note) % 12, intervals: intervals, name: String(scale.scale_name || "") };
+  }
+  if (MODE === "generate" && KINDS[params.kind] === "drums") {
+    // The pads are part of the request, so a changed kit never reuses a cached result.
+    var kit = readPads();
+    padsReason = kit.reason;
+    if (kit.pads) context.pads = kit.pads;
   }
   return context;
 }
@@ -307,8 +381,8 @@ function describe(result) {
   if (result.chords) parts.push(Array.isArray(result.chords) ? result.chords.join(" - ") : String(result.chords));
   if (result.diff) parts.push("+" + result.diff.added + " ~" + result.diff.modified + " -" + result.diff.removed);
   if (result.notes) parts.push(result.notes.length + " notes");
-  // The generator is not told the kit's pads, so the server's own fallback is shown, not hidden.
-  if (result.drum_map === "gm") parts.push("pads unknown: General MIDI drum pitches");
+  if (result.drum_map === "gm") parts.push("pads unknown" + (padsReason ? " (" + padsReason + ")" : "") + ": General MIDI drum pitches");
+  if (result.drum_map === "drum_rack") parts.push("kit pads used");
   if (result.ignored && result.ignored.length) parts.push("ignored: " + result.ignored.join(", "));
   parts.push("seed " + result.seed);
   return parts.join("  ");

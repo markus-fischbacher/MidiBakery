@@ -137,4 +137,26 @@ def test_moved_selection_at_the_next_apply_never_reuses_the_cached_result(tmp_pa
 @pytest.mark.skipif(NODE is None, reason="no Node.js available")
 def test_status_shows_the_pad_fallback_and_ignored_controls(tmp_path):
     status = " ".join(_run(tmp_path, "describe")["statuses"])
-    assert "pads unknown: General MIDI drum pitches" in status and "ignored: octave" in status
+    assert "pads unknown (no Drum Rack on the track): General MIDI drum pitches" in status and "ignored: octave" in status
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_named_pads_of_the_tracks_drum_rack_are_sent_and_a_changed_kit_is_not_cached(tmp_path):
+    out = _run(tmp_path, "pads")
+    assert out["pads"] == [{"note": 48, "name": "Kick Heavy"}, {"note": 49, "name": "Snare Tight"}]  # out-of-range chain dropped
+    assert out["after"] == out["before"] + 1  # the moved kick pad made a new request
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_pads_are_found_one_level_inside_an_instrument_rack(tmp_path):
+    assert _run(tmp_path, "pads-nested")["pads"] == [{"note": 48, "name": "Kick Heavy"}, {"note": 49, "name": "Snare Tight"}]
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_older_live_reads_populated_drum_pads(tmp_path):
+    assert _run(tmp_path, "pads-legacy")["pads"] == [{"note": 36, "name": "Kick"}, {"note": 41, "name": "Floor Tom"}]
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_no_drum_rack_sends_no_pads(tmp_path):
+    assert _run(tmp_path, "no-rack")["pads"] is None

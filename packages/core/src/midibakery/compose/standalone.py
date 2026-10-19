@@ -158,6 +158,7 @@ def generate(request: GenerateRequest) -> dict[str, Any]:
         drum_map = map_pads([p.model_dump() for p in ctx.pads] if ctx.pads else None)
         notes = generate_part(spec, None, scale, meter, bars, rng, drum_map)
         info["drum_map"] = drum_map.source
+        info["drum_roles"] = list(drum_map.detected)
     else:
         if spec.progression:
             harmony = harmony_mod.from_progression(spec.progression, scale, meter, bars, spec.chords_per_bar)
