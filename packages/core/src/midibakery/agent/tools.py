@@ -196,6 +196,7 @@ def _first_sentence(text: str, limit: int) -> str:
         if end in text:
             text = text.split(end, 1)[0] + "."
             break
+    text = re.sub(r",? (e\.g|i\.e)\.$", ".", text)  # the example went with the cut
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
@@ -208,12 +209,23 @@ _SAID_IN_PROMPT = frozenset({
 })
 
 
+def _enum_listing(description: str, enum: Any) -> tuple[str, bool]:
+    """('(drums)', True) for '(drums) house, techno or rock.' when those are the enum's values."""
+    if not isinstance(enum, list):
+        return "", False
+    scope = re.match(r"\([^)]*\)", description)
+    body = description[scope.end():] if scope else description
+    words = [w for w in re.split(r"[,.\s]+|\(default\)", body) if w and w != "or"]
+    return (scope.group(0) if scope else ""), bool(words) and all(w in {str(e) for e in enum} for w in words)
+
+
 def compact_schema(node: Any, limit: int = 90) -> Any:
     """Shrink an inlined JSON schema for small context windows.
 
-    Drops titles, bounds and discriminator mappings, folds Optional (anyOf [X, null]) into X, removes
-    null/empty/false defaults (an option left out is off), descriptions the system prompt already gives
-    (_SAID_IN_PROMPT: beats, zero-based track/slot/return indices), and cuts descriptions to their first sentence.
+    Drops titles, bounds, discriminator mappings and defaults (an option left out gets its default, the
+    model need not know which), folds Optional (anyOf [X, null]) into X, removes descriptions the system
+    prompt already gives (_SAID_IN_PROMPT: beats, zero-based track/slot/return indices) or that only list
+    the enum, and cuts descriptions to their first sentence.
     """
     if isinstance(node, list):
         return [compact_schema(v, limit) for v in node]
@@ -231,11 +243,16 @@ def compact_schema(node: Any, limit: int = 90) -> Any:
                 node = {"type": [v["type"] for v in bare], **{k: v for k, v in node.items() if k != "anyOf"}}
     out: dict[str, Any] = {}
     for key, value in node.items():
-        if key in _DROP_KEYS or (key == "default" and (value is False or value in (None, [], {}))):
+        if key in _DROP_KEYS or key == "default":
             continue
         if key == "description" and value in _SAID_IN_PROMPT:
             continue
         if key == "description" and isinstance(value, str):
+            scope, listed = _enum_listing(value, node.get("enum"))
+            if listed:
+                if scope:
+                    out[key] = scope
+                continue
             out[key] = _first_sentence(value, limit)
         elif key == "properties" and isinstance(value, dict):
             out[key] = {name: compact_schema(v, limit) for name, v in value.items()}  # property names are data, not schema keys

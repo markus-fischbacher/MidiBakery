@@ -8,10 +8,10 @@ By Klirrwerk. AI composition and session control for Ableton Live 12 Suite.
 |---|---|
 | Musicians (German): install, set up, use | [docs/user/BENUTZERHANDBUCH.md](docs/user/BENUTZERHANDBUCH.md) |
 | Musicians (English) | [docs/user/USER_GUIDE.md](docs/user/USER_GUIDE.md) |
-| MCP server for Claude Desktop / Claude Code: setup, all 40 tools, plain-language version (German: [MCP-SERVER.md](docs/user/MCP-SERVER.md)) | [docs/user/MCP_SERVER.md](docs/user/MCP_SERVER.md) |
-| Concept, roadmap and what is done (German) | [docs/KONZEPT.md](docs/KONZEPT.md) |
-| How the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together (German) | [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md) |
-| Genre recipes behind `plan_song` (German) | [docs/GENRES.md](docs/GENRES.md) |
+| MCP server for Claude Desktop / Claude Code: setup, all 40 tools, plain-language version (German: [MCP_SERVER.de.md](docs/user/MCP_SERVER.de.md)) | [docs/user/MCP_SERVER.md](docs/user/MCP_SERVER.md) |
+| Concept, roadmap and what is done | [docs/CONCEPT.md](docs/CONCEPT.md) |
+| How the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Genre recipes behind `plan_song` | [docs/GENRES.md](docs/GENRES.md) |
 | Named patterns for `compose` (bass, lead, techno drums, emotion progressions) | [docs/PATTERNS.md](docs/PATTERNS.md) |
 | Update and license service | [services/updates/README.md](services/updates/README.md) |
 

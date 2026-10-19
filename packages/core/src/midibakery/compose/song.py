@@ -51,6 +51,7 @@ from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
 from midibakery.compose.rhythm import Meter
+from midibakery.compose.rollback import batch_steps, completed, restore_locators, undo, undo_batch
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
 from midibakery.compose.references import find_reference, reference_scale
@@ -926,29 +927,6 @@ def _breathe(notes: list[Note], role: str, every: int, first_bar: int, bpb: floa
     return [n for n in notes if not paused(n)]
 
 
-async def _undo(call: Call, error: BridgeError, steps: int) -> None:
-    """Take back what a failed apply already did, so a song lands whole or not at all."""
-    error.details["rolled_back"] = True
-    if not steps:
-        return
-    try:
-        for _ in range(steps):
-            await call("history.step", {"action": "undo"})
-    except BridgeError as undo_error:
-        error.message += f" (undoing the song's {steps} step(s) failed: {undo_error.message}; check Live's undo history)"
-        return
-    error.message += f"; the song's {steps} step(s) that had already run were undone, Live is unchanged"
-
-
-def _batch_steps(ops: list[dict[str, Any]], done: int) -> int:
-    """Undo steps the first `done` ops of a batch left: one, but Live 12.4 closes the step when it
-    creates a return track, so what follows the last new return is a second one (measured)."""
-    if not done:
-        return 0
-    last_return = max((i for i, o in enumerate(ops[:done]) if o["op"] == "return.create"), default=None)
-    return 2 if last_return is not None and last_return < done - 1 else 1
-
-
 async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     """New tracks, returns and mix (one undo step), the kits and presets (one step each), then
     tempo, all clips (one undo step) and locators."""
@@ -985,9 +963,9 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
             try:
                 await call("batch", {"ops": ops, "label": f"MidiBakery song {plan.id}: tracks"})
             except BridgeError as exc:
-                await _undo(call, exc, _batch_steps(ops, len(exc.details.get("completed") or [])))
+                await undo_batch(call, exc, [op["op"] for op in ops])
                 raise
-            undo_steps += _batch_steps(ops, len(ops))
+            undo_steps += batch_steps([op["op"] for op in ops], len(ops))
         for t in sorted(new, key=lambda t: t.index):
             if t.sound is None:
                 continue
@@ -1021,11 +999,16 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         result = await call("arrangement.edit", {"actions": actions})
         undo_steps += 1
     except BridgeError as exc:
-        if not exc.details.get("rolled_back"):
-            await _undo(call, exc, undo_steps + (1 if exc.details.get("completed") else 0))
+        if "rolled_back" not in exc.details:
+            await undo(call, exc, undo_steps + (1 if completed(exc) else 0))
         raise
+    placed: int | str = len(plan.locators) if not song["is_playing"] else "skipped: stop the transport and plan again for locators"
     if not song["is_playing"]:
-        await call("arrangement.locators", {"actions": plan.locators})
+        try:
+            await call("arrangement.locators", {"actions": plan.locators})
+        except BridgeError as exc:  # the song is whole; its locators all or none (each is an undo step of its own)
+            await restore_locators(call, exc, arrangement["locators"])
+            placed = f"not set: {exc.message}"
         if (await call("song.get", {}))["current_song_time"] != song["current_song_time"]:
             await call("song.position", {"beat": song["current_song_time"]})
     return {
@@ -1036,7 +1019,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         "automation": {r: f"track index {t.index}, device index {t.filter_device}" for r, t in plan.roles.items() if t.filter is not None},
         **({"sidechain": ducks} if (ducks := {r: f"track index {t.index}, device index {t.duck_device}" for r, t in plan.roles.items() if t.duck is not None}) else {}),
         **plan.mix_info(),
-        "locators": len(plan.locators) if not song["is_playing"] else "skipped: stop the transport and plan again for locators",
+        "locators": placed,
         "undo": f"{undo_steps} undo step(s) for tracks/mix/sounds/tempo/clips; each locator is its own step",
         **({"warnings": warnings} if warnings else {}),
     }

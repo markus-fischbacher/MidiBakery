@@ -379,7 +379,7 @@ Du sagst das Genre, MidiBakery plant den Song, zeigt dir eine **Vorschau** (Zeit
 **Was MidiBakery dabei macht:**
 
 - **Spuren:** Es sucht vorhandene Spuren für Drums (Spur mit Drum Rack), Bass, Akkorde und Lead (an Namen wie „Bass/Sub/808“, „Chords/Pad/Keys“, „Lead/Melody/Synth“). Fehlende Spuren legt es an, mit passendem Kit und Presets aus der Core Library, benannt nach ihrer Rolle (Drums, Bass, Chords, Lead, Riser, Impact); die stumme Sidechain-Spur kommt ganz nach vorne. **Benenne deine Spuren also vorher passend**, wenn du eigene Klänge behalten willst. Mit „nimm Spur 3 als Bass“ weist du eine Rolle zu.
-- **Noten:** Aufbau und Muster folgen Rezepten pro Genre (siehe [GENRES.md](../GENRES.md)): Drums mit Ghost-Notes und Fills, wechselnder Bass, zweite Harmonie im Break, eine Hook, die sich entwickelt. Ein Lead, der eine 4-Takt-Phrase durchspielen würde, pausiert in ihrem 4. Takt: Platz für die Antwort einer Gegenmelodie. Dynamik steigt und fällt mit der Energie des Abschnitts.
+- **Noten:** Aufbau und Muster folgen Rezepten pro Genre (siehe [GENRES.md](../GENRES.md), Englisch): Drums mit Ghost-Notes und Fills, wechselnder Bass, zweite Harmonie im Break, eine Hook, die sich entwickelt. Ein Lead, der eine 4-Takt-Phrase durchspielen würde, pausiert in ihrem 4. Takt: Platz für die Antwort einer Gegenmelodie. Dynamik steigt und fällt mit der Energie des Abschnitts.
 - **Marker:** Es setzt **Locators** (Marker) an die Abschnitte.
 - **Mix (an):** je ein Hall- und ein Delay-Return (vorhandene werden verwendet), Pegel und Sends für neue Spuren.
 - **Automation (an):** Filterfahrten, Delay-Würfe.
@@ -485,7 +485,7 @@ MidiBakery kann Live-Parameter lesen und setzen. Es **hört nichts**. Zeitliche 
   - Der Limiter fängt Spitzen bei -1 dB True Peak ab. Er macht den Song **nicht lauter**.
   - Wie bei Songs siehst du erst eine Vorschau und schreibst mit **Apply**. Zweimal **Undo** entfernt die Kette wieder.
   - Hat dein Master schon einen Limiter, EQ Eight oder Glue Compressor, lässt MidiBakery ihn in Ruhe.
-  - Woher die Werte stammen, steht in [GENRES.md](../GENRES.md#master-kette-plan_master).
+  - Woher die Werte stammen, steht in [GENRES.md](../GENRES.md#master-chain-plan_master) (Englisch).
 - **Lautheit messen:** Zieh das Gerät **MidiBakery Loudness Meter** (Browser: Audio Effects › Max Audio Effect › MidiBakery) als **letztes Gerät** auf die Master-Spur, nach dem Limiter. Während Live spielt, zeigt es:
   - **Momentary** (die letzten 0,4 s), **Short-term** (die letzten 3 s) und **Integrated** (alles seit dem Start oder Reset) in LUFS, nach ITU-R BS.1770 / EBU R 128.
   - **Peak**: die höchste Sample-Spitze seit dem Reset in dB. Eine echte True-Peak-Spitze kann bis etwa 0,5 dB höher liegen.
@@ -496,7 +496,7 @@ MidiBakery kann Live-Parameter lesen und setzen. Es **hört nichts**. Zeitliche 
   1. Reset am Meter, den Song (oder mindestens 30 s vom lautesten Teil) abspielen.
   2. MidiBakery schlägt vor, um wie viel dB es den **Input Gain** des Limiters ändert (höchstens 6 dB pro Runde), und schreibt es mit **Apply**. Ein Undo nimmt es zurück.
   3. Das Meter fängt neu an: noch einmal abspielen, dann die nächste Runde. Liegt der Song innerhalb von 0,5 LU am Ziel, sagt MidiBakery das.
-  - Ziele: House -8, Melodic Techno -8,8, Peak-Time Techno -7,7, Drum & Bass -6,3, Trap -8,4, Streaming -14 LUFS. Es sind Mediane veröffentlichter Tracks ([GENRES.md](../GENRES.md#lautheitsziele-plan_loudness)), keine Pflicht.
+  - Ziele: House -8, Melodic Techno -8,8, Peak-Time Techno -7,7, Drum & Bass -6,3, Trap -8,4, Streaming -14 LUFS. Es sind Mediane veröffentlichter Tracks ([GENRES.md](../GENRES.md#loudness-targets-plan_loudness), Englisch), keine Pflicht.
   - Lauter heißt hier: mehr Limiting. Hör auf Pumpen und flache Drums; mehr als +12 dB gibt MidiBakery dem Limiter nicht.
 
 Bei Ohren-Fragen („klingt matschig“) bekommst du Hinweise, aber keine Messung. Für genaue Analysen von Audio benutze Lives eigene Analyzer.
@@ -656,4 +656,4 @@ Kapitel 3, „Deinstallieren“.
 
 ## 17. MidiBakery aus Claude Desktop oder Claude Code benutzen
 
-Der **MCP-Server** bringt dieselben 40 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP-SERVER.md](MCP-SERVER.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).
+Der **MCP-Server** bringt dieselben 40 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP_SERVER.de.md](MCP_SERVER.de.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).

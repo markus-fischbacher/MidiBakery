@@ -378,7 +378,7 @@ You name the genre, MidiBakery plans the song, shows a **preview** (timeline of 
 **What MidiBakery does:**
 
 - **Tracks:** it looks for existing tracks for drums (a track with a Drum Rack), bass, chords and lead (by names like "Bass/Sub/808", "Chords/Pad/Keys", "Lead/Melody/Synth"). Missing tracks are created with a fitting kit and presets from the Core Library, named by their role (Drums, Bass, Chords, Lead, Riser, Impact); the silent Sidechain track goes first in the Set. **Name your tracks accordingly beforehand** if you want to keep your own sounds. "Use track 3 as the bass" assigns a role.
-- **Notes:** structure and patterns follow recipes per genre (see [GENRES.md](../GENRES.md), German): drums with ghost notes and fills, a changing bass, a second harmony in the break, a hook that develops. A lead that would play through a 4-bar phrase rests in its 4th bar, so a counter melody has room to answer. Dynamics rise and fall with each section's energy.
+- **Notes:** structure and patterns follow recipes per genre (see [GENRES.md](../GENRES.md)): drums with ghost notes and fills, a changing bass, a second harmony in the break, a hook that develops. A lead that would play through a 4-bar phrase rests in its 4th bar, so a counter melody has room to answer. Dynamics rise and fall with each section's energy.
 - **Markers:** it sets **locators** at the sections.
 - **Mix (on):** a reverb and a delay return (existing ones are reused), levels and sends for new tracks.
 - **Automation (on):** filter sweeps, delay throws.
@@ -484,7 +484,7 @@ MidiBakery can read and set Live parameters. It **hears nothing**. You make the 
   - The Limiter catches peaks at -1 dB true peak. It does **not** make the song louder.
   - As with songs you get a preview first and write with **Apply**. Pressing **Undo** twice removes the chain.
   - If your Master already has a Limiter, EQ Eight or Glue Compressor, MidiBakery leaves it alone.
-  - Where the settings come from: [GENRES.md](../GENRES.md#master-kette-plan_master) (German).
+  - Where the settings come from: [GENRES.md](../GENRES.md#master-chain-plan_master).
 - **Measuring loudness:** drag the **MidiBakery Loudness Meter** device (browser: Audio Effects › Max Audio Effect › MidiBakery) onto the Master track as its **last device**, after the Limiter. While Live plays it shows:
   - **Momentary** (the last 0.4 s), **Short-term** (the last 3 s) and **Integrated** (everything since the start or a reset) in LUFS, after ITU-R BS.1770 / EBU R 128.
   - **Peak**: the highest sample peak since the reset in dB. A true peak can be up to about 0.5 dB higher.
@@ -495,7 +495,7 @@ MidiBakery can read and set Live parameters. It **hears nothing**. You make the 
   1. Reset the meter, play the song (or at least 30 s of the loudest part).
   2. MidiBakery proposes how many dB to change the Limiter's **Input Gain** (at most 6 dB per round) and writes it with **Apply**. One undo takes it back.
   3. The meter starts again: play again, then the next round. Within 0.5 LU of the target, MidiBakery says so.
-  - Targets: house -8, melodic techno -8.8, peak-time techno -7.7, drum & bass -6.3, trap -8.4, streaming -14 LUFS. They are medians of released tracks ([GENRES.md](../GENRES.md#lautheitsziele-plan_loudness), German), not rules.
+  - Targets: house -8, melodic techno -8.8, peak-time techno -7.7, drum & bass -6.3, trap -8.4, streaming -14 LUFS. They are medians of released tracks ([GENRES.md](../GENRES.md#loudness-targets-plan_loudness)), not rules.
   - Louder here means more limiting. Listen for pumping and flat drums; MidiBakery never gives the Limiter more than +12 dB.
 
 For ear questions ("sounds muddy") you get hints but no measurement. For accurate audio analysis use Live's own analyzers.
@@ -633,4 +633,4 @@ Chapter 3, "Uninstalling".
 
 ## 16. Using MidiBakery from Claude Desktop or Claude Code
 
-The MCP server brings the same 40 tools to Claude Desktop, Claude Code and other MCP apps. You then chat in their window instead of the Chat device. The setup, a plain-language explanation and the reference of every tool are in **[MCP_SERVER.md](MCP_SERVER.md)** (German: [MCP-SERVER.md](MCP-SERVER.md)).
+The MCP server brings the same 40 tools to Claude Desktop, Claude Code and other MCP apps. You then chat in their window instead of the Chat device. The setup, a plain-language explanation and the reference of every tool are in **[MCP_SERVER.md](MCP_SERVER.md)** (German: [MCP_SERVER.de.md](MCP_SERVER.de.md)).

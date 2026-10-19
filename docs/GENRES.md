@@ -1,567 +1,567 @@
-# Genre-Rezepte für die Song-Engine
+# Genre recipes for the song engine
 
-Was House, Melodic Techno, Peak-Time Techno, Drum & Bass und EDM-Trap typischerweise ausmacht, zusammengetragen aus Fachartikeln und Tutorials (Stand Oktober 2026). Die Vorlagen in `packages/core/src/midibakery/compose/structures.py` und die Generatoren sollen diesen Rezepten folgen.
+What typically defines House, Melodic Techno, Peak-Time Techno, Drum & Bass and EDM Trap, compiled from trade articles and tutorials (as of October 2026). The templates in `packages/core/src/midibakery/compose/structures.py` and the generators should follow these recipes.
 
-**Wie belastbar eine Angabe ist:**
-- **●** mehrere Quellen sagen dasselbe
-- **◐** nur eine Quelle oder Quellen widersprechen sich (die Varianten stehen dabei)
-- **○** keine Quelle nennt es ausdrücklich: übliche Konvention, nach Gehör zu prüfen
+**How reliable a statement is:**
+- **●** several sources say the same thing
+- **◐** only one source, or sources disagree (the variants are listed)
+- **○** no source states it explicitly: common convention, to be checked by ear
 
-**Schreibweisen:**
-- Schritte zählen in einem Takt mit 16 Sechzehnteln, Schritt 1 = Zählzeit 1. Schritt 5 ist Zählzeit 2, Schritt 9 Zählzeit 3, Schritt 13 Zählzeit 4. Die Offbeats sind 3, 7, 11 und 15.
-- MIDI-Noten gelten wie in Live: 60 = C3. Quellen benennen Oktaven unterschiedlich, deshalb sind Lagen hier über die Frequenz umgerechnet.
-- Swing in Prozent im MPC-Sinn: 50 % = gerade. In Lives Groove-Pool entspricht das ungefähr „Amount“ ab 0.
+**Notation:**
+- Steps count within a bar of 16 sixteenths, step 1 = beat 1. Step 5 is beat 2, step 9 beat 3, step 13 beat 4. The offbeats are 3, 7, 11 and 15.
+- MIDI notes are as in Live: 60 = C3. Sources name octaves differently, so registers here are converted via frequency.
+- Swing in percent in the MPC sense: 50 % = straight. In Live's Groove Pool this roughly corresponds to "Amount" from 0.
 
-Rezepte sind Konventionen, keine Gesetze. Ein Track nach Rezept klingt genretypisch, gut klingt er erst nach dem Hören. Für Einsteiger hilft ein Referenztrack: Das Reference-Analyzer-Gerät zerlegt einen Song, der gefällt, in Abschnitte, und `plan_song` mit `reference` baut den neuen Song nach dessen Aufbau (siehe unten).
+Recipes are conventions, not laws. A track made by recipe sounds typical of the genre; whether it sounds good only shows after listening. For beginners a reference track helps: the Reference Analyzer device splits a song you like into sections, and `plan_song` with `reference` builds the new song after its structure (see below).
 
 ---
 
-## Gemeinsame Grundregeln (alle Genres)
+## Common ground rules (all genres)
 
-- **●** Abschnitte sind Vielfache von 8 Takten, meist 16 oder 32.
-- **●** Etwas Kleines ändert sich alle 4 bis 8 Takte (Hat, Clap, Fill). Etwas Großes ändert sich alle 16 Takte (Bass, Chords, Melodie).
-- **●** Fills und Drop-outs liegen im letzten Takt einer Phrase, kurz vor dem Wechsel.
-- **●** Ein DJ-freundliches Intro und Outro besteht aus Drums mit wenigen Elementen und ohne oder mit wenig Sub-Bass. Das Outro baut ab, statt das Intro zu kopieren.
-- **●** Vor dem Drop verschwindet die Kick, und oft gibt es eine kurze Stille.
-- **●** Der zweite Drop ist nicht identisch mit dem ersten: andere Variation, mehr Energie.
-- **●** Keine flachen Velocities. Ghost-Notes sind deutlich leiser, etwa 30 bis 50 % oder 6 bis 12 dB.
-- **●** Der Bass klebt nicht auf der Kick: Er spielt in den Lücken oder unter der Kick mit Sidechain, aber nie dagegen.
-- **●** Moll überwiegt. Akkordfolgen haben 2 bis 4 Akkorde und laufen als Loop über 2 bis 8 Takte.
-- **●** Eine Hook, nicht viele: ein kurzes Motiv über 2 bis 4 Takte, das wiederkehrt und variiert. Die Melodie liegt über den Chords, nicht in derselben Oktave.
-- **●** Typische Anfängerfehler sind ein Loop ohne Entwicklung, zu viele Elemente gleichzeitig, alles starr auf dem Raster, alle Änderungen immer auf Takt 1 eines Abschnitts, ein überladenes Intro und eine Kick, die mit dem Bass kollidiert.
+- **●** Sections are multiples of 8 bars, usually 16 or 32.
+- **●** Something small changes every 4 to 8 bars (hat, clap, fill). Something big changes every 16 bars (bass, chords, melody).
+- **●** Fills and drop-outs sit in the last bar of a phrase, just before the change.
+- **●** A DJ-friendly intro and outro consists of drums with few elements and no or little sub bass. The outro breaks down instead of copying the intro.
+- **●** Before the drop the kick disappears, and there is often a short silence.
+- **●** The second drop is not identical to the first: different variation, more energy.
+- **●** No flat velocities. Ghost notes are clearly quieter, about 30 to 50 % or 6 to 12 dB.
+- **●** The bass does not stick to the kick: it plays in the gaps or under the kick with sidechain, but never against it.
+- **●** Minor dominates. Chord progressions have 2 to 4 chords and loop over 2 to 8 bars.
+- **●** One hook, not many: a short motif over 2 to 4 bars that returns and varies. The melody sits above the chords, not in the same octave.
+- **●** Typical beginner mistakes are a loop without development, too many elements at once, everything rigidly on the grid, all changes always on bar 1 of a section, an overloaded intro and a kick that collides with the bass.
 
 ---
 
 ## House
 
-Familie aus Mainstream-, Deep- und Tech-House. Deep House ist langsamer und jazziger, mit Septim- und Nonakkorden. Tech House ist trockener und perkussiver, die Hook ist oft ein gestimmtes Percussion-Riff.
+A family of mainstream, deep and tech house. Deep house is slower and jazzier, with seventh and ninth chords. Tech house is drier and more percussive; the hook is often a tuned percussion riff.
 
-**Tempo und Swing**
-- **●** 120–128 BPM. Deep House 120–124, Mainstream 124–126, Tech House 125–128.
-- **◐** Swing auf Sechzehnteln, je nach Stil 55–65 %, Tech House bis 75 %. Attack schwingt alle Spuren, nicht nur den Shaker. Vorgabe: **etwa 58–62 %**.
+**Tempo and swing**
+- **●** 120–128 BPM. Deep house 120–124, mainstream 124–126, tech house 125–128.
+- **◐** Swing on sixteenths, 55–65 % depending on style, tech house up to 75 %. Attack swings all tracks, not just the shaker. Default: **about 58–62 %**.
 
-**Struktur** (Phrasen 8/16/32)
-- **●** Intro 16–32 Takte, zuerst Drums. Elektronauts empfiehlt sparsamer 8–16 Takte mit höchstens 2–3 Elementen.
-- **◐** Ein übliches Schema: Intro 16–32, Build 8–16, Drop 32, Breakdown 16–32, Drop 2 32, Outro 16–32.
-- **◐** Länge: Eine Auswertung von 63 Platten ergab im Median 4:31 für Extended und 3:31 für Radio-Edits. Clubmixe sind oft 6–7 Minuten lang (○).
+**Structure** (phrases 8/16/32)
+- **●** Intro 16–32 bars, drums first. Elektronauts recommends a sparser 8–16 bars with at most 2–3 elements.
+- **◐** A common scheme: intro 16–32, build 8–16, drop 32, breakdown 16–32, drop 2 32, outro 16–32.
+- **◐** Length: an analysis of 63 records gave a median of 4:31 for extended mixes and 3:31 for radio edits. Club mixes are often 6–7 minutes long (○).
 
-**Aufbau**
-- **◐** Native Instruments: Beat und Akkorde ab Takt 1, eine Orgel ab Takt 9, die erste Lead-Linie ab Takt 17. Alle 16 Takte ein Riser, beim Bass-Einstieg ein FX-Hit.
-- **●** Riser über 8 oder 16 Takte, die genau auf einer Phrasengrenze auflösen. Dazu ein Filter-Sweep, ein Snare-Roll und im Breakdown ohne Kick.
-- **◐** Fills (909-Toms und -Snare) alle 8 Takte, jedes Mal etwas anders. Das stärkste Signal wird für den größten Wechsel aufgehoben.
+**Arrangement**
+- **◐** Native Instruments: beat and chords from bar 1, an organ from bar 9, the first lead line from bar 17. A riser every 16 bars, an FX hit when the bass enters.
+- **●** Risers over 8 or 16 bars that resolve exactly on a phrase boundary. Add a filter sweep, a snare roll and, in the breakdown, no kick.
+- **◐** Fills (909 toms and snare) every 8 bars, slightly different each time. The strongest signal is saved for the biggest change.
 
 **Drums**
-- **●** Kick auf 1, 5, 9, 13.
-- **●** Clap oder Snare auf 5 und 13, oft zwei Claps übereinander. Bei Attack ein paar Millisekunden zu früh.
-- **●** Open Hat auf den Offbeats 3, 7, 11, 15, leiser als die Kick (NI: Velocity 83).
-- **◐** Closed Hat: bei Loopmasters auf dem 1., 2. und 4. Sechzehntel jeder Zählzeit, das 3. bleibt für die Open Hat frei. Bei Attack (Soulful) dagegen auf den Zählzeiten.
-- **◐** Shaker auf allen 16 Schritten mit wechselnder Velocity, leise. Er trägt den Swing.
-- **◐** Im Tech House zusätzlich ein Ride auf jeder Zählzeit.
-- **◐** Ghost-Notes: ein etwa 6 dB leiserer Clap auf dem ersten Sechzehntel nach dem letzten Clap eines 2-Takt-Loops. Im Tech House Ghost-Snares kurz vor den Kicks.
-- **◐** Variation: Crash am Anfang jeder 2-Takt-Sequenz, Open Hat erst in der zweiten Drop-Hälfte, Fill alle 8 Takte.
+- **●** Kick on 1, 5, 9, 13.
+- **●** Clap or snare on 5 and 13, often two claps layered. At Attack a few milliseconds early.
+- **●** Open hat on the offbeats 3, 7, 11, 15, quieter than the kick (NI: velocity 83).
+- **◐** Closed hat: at Loopmasters on the 1st, 2nd and 4th sixteenth of each beat; the 3rd stays free for the open hat. At Attack (Soulful), on the other hand, on the beats.
+- **◐** Shaker on all 16 steps with varying velocity, quiet. It carries the swing.
+- **◐** In tech house additionally a ride on every beat.
+- **◐** Ghost notes: a clap about 6 dB quieter on the first sixteenth after the last clap of a 2-bar loop. In tech house, ghost snares just before the kicks.
+- **◐** Variation: crash at the start of each 2-bar sequence, open hat only in the second half of the drop, fill every 8 bars.
 
 **Bass**
-- **●** Zwischen den Kicks oder auf den Offbeats (Schritte 3, 7, 11, 15), mit Sidechain zur Kick.
-- **◐** Notenlänge: kurz auf der Zählzeit (etwa 60 % eines Sechzehntels), auf dem Offbeat lang (90–100 %). Monofon, keine überlappenden Noten.
-- **◐** Lage: Grundton etwa 35–70 Hz, also **MIDI 25–37**. Dazu kann ein Layer eine Oktave höher kommen.
-- **●** Folgt den Akkord-Grundtönen und geht manchmal zur Terz.
+- **●** Between the kicks or on the offbeats (steps 3, 7, 11, 15), with sidechain to the kick.
+- **◐** Note length: short on the beat (about 60 % of a sixteenth), long on the offbeat (90–100 %). Monophonic, no overlapping notes.
+- **◐** Register: root at about 35–70 Hz, i.e. **MIDI 25–37**. A layer one octave higher can be added.
+- **●** Follows the chord roots and sometimes moves to the third.
 
-**Harmonik**
-- **●** Meist Moll. Deep House nutzt m7-, maj7- und m9-Akkorde.
-- **◐** Folgen aus den Quellen: zwei Akkorde (i–bVII), i–v–iv, i–bIII–v. 1–2 Akkorde pro Takt in Loops über 2 oder 4 Takte.
-- **◐** Stabs: kurze Akkord-Hits (m7/m9) mit kurzer Hüllkurve, etwa ein Sechzehntel bis ein Achtel lang (○). Pads liegen im Hintergrund.
-- **◐** Enge Lage, damit der Loop fließt. Etwa C3–C5, also MIDI 60–84 (○). Pads mit Tiefpass um 400 Hz.
+**Harmony**
+- **●** Mostly minor. Deep house uses m7, maj7 and m9 chords.
+- **◐** Progressions from the sources: two chords (i–bVII), i–v–iv, i–bIII–v. 1–2 chords per bar in loops over 2 or 4 bars.
+- **◐** Stabs: short chord hits (m7/m9) with a short envelope, about a sixteenth to an eighth long (○). Pads sit in the background.
+- **◐** Close voicing so the loop flows. About C3–C5, i.e. MIDI 60–84 (○). Pads with a low-pass around 400 Hz.
 
-**Lead und Hook** (dünn belegt)
-- **◐** Sparsam. Call and Response: der Ruf kurz, die Antwort länger und auf anderer Tonhöhe. Eine Variation folgt 4 Takte später.
-- **◐** Im Tech House ist die Hook oft ein gestimmtes Percussion-Riff (Clave, Cowbell).
-- **○** Motive über 2–4 Takte, 3–8 Noten pro Takt, überwiegend Akkordtöne, Pausen auf der Eins, etwa eine Oktave über den Chords.
+**Lead and hook** (thinly sourced)
+- **◐** Sparse. Call and response: the call short, the response longer and at a different pitch. A variation follows 4 bars later.
+- **◐** In tech house the hook is often a tuned percussion riff (clave, cowbell).
+- **○** Motifs over 2–4 bars, 3–8 notes per bar, mostly chord tones, rests on the one, about an octave above the chords.
 
-**Sounds** (native Live-Devices)
-- Drum Rack mit 909-, 808- oder CR-78-Kit.
-- Bass mit Simpler (MS2-Filter, Drive), Drift oder Analog.
-- Chord-Stabs mit Orgel- oder E-Piano-Sound: Operator, Electric, Wavetable oder Simpler mit Akkord-Sample.
-- Effekte: Reverb, Echo, Auto Filter.
+**Sounds** (native Live devices)
+- Drum Rack with a 909, 808 or CR-78 kit.
+- Bass with Simpler (MS2 filter, drive), Drift or Analog.
+- Chord stabs with an organ or electric piano sound: Operator, Electric, Wavetable or Simpler with a chord sample.
+- Effects: Reverb, Echo, Auto Filter.
 
-**Filterfahrten** (Auto Filter, Clip-Automation)
+**Filter sweeps** (Auto Filter, clip automation)
 
-| Abschnitt | Drums (High-pass) | Chords (Low-pass) |
+| Section | Drums (high-pass) | Chords (low-pass) |
 |---|---|---|
-| Intro | offen | ab Takt 9: 150 Hz → 20 kHz, öffnet spät |
-| Build, Build 2 | 20 → 400 Hz bzw. 500 Hz | offen |
-| Break | 150 Hz, dünn | 200 Hz → 20 kHz, öffnet spät |
-| Outro | offen (Kick bleibt für den DJ) | 20 kHz → 150 Hz in 8 Takten |
+| Intro | open | from bar 9: 150 Hz → 20 kHz, opens late |
+| Build, Build 2 | 20 → 400 Hz or 500 Hz | open |
+| Break | 150 Hz, thin | 200 Hz → 20 kHz, opens late |
+| Outro | open (kick stays for the DJ) | 20 kHz → 150 Hz over 8 bars |
 
-Die Drops sind offen. Im Break steigt die Resonanz der Chords mit dem Cutoff von 5 auf 40 %. Delay-Throws: Im Drop wirft der Lead auf der letzten Zählzeit jedes 8. Takts ins Delay.
+The drops are open. In the break the chords' resonance rises with the cutoff from 5 to 40 %. Delay throws: in the drop the lead throws into the delay on the last beat of every 8th bar.
 
-**Quellen:** Ableton Learning Music (Tempo); EDMProd „Classic Deep House“; Native Instruments „Deep House Track“; Attack Magazine Beat Dissected (Soulful Deep House, Deep Tech House, Chugging Tech House, Dusted Deep House); Attack Passing Notes (Deep House Chords); Attack Deconstructed (Tiga „Bugatti“); Mixed In Key (Arrangement); Mixgraph (Intro, Riser); Loopmasters (Tech House Beat & Bass); The Producer School und Boombox (Tech-House-Basslines); Mode Audio (Deep House Chords); MusicRadar (m9-Akkorde, Hooks); EDMProd (Call and Response); Violet Recording (House); Foren: Gearspace, Elektronauts, KVR, DJTechTools (schwächer belegt).
+**Sources:** Ableton Learning Music (tempo); EDMProd "Classic Deep House"; Native Instruments "Deep House Track"; Attack Magazine Beat Dissected (Soulful Deep House, Deep Tech House, Chugging Tech House, Dusted Deep House); Attack Passing Notes (Deep House Chords); Attack Deconstructed (Tiga "Bugatti"); Mixed In Key (arrangement); Mixgraph (intro, riser); Loopmasters (Tech House Beat & Bass); The Producer School and Boombox (tech house basslines); Mode Audio (Deep House Chords); MusicRadar (m9 chords, hooks); EDMProd (call and response); Violet Recording (House); forums: Gearspace, Elektronauts, KVR, DJTechTools (weaker sourcing).
 
 ---
 
 ## Melodic Techno
 
-Melodic Techno (etwa Afterlife: Anyma, ARTBAT, Stephan Bodzin) ist langsamer und harmonischer als Peak-Time Techno. Es hat 2 bis 4 Akkorde, Pads und eine Arpeggio- oder Lead-Hook. Raw/Industrial Techno ist schneller und fast atonal, das gehört nicht hierher.
+Melodic techno (e.g. Afterlife: Anyma, ARTBAT, Stephan Bodzin) is slower and more harmonic than peak-time techno. It has 2 to 4 chords, pads and an arpeggio or lead hook. Raw/industrial techno is faster and almost atonal; that does not belong here.
 
-**Tempo und Swing**
-- **●** 120–125 BPM, typisch 122. Attacks Deep-Melodic-Beat liegt bei 120–123.
-- **◐** Swing leicht: Attack 10 %, Beatportal „subtil“ auf Hats und Shakern. Vorgabe: **0–15 % nur auf Hats und Percussion, nie auf der Kick**.
+**Tempo and swing**
+- **●** 120–125 BPM, typically 122. Attack's deep melodic beat sits at 120–123.
+- **◐** Light swing: Attack 10 %, Beatportal "subtle" on hats and shakers. Default: **0–15 % only on hats and percussion, never on the kick**.
 
-**Struktur**
-- **●** Abschnitte sind Vielfache von 8 Takten. DJ-Intro und -Outro mit 16–32 Takten Drums und Percussion.
-- **◐** Beatportal: Intro 16 (Kick, Hats, Atmosphäre), Build 16 (dazu Bass, Pads, FX), Drop 16, Breakdown 16 (nur Pads und FX), Höhepunkt 16.
+**Structure**
+- **●** Sections are multiples of 8 bars. DJ intro and outro with 16–32 bars of drums and percussion.
+- **◐** Beatportal: intro 16 (kick, hats, atmosphere), build 16 (adding bass, pads, FX), drop 16, breakdown 16 (only pads and FX), climax 16.
 
-**Aufbau**
+**Arrangement**
 - **◐** Native Instruments:
-  - Takt 1–8: Kick, Hats, Percussion, Pad.
-  - Ab Takt 9: Clap, Shaker, Rim, Noise und Bass.
-  - Ab Takt 17: Lead.
-  - Ab Takt 25: Shaker und Rim fallen weg.
-- **●** Den Pad-Filter über 16 Takte öffnen, den Bass-Tiefpass durch Breakdowns und Builds fahren. Riser und Impacts sparsam, ein Sub-Drop vor jedem Drop (Beatportal).
+  - Bars 1–8: kick, hats, percussion, pad.
+  - From bar 9: clap, shaker, rim, noise and bass.
+  - From bar 17: lead.
+  - From bar 25: shaker and rim drop out.
+- **●** Open the pad filter over 16 bars, sweep the bass low-pass through breakdowns and builds. Risers and impacts sparingly, a sub drop before each drop (Beatportal).
 
 **Drums**
-- **●** Kick auf 1, 5, 9, 13, Clap auf 5 und 13. Attack nutzt stattdessen einen synkopierten Clap am Ende jedes zweiten Takts, dazu alle 4 Takte einen Doppelschlag.
-- **●** Closed Hat auf den Offbeats plus eine leise Sechzehntel-Schicht. Shaker in Sechzehnteln, der Rim leicht vor den Upbeats.
+- **●** Kick on 1, 5, 9, 13, clap on 5 and 13. Attack instead uses a syncopated clap at the end of every second bar, plus a double hit every 4 bars.
+- **●** Closed hat on the offbeats plus a quiet sixteenth layer. Shaker in sixteenths, the rim slightly ahead of the upbeats.
 
 **Bass**
-- **●** Folgt den Akkord-Grundtönen. NI wechselt den Grundton alle 2 Takte.
-- **◐** Lage etwa MIDI 32–48 (NI: Ab1).
+- **●** Follows the chord roots. NI changes the root every 2 bars.
+- **◐** Register about MIDI 32–48 (NI: Ab1).
 
-**Harmonik**
-- **●** 1 Akkord pro 1–2 Takte in einem Loop über 4–8 Takte. Beispiele: Am–F–C–G, Am–Dm–Em–C.
-- **◐** Pads in 2–3 Schichten (hell, mittel, tief) mit langsamem Attack. Natürlich Moll, alternativ Phrygisch oder Dorisch.
+**Harmony**
+- **●** 1 chord per 1–2 bars in a loop over 4–8 bars. Examples: Am–F–C–G, Am–Dm–Em–C.
+- **◐** Pads in 2–3 layers (bright, mid, low) with slow attack. Natural minor, alternatively Phrygian or Dorian.
 
 **Lead**
-- **◐** Einfaches Arpeggio in der Tonart. NI behält einen Rhythmus über 1 Takt mit kurzen Stotter-Noten und versetzt ihn alle 2 Takte auf die Akkordtöne.
-- **○** Sechzehntel-Raster, 4–10 Noten pro Takt, MIDI 60–84.
+- **◐** Simple arpeggio in the key. NI keeps a 1-bar rhythm with short stutter notes and shifts it onto the chord tones every 2 bars.
+- **○** Sixteenth grid, 4–10 notes per bar, MIDI 60–84.
 
-**Sounds:** Pads und Leads mit Wavetable oder Drift, langem Reverb und Delay (1/8 oder 3/16). Bass mit Analog oder Drift.
+**Sounds:** Pads and leads with Wavetable or Drift, long reverb and delay (1/8 or 3/16). Bass with Analog or Drift.
 
-**Filterfahrten** (Auto Filter, Clip-Automation): Langsames Öffnen gehört zu den langen Builds des Genres.
+**Filter sweeps** (Auto Filter, clip automation): slow opening is part of the genre's long builds.
 
-| Abschnitt | Drums (High-pass) | Pads (Low-pass) | Arp (Low-pass) |
+| Section | Drums (high-pass) | Pads (low-pass) | Arp (low-pass) |
 |---|---|---|---|
-| Intro | offen | 150 Hz → 3 kHz | – |
-| Build | 12 Takte offen, dann 20 → 200 Hz | 3 → 20 kHz, öffnet spät | ab Takt 9: 500 Hz → 2 kHz |
-| Drop | offen | offen | 800 Hz → 6 kHz in 16 Takten, zurück auf 3 kHz |
-| Breakdown | – | 150 Hz → 8 kHz, öffnet spät | 600 Hz → 2,5 kHz |
-| Build 2 | 20 → 350 Hz | offen | 2,5 → 10 kHz |
-| Climax | offen | offen | 2 → 12 kHz |
-| Outro | offen | 12 kHz → 150 Hz in 8 Takten | – |
+| Intro | open | 150 Hz → 3 kHz | – |
+| Build | open for 12 bars, then 20 → 200 Hz | 3 → 20 kHz, opens late | from bar 9: 500 Hz → 2 kHz |
+| Drop | open | open | 800 Hz → 6 kHz over 16 bars, back to 3 kHz |
+| Breakdown | – | 150 Hz → 8 kHz, opens late | 600 Hz → 2.5 kHz |
+| Build 2 | 20 → 350 Hz | open | 2.5 → 10 kHz |
+| Climax | open | open | 2 → 12 kHz |
+| Outro | open | 12 kHz → 150 Hz over 8 bars | – |
 
-Im Build steigt die Resonanz der Pads von 10 auf 35 %. Delay-Throws: Im Breakdown wirft das Arp auf der letzten Zählzeit jedes 8. Takts ins Delay.
+In the build the pads' resonance rises from 10 to 35 %. Delay throws: in the breakdown the arp throws into the delay on the last beat of every 8th bar.
 
-**Quellen:** Beatportal (Melodic House & Techno: Anyma, Miss Monique, ARTBAT, Stephan Bodzin); Native Instruments (Melodic Techno); Attack Magazine (Deep Melodic/Progressive Techno).
+**Sources:** Beatportal (Melodic House & Techno: Anyma, Miss Monique, ARTBAT, Stephan Bodzin); Native Instruments (Melodic Techno); Attack Magazine (Deep Melodic/Progressive Techno).
 
 ---
 
 ## Peak-Time Techno
 
-Peak-Time oder Driving Techno ist die Beatport-Kategorie „Peak Time / Driving“, der Stil von Drumcode: Adam Beyer, Amelie Lens, Charlotte de Witte, Enrico Sangiuliano, Layton Giordani, Eli Brown. Er ist perkussiv, treibend und kommt mit fast keiner Harmonik aus. Spannung entsteht durch schrittweise Veränderung, nicht durch große Drops.
+Peak-time or driving techno is the Beatport category "Peak Time / Driving", the Drumcode style: Adam Beyer, Amelie Lens, Charlotte de Witte, Enrico Sangiuliano, Layton Giordani, Eli Brown. It is percussive, driving and gets by with almost no harmony. Tension comes from gradual change, not from big drops.
 
-**Tempo und Swing**
-- **●** 126–132 BPM, Beatportal empfiehlt 128 als Start. Der Drumcode-Stil liegt eher um 135, neuere Releases von Amelie Lens und Charlotte de Witte um 138. Ab 140 ist es Hard Techno, nicht mehr dieser Stil.
-- **●** Das Tempo steigt seit Jahren: lange um 127, dann die Welle mit 150 und mehr (Attack, MusicTech).
-- **●** Kaum Swing: 0–20 % nur auf Hats, Shakern und Percussion. Kick und Bass bleiben gerade.
-- Vorgabe: **128 BPM** wie die Referenz unten.
+**Tempo and swing**
+- **●** 126–132 BPM, Beatportal recommends 128 as a start. The Drumcode style sits more around 135, newer releases by Amelie Lens and Charlotte de Witte around 138. From 140 it is hard techno, no longer this style.
+- **●** The tempo has been rising for years: long around 127, then the wave at 150 and above (Attack, MusicTech).
+- **●** Hardly any swing: 0–20 % only on hats, shakers and percussion. Kick and bass stay straight.
+- Default: **128 BPM** like the reference below.
 
-**Struktur** (Abschnitte als Vielfache von 8 Takten, meist 16 oder 32)
-- **◐** EDMProd: DJ-Intro, Breakdown, Drop, Drop-Variation (32+), Breakdown, Drop, Outro, je 16–32 Takte.
-- **◐** Beatportal (bei 128 BPM umgerechnet): Intro ~32, Build ~32, Drop ~16, Breakdown ~32, Drop 2 ~32, Outro mit Abbau.
-- **◐** Vorschlag für die Engine, etwa 192–224 Takte (6–7 Minuten bei 130 BPM): Intro 32, Groove A 32, Breakdown 1 16, Peak 1 32, Groove B 16–32, Breakdown 2 16–32, Peak 2 32, Outro 32.
-- **●** Intro und Outro mit 16–32 Takten nur Drums. Im Outro geht zuerst der Bass, und es ist keine Kopie des Intros.
-- **●** Alle 8 Takte ändert sich etwas, alle 16 Takte markiert ein Fill oder Impact die Phrase. Pro 8 oder 16 Takte ändert sich nur eine Dimension (Filter, Decay oder Akzent).
-- **◐** Breakdowns mit 8, 16 oder 32 Takten (Attack: 24 = 3 × 8, oder 32). Die Kick ist raus. Percussion, Clap, Offbeat-Hat, ein hochpassgefilterter Bass, Textur und die Hook laufen weiter.
-- **●** Spannung ohne großen Drop: Der Peak läuft mindestens 32 Takte, darin optional Mini-Breaks von 1–2 Takten. Oft reicht es, Kick oder Bass kurz wegzunehmen, ein Riser ist nicht nötig.
+**Structure** (sections as multiples of 8 bars, usually 16 or 32)
+- **◐** EDMProd: DJ intro, breakdown, drop, drop variation (32+), breakdown, drop, outro, each 16–32 bars.
+- **◐** Beatportal (converted at 128 BPM): intro ~32, build ~32, drop ~16, breakdown ~32, drop 2 ~32, outro breaking down.
+- **◐** Proposal for the engine, about 192–224 bars (6–7 minutes at 130 BPM): intro 32, groove A 32, breakdown 1 16, peak 1 32, groove B 16–32, breakdown 2 16–32, peak 2 32, outro 32.
+- **●** Intro and outro with 16–32 bars of drums only. In the outro the bass goes first, and it is not a copy of the intro.
+- **●** Something changes every 8 bars; every 16 bars a fill or impact marks the phrase. Per 8 or 16 bars only one dimension changes (filter, decay or accent).
+- **◐** Breakdowns of 8, 16 or 32 bars (Attack: 24 = 3 × 8, or 32). The kick is out. Percussion, clap, offbeat hat, a high-pass-filtered bass, texture and the hook keep running.
+- **●** Tension without a big drop: the peak runs at least 32 bars, optionally with mini breaks of 1–2 bars inside. Often it is enough to briefly remove kick or bass; a riser is not needed.
 
-**Referenzen** (Analyse vom Oktober 2026; gemessen wurde pro Takt die Energie von Kick, Bass, Mitten und Höhen, Melodien lassen sich aus dem fertigen Mix so nicht ablesen):
-- Y-Traxx – Mystery Land (Spektre Remix): 128 BPM, A-Moll, 7:30, rund 232 Takte.
-- Katoff – The Signal: 126 BPM, Dis-Moll; nur eine 3-Minuten-Fassung ohne DJ-Intro und Outro.
-- T78 – Nezquik (Original Mix): 128 BPM, A-Moll, 7:00, rund 220 Takte.
+**References** (analysis from October 2026; measured per bar was the energy of kick, bass, mids and highs; melodies cannot be read from the finished mix this way):
+- Y-Traxx – Mystery Land (Spektre Remix): 128 BPM, A minor, 7:30, about 232 bars.
+- Katoff – The Signal: 126 BPM, D# minor; only a 3-minute version without DJ intro and outro.
+- T78 – Nezquik (Original Mix): 128 BPM, A minor, 7:00, about 220 bars.
 
-Was alle drei tun:
-- **●** Vor jedem großen Drop geht zuerst der Bass für etwa 8 Takte, dann wird die Kick über 3–5 Takte herausgefiltert. Die letzten 2–3 Takte laufen ohne Kick, und genau dann ist der Synth am lautesten.
-- **●** Im Outro geht zuerst der Bass, dann die Kick, am Ende bleiben die Hats.
+What all three do:
+- **●** Before each big drop the bass goes first for about 8 bars, then the kick is filtered out over 3–5 bars. The last 2–3 bars run without kick, and exactly then the synth is loudest.
+- **●** In the outro the bass goes first, then the kick; at the end the hats remain.
 
-Was zwei von drei tun:
-- **◐** Nach einem Breakdown kommen die Hats verzögert: 8–16 Takte Kick, Bass und Synth mit wenig Hats, dann voll (Katoff, T78).
-- **◐** Nach einem Peak 8 Takte nur Kick und Bass, ohne Hats und Synth (Spektre, T78).
-- **◐** Im Breakdown ohne Kick rumpelt der Bass leise weiter (Katoff, T78).
+What two of three do:
+- **◐** After a breakdown the hats come in late: 8–16 bars of kick, bass and synth with few hats, then full (Katoff, T78).
+- **◐** After a peak, 8 bars of only kick and bass, without hats and synth (Spektre, T78).
+- **◐** In the breakdown without kick the bass keeps rumbling quietly (Katoff, T78).
 
-Einzelne Tracks:
-- **◐** T78 nimmt am Ende vieler 8- und 16-Takt-Phrasen für einen Takt Kick und Bass weg.
-- **◐** Katoff setzt im Groove einen Synth-Akzent auf den Anfang jeder 8-Takt-Phrase und spielt im Breakdown den Synth im Wechsel von 2 Takten an, 2 Takten aus, mit 2 Takten Stille vor dem Drop.
+Individual tracks:
+- **◐** T78 removes kick and bass for one bar at the end of many 8- and 16-bar phrases.
+- **◐** Katoff puts a synth accent at the start of every 8-bar phrase in the groove and, in the breakdown, plays the synth alternating 2 bars on, 2 bars off, with 2 bars of silence before the drop.
 
-Die Vorlage kombiniert die drei, 224 Takte, also 7:00 bei 128 BPM:
+The template combines the three, 224 bars, i.e. 7:00 at 128 BPM:
 
-| Takte | Abschnitt | Was passiert | Vorbild |
+| Bars | Section | What happens | Model |
 |---|---|---|---|
-| 1–32 | Intro | Kick und Hats, nach 16 Takten der Bass | Spektre |
-| 33–48 | Groove | Synth-Akzent auf jedem Phrasenanfang, 1 Takt Pause von Kick und Bass am Ende jeder Phrase | Katoff, T78 |
-| 49–64 | Lift | 8 Takte ohne Bass, dann kommen die Stabs, nach 12 Takten geht die Kick | alle drei |
-| 65–96 | Peak | Alles läuft, 1 Takt Pause am Ende jeder 16 Takte | T78 |
-| 97–120 | Breakdown | Ohne Kick: Rumpel-Bass, die Hats gehen nach 8 Takten, Synth im Wechsel, 2 Takte Stille | Katoff, Spektre |
-| 121–152 | Peak 2 | 8 Takte mit wenig Hats, dann voll | Katoff, T78 |
-| 153–160 | Lift 2 | Ohne Bass, die Kick geht, die Acid-Line bleibt | alle drei |
-| 161–176 | Peak 3 | Alles läuft | T78 |
-| 177–184 | Stripped | Nur Kick und Bass | Spektre, T78 |
-| 185–224 | Outro | 24 Takte Groove ohne Hook, dann geht der Bass, dann die Kick, zuletzt bleiben die Hats | alle drei |
+| 1–32 | Intro | Kick and hats, the bass after 16 bars | Spektre |
+| 33–48 | Groove | Synth accent on every phrase start, 1-bar pause of kick and bass at the end of each phrase | Katoff, T78 |
+| 49–64 | Lift | 8 bars without bass, then the stabs come in, the kick goes after 12 bars | all three |
+| 65–96 | Peak | Everything plays, 1-bar pause at the end of every 16 bars | T78 |
+| 97–120 | Breakdown | Without kick: rumble bass, the hats go after 8 bars, synth alternating, 2 bars of silence | Katoff, Spektre |
+| 121–152 | Peak 2 | 8 bars with few hats, then full | Katoff, T78 |
+| 153–160 | Lift 2 | Without bass, the kick goes, the acid line stays | all three |
+| 161–176 | Peak 3 | Everything plays | T78 |
+| 177–184 | Stripped | Only kick and bass | Spektre, T78 |
+| 185–224 | Outro | 24 bars of groove without hook, then the bass goes, then the kick, finally the hats remain | all three |
 
-In den Referenzen wird die Kick oft herausgefiltert, statt hart zu enden. Die Engine macht das mit einem Auto Filter pro Spur, dessen Cutoff sie pro Clip automatisiert (`sweeps` in der Vorlage):
+In the references the kick is often filtered out instead of ending hard. The engine does this with one Auto Filter per track whose cutoff it automates per clip (`sweeps` in the template):
 
-| Abschnitt | Drums (High-pass) | Chords (Low-pass) | Lead (Low-pass) |
+| Section | Drums (high-pass) | Chords (low-pass) | Lead (low-pass) |
 |---|---|---|---|
-| Lift | 8 Takte offen, dann 20 → 300 Hz | 200 Hz → 20 kHz, öffnet spät | 600 Hz → 2,5 kHz |
-| Peak | offen: die Kick ist sofort voll da | offen | 400 Hz → 5 kHz in 24 Takten, zurück auf 1,5 kHz |
-| Breakdown | 250 Hz, dünn | 150 Hz → 9 kHz, öffnet spät | 800 Hz → 3 kHz |
-| Peak 2 | offen | offen | 800 Hz → 8 kHz in 16 Takten, zurück auf 2 kHz |
-| Lift 2 | 20 → 400 Hz | offen | 2 → 12 kHz |
-| Peak 3 | offen | offen | 6 → 3 kHz |
+| Lift | open for 8 bars, then 20 → 300 Hz | 200 Hz → 20 kHz, opens late | 600 Hz → 2.5 kHz |
+| Peak | open: the kick is fully there at once | open | 400 Hz → 5 kHz over 24 bars, back to 1.5 kHz |
+| Breakdown | 250 Hz, thin | 150 Hz → 9 kHz, opens late | 800 Hz → 3 kHz |
+| Peak 2 | open | open | 800 Hz → 8 kHz over 16 bars, back to 2 kHz |
+| Lift 2 | 20 → 400 Hz | open | 2 → 12 kHz |
+| Peak 3 | open | open | 6 → 3 kHz |
 
-Resonanz: Im Lift steigt sie bei den Chords von 0 auf 50 %. Die Acid-Line wird in den Peaks spitzer (Peak 20 → 60 % in 24 Takten, zurück auf 30 %; Peak 2 30 → 70 %, zurück auf 40 %; Lift 2 40 → 75 %). Delay-Throws: Die Chords werfen in Groove und Breakdown auf der letzten Zählzeit jedes 8. Takts ins Delay.
+Resonance: in the lift it rises on the chords from 0 to 50 %. The acid line gets sharper in the peaks (Peak 20 → 60 % over 24 bars, back to 30 %; Peak 2 30 → 70 %, back to 40 %; Lift 2 40 → 75 %). Delay throws: the chords throw into the delay in groove and breakdown on the last beat of every 8th bar.
 
-Jeder Clip einer gefilterten Spur bekommt eine Hüllkurve, auch wenn sie nur „offen“ ist. So bleibt kein Filter aus dem vorigen Abschnitt hängen.
+Every clip of a filtered track gets an envelope, even if it is only "open". That way no filter from the previous section stays stuck.
 
-Ein Abschnitt kann statt einer Geraden auch eine Kurve oder Welle fahren: `300>8000~exp` beginnt langsam und öffnet am Ende schnell (`~log` umgekehrt), `400>3000~sine/2` schwingt alle 2 Takte zwischen beiden Werten (auch `triangle`, `saw`, `square`).
+Instead of a straight line, a section can also run a curve or wave: `300>8000~exp` starts slowly and opens fast at the end (`~log` the other way round), `400>3000~sine/2` oscillates between both values every 2 bars (also `triangle`, `saw`, `square`).
 
-**Aufbau**
-- **●** Elemente einzeln einführen. Rides kommen erst im Drop. Die Hook wird schon im Intro angedeutet, leise und gefiltert.
-- **●** Die letzten 8 Takte eines Breakdowns:
-  - Riser, Clap-Roll und schneller werdende Percussion.
-  - Der Snare-Roll wird lauter und dichter, am Ende 32tel.
-  - Die Tiefen werden per Hochpass bis zum Drop weggefiltert.
-  - Ein Sub-Drop-Hit auf der Eins des Drops.
-- **◐** Clap-Rolls in Sechzehnteln in Takt 4 ab Zählzeit 2, alle 4 Takte (EDMProd).
-- **◐** Kick-Edits: zusätzliche Kicks, die Kick am Abschnittsende weg, Reverse-Kicks.
-- **●** „Der Moment“: Die Hook (Stab oder Lead) wird im Breakdown vorgestellt und kommt im Drop mit voller Wucht. Den stärksten Lead hebt man sich für den letzten Drop auf.
+**Arrangement**
+- **●** Introduce elements one at a time. Rides only come in the drop. The hook is already hinted at in the intro, quiet and filtered.
+- **●** The last 8 bars of a breakdown:
+  - Riser, clap roll and accelerating percussion.
+  - The snare roll gets louder and denser, 32nds at the end.
+  - The lows are filtered away with a high-pass until the drop.
+  - A sub drop hit on the one of the drop.
+- **◐** Clap rolls in sixteenths in bar 4 from beat 2, every 4 bars (EDMProd).
+- **◐** Kick edits: extra kicks, the kick removed at the end of a section, reverse kicks.
+- **●** "The moment": the hook (stab or lead) is introduced in the breakdown and comes back with full force in the drop. Save the strongest lead for the last drop.
 
 **Drums**
-- **●** Kick auf 1, 5, 9, 13, kurz und druckvoll. Sie läuft durch, außer im Breakdown.
-- **◐** Ghost-Kick auf Schritt 4 und/oder 12. Variante „rollend“: leise Offbeat-Kicks auf 3, 4, 7, 8, 11, 12, 15, 16, etwa 10 dB leiser (Attack).
-- **◐** Clap, hier widersprechen sich die Quellen:
-  - Beatportal: sparsam auf 5 und 13.
-  - EDMProd: kein House-Clap, sondern synkopierte Snares um Schritt 1–2 und 7–8 im 2-Takt-Zyklus.
-  - Charlotte de Witte verzichtet ganz auf Claps und schichtet bis zu sieben Hat- und Becken-Sounds.
-  - Vorgabe: Clap optional und sparsam.
-- **●** Closed Hats in durchgehenden Sechzehnteln mit „tanzender“ Velocity. Offbeat-Hat (oft offen) auf 3, 7, 11, 15. Eine Open Hat auf 2 und 4 mit Lücken, eine davon verspätet mit etwa 50 %.
-- **◐** Ride auf jedem Achtel (ungerade Schritte), auf Zählzeit 1 und 3 leiser, damit er sich gegen die Kick duckt.
-- **◐** Percussion: Toms in Sechzehnteln im Wechsel. Rim auf den Kick-Schritten und auf 6 und 14, ein Low Tom auf 14. Ghost-Claps rund um den Haupt-Clap.
-- **○** Velocity: Kick 127, Haupt-Hits 100–115, Hats im Wechsel um 70 und 100, Ghosts 30–55.
-- **○** Variation: ein Kern über 1 Takt, ein Turnaround über 4 Takte (Fill in den letzten 2 Zählzeiten), ein Abschnittswechsel alle 8 oder 16 Takte.
-- **◐** Rumble ist Klangbearbeitung: eine Sub- oder Rumble-Fahne unter einem knackigen Transienten, ein Delay in Sechzehnteln auf einer Kick-Kopie, gefiltert und angezerrt.
+- **●** Kick on 1, 5, 9, 13, short and punchy. It runs through, except in the breakdown.
+- **◐** Ghost kick on step 4 and/or 12. "Rolling" variant: quiet offbeat kicks on 3, 4, 7, 8, 11, 12, 15, 16, about 10 dB quieter (Attack).
+- **◐** Clap, here the sources disagree:
+  - Beatportal: sparingly on 5 and 13.
+  - EDMProd: no house clap, but syncopated snares around steps 1–2 and 7–8 in a 2-bar cycle.
+  - Charlotte de Witte does without claps entirely and layers up to seven hat and cymbal sounds.
+  - Default: clap optional and sparse.
+- **●** Closed hats in continuous sixteenths with "dancing" velocity. Offbeat hat (often open) on 3, 7, 11, 15. An open hat on 2 and 4 with gaps, one of them late by about 50 %.
+- **◐** Ride on every eighth (odd steps), quieter on beats 1 and 3 so it ducks against the kick.
+- **◐** Percussion: toms alternating in sixteenths. Rim on the kick steps and on 6 and 14, a low tom on 14. Ghost claps around the main clap.
+- **○** Velocity: kick 127, main hits 100–115, hats alternating around 70 and 100, ghosts 30–55.
+- **○** Variation: a 1-bar core, a 4-bar turnaround (fill in the last 2 beats), a section change every 8 or 16 bars.
+- **◐** Rumble is sound design: a sub or rumble tail under a punchy transient, a sixteenth delay on a copy of the kick, filtered and distorted.
 
 **Bass**
-- **●** **Rollende Sechzehntel**, das erste Sechzehntel jeder Zählzeit bleibt für die Kick frei: Schritte 2–4, 6–8, 10–12, 14–16. Meist ein Ton, gelegentlich ein anderer. Variante: nur Offbeats (3, 7, 11, 15).
-- **◐** Ein Top-Bass mit demselben Rhythmus und Oktavsprüngen. EDMProd springt bei jeder zweiten Wiederholung eine Oktave.
-- **◐** Notenlänge: ein Sechzehntel mit 70–90 % Gate, kurze Lücken (Producer School). EDMProd nutzt 99 %.
-- **●** Lage:
+- **●** **Rolling sixteenths**; the first sixteenth of each beat stays free for the kick: steps 2–4, 6–8, 10–12, 14–16. Usually one note, occasionally another. Variant: offbeats only (3, 7, 11, 15).
+- **◐** A top bass with the same rhythm and octave jumps. EDMProd jumps an octave on every second repetition.
+- **◐** Note length: a sixteenth with 70–90 % gate, short gaps (Producer School). EDMProd uses 99 %.
+- **●** Register:
   - Sub MIDI 28–36 (41–65 Hz).
-  - Rollender Mid-Bass MIDI 36–48 (65–131 Hz). Attacks Hauptton liegt bei 98 Hz, also MIDI 43.
-  - Acid eine Oktave über dem Bass.
-- **●** Die Kick ist auf den Grundton gestimmt, ihre Resonanz liegt meist bei 47–60 Hz (MIDI 30–35). Attack stimmt sie auf F (43,65 Hz, MIDI 29).
+  - Rolling mid bass MIDI 36–48 (65–131 Hz). Attack's main note sits at 98 Hz, i.e. MIDI 43.
+  - Acid one octave above the bass.
+- **●** The kick is tuned to the root; its resonance usually sits at 47–60 Hz (MIDI 30–35). Attack tunes it to F (43.65 Hz, MIDI 29).
 
-**Stabs, Synths und Hooks**
-- **●** Hook: ein Loop über 1–2 Takte, minimal und repetitiv. Er bewegt sich über Cutoff, Resonanz und LFO, nicht über neue Noten. Ein Motiv aus 3 Tönen (Grundton, Quinte, kleine Septime) mit Pausen.
-- **●** **Parallele Stabs:**
-  - Eine Moll-Dreiklangsform wird als Block verschoben, auch aus der Tonart heraus, immer in derselben Umkehrung.
-  - Jeder Hit ist ein Sechzehntel lang, meist neben der Eins.
-  - Aus 2 Takten werden 4, indem man 1–2 Hits stummschaltet oder verschiebt.
-  - ○ Etwa 3–6 Hits pro Takt.
-- **●** **Acid** im 303-Stil: Sägezahn, 16 Schritte. Slides nur zwischen kurzen Noten, denn gleitet jede Note, fällt der Slide nicht mehr auf. Wenige Akzente vor den Kicks, Cutoff tief und Resonanz hoch, über den Track hinweg geöffnet.
-- **◐** Riff-Variation: alle 8–16 Takte einen Parameter ändern oder alle 8 Takte einen Ton tauschen, der Kern bleibt.
-- **◐** Lage der Stabs MIDI 60–79 (C3–G4).
-- **●** Vocals als kurze, wiederholte Schnipsel, gern auch zum Schluss.
+**Stabs, synths and hooks**
+- **●** Hook: a 1–2-bar loop, minimal and repetitive. It moves via cutoff, resonance and LFO, not via new notes. A 3-note motif (root, fifth, minor seventh) with rests.
+- **●** **Parallel stabs:**
+  - A minor triad shape is shifted as a block, even out of the key, always in the same inversion.
+  - Each hit is one sixteenth long, mostly off the one.
+  - 2 bars become 4 by muting or moving 1–2 hits.
+  - ○ About 3–6 hits per bar.
+- **●** **Acid** in 303 style: sawtooth, 16 steps. Slides only between short notes, because if every note glides, the slide no longer stands out. Few accents before the kicks, cutoff low and resonance high, opened up over the course of the track.
+- **◐** Riff variation: change one parameter every 8–16 bars or swap one note every 8 bars; the core stays.
+- **◐** Register of the stabs MIDI 60–79 (C3–G4).
+- **●** Vocals as short, repeated snippets, often also toward the end.
 
-**Harmonik**
-- **●** Sehr wenig, oft keine klassische Tonleiter. „Atonal“ ist in Ordnung (EDMProd).
-- **●** Moll, etwa F-Moll oder E-Moll. Ein Akkord oder ein Drone ist Standard. Eine Verschiebung zwischen zwei Akkorden bringt Bewegung.
-- **◐** Ein Moll-Dreiklang in Grundstellung, optional mit dem Grundton eine Oktave höher verdoppelt. Akkorde tauchen, wenn überhaupt, im Breakdown auf.
+**Harmony**
+- **●** Very little, often no classical scale. "Atonal" is fine (EDMProd).
+- **●** Minor, e.g. F minor or E minor. One chord or a drone is standard. A shift between two chords adds movement.
+- **◐** A minor triad in root position, optionally with the root doubled an octave higher. Chords, if at all, appear in the breakdown.
 
-**Sounds** (native Live-Devices)
-- Kick: Drum Rack mit 909-Sample oder Kick Analog, Drum Buss mit „Boom“ auf dem Grundton, Saturator.
-- Rumble: Kick-Send in Echo (1/16) und Hybrid Reverb, dann Auto Filter (Tiefpass ~80 Hz), dann Roar.
-- Mid-Bass: Analog oder Drift (Sägezahn, kurze Filterhüllkurve). EQ Eight mit Hochpass um 65 Hz und Tiefpass um 350 Hz, Multiband Dynamics statt OTT, Compressor mit Sidechain zur Kick.
-- Acid: Drift oder Analog, mono und legato, resonanter Tiefpass, dazu Roar und Saturator.
-- Stabs: Wavetable mit verstimmten Sägezähnen oder Rechteck, Roar, Echo ping-pong, Hybrid Reverb (~1,5 s).
-- FM-Hits: Operator. Vocals und Texturen: Simpler. Filterfahrten: Auto Filter.
+**Sounds** (native Live devices)
+- Kick: Drum Rack with a 909 sample or Kick Analog, Drum Buss with "Boom" on the root, Saturator.
+- Rumble: kick send into Echo (1/16) and Hybrid Reverb, then Auto Filter (low-pass ~80 Hz), then Roar.
+- Mid bass: Analog or Drift (sawtooth, short filter envelope). EQ Eight with high-pass around 65 Hz and low-pass around 350 Hz, Multiband Dynamics instead of OTT, Compressor with sidechain to the kick.
+- Acid: Drift or Analog, mono and legato, resonant low-pass, plus Roar and Saturator.
+- Stabs: Wavetable with detuned saws or square, Roar, Echo ping-pong, Hybrid Reverb (~1.5 s).
+- FM hits: Operator. Vocals and textures: Simpler. Filter sweeps: Auto Filter.
 
-**Anfängerfehler:** zu früh übersteuern, das Intro als Outro kopieren, keine Sidechain auf dem Bass, verwaschene Layer ohne Platz für die Kick, ein Pattern nach nur einem Takt beurteilen, zu früh zu viele Layer, nach dem Limiter arrangieren, bei Acid jede Note gleiten lassen oder zu viel akzentuieren.
+**Beginner mistakes:** overdriving too early, copying the intro as the outro, no sidechain on the bass, washed-out layers with no room for the kick, judging a pattern after just one bar, too many layers too early, arranging after the limiter, letting every acid note glide or accenting too much.
 
-**Quellen:** Beatportal (Peak-Time/Driving im Stil von Layton Giordani, Eli Brown, Adam Beyer); Mixed In Key (Techno-Arrangement); EDMProd (How to Make Techno); The Producer School (Drumcode Beats); Attack Magazine (Rolling Techno, Big Beat Techno, Warehouse Rolling Bass, Parallel Chord Stabs, Techno Synth Stabs, Effective Breakdown, Tempo-Trend); MusicTech (Sam Paganini); Lost Stories Academy (DJ-freundlich); Production Music Live (Techno); Skiddle (Interview Charlotte de Witte); Aulart (Kick-Tuning, Hannes Bieger); Roland (TB-303); Elektronauts und Ableton-Forum (schwächer belegt).
+**Sources:** Beatportal (peak-time/driving in the style of Layton Giordani, Eli Brown, Adam Beyer); Mixed In Key (techno arrangement); EDMProd (How to Make Techno); The Producer School (Drumcode Beats); Attack Magazine (Rolling Techno, Big Beat Techno, Warehouse Rolling Bass, Parallel Chord Stabs, Techno Synth Stabs, Effective Breakdown, tempo trend); MusicTech (Sam Paganini); Lost Stories Academy (DJ-friendly); Production Music Live (Techno); Skiddle (interview with Charlotte de Witte); Aulart (kick tuning, Hannes Bieger); Roland (TB-303); Elektronauts and Ableton forum (weaker sourcing).
 
 ---
 
 ## Drum & Bass
 
-Drei Spielarten:
-- **Liquid:** Pads, Rhodes, Groove über Velocity und Mikrotiming.
-- **Dancefloor:** poppige Akkorde.
-- **Neurofunk:** Reese- und FM-Bässe, kurze Stabs, fast atonal.
+Three flavors:
+- **Liquid:** pads, Rhodes, groove via velocity and micro-timing.
+- **Dancefloor:** poppy chords.
+- **Neurofunk:** Reese and FM basses, short stabs, almost atonal.
 
-**Tempo und Swing**
-- **●** 170–176 BPM, Standard **174**. Liquid 170–176, Neuro 172–174, Halftime 170–175 (fühlt sich wie ~87 an).
-- **◐** Swing nur auf den Hats (52–60 %). Kick und Haupt-Snares bleiben auf dem Raster, sonst ist der Track schwer zu mixen.
+**Tempo and swing**
+- **●** 170–176 BPM, standard **174**. Liquid 170–176, neuro 172–174, halftime 170–175 (feels like ~87).
+- **◐** Swing only on the hats (52–60 %). Kick and main snares stay on the grid, otherwise the track is hard to mix.
 
-**Struktur** (Phrasen 4/8/16/32/64)
-- **●** Intro 16–32, Build 8–16, Drop 32–64, Breakdown 16–32 ohne Drums, Build 2 8–16, Drop 2 32–64 (härter, anderer Bass), Outro 16–32. Etwa 256 Takte, knapp 6 Minuten. Ein Takt dauert bei 174 BPM rund 1,38 Sekunden.
-- **◐** KAN-Vorlage: Intro 32, Build 16, Drop 64 (2 × 32), Mittelteil 16–32, Breakdown 32, Build 16, Drop 2 64, Outro 32. Kürzere Fassungen (EDMProd Liquid: 6 × 16 = 96 Takte) und Radio-Edits mit 3–4 Minuten sind auch üblich.
-- **●** Kleine Änderungen alle 4–8 Takte, größere alle 16 Takte. Drop 1 besteht oft aus 4 Phrasen à 16 Takten, jede mit etwas Neuem oder Weggelassenem.
-- **●** Intro und Outro mit Drums und Percussion, wenig oder kein Sub, die Mitten im Intro sparsam.
+**Structure** (phrases 4/8/16/32/64)
+- **●** Intro 16–32, build 8–16, drop 32–64, breakdown 16–32 without drums, build 2 8–16, drop 2 32–64 (harder, different bass), outro 16–32. About 256 bars, just under 6 minutes. At 174 BPM one bar lasts about 1.38 seconds.
+- **◐** KAN template: intro 32, build 16, drop 64 (2 × 32), middle part 16–32, breakdown 32, build 16, drop 2 64, outro 32. Shorter versions (EDMProd Liquid: 6 × 16 = 96 bars) and radio edits of 3–4 minutes are also common.
+- **●** Small changes every 4–8 bars, bigger ones every 16 bars. Drop 1 often consists of 4 phrases of 16 bars, each with something added or left out.
+- **●** Intro and outro with drums and percussion, little or no sub, mids sparse in the intro.
 
-**Aufbau**
-- **◐** Neues im Intro alle 8–16 Takte. Bei KAN kommt der erste Bass-Hit in Takt 17.
-- **●** Build: Noise-Riser, sich öffnender Filter, Snare-Roll (Sechzehntel bis 32tel, Velocity von 50 auf 100 %, eventuell 1–2 Halbtöne nach oben), zusätzliche Hats. Build 2 ist dramatischer als Build 1.
-- **◐** EDMProd Liquid: die Drums 4 Takte vor dem Drop ganz raus, die Kick in Vierteln, dann Achteln, dann Sechzehnteln. Crash auf Zählzeit 1 des Drops.
-- **●** Kurze Stille vor jedem Drop. Nicht jede Änderung auf Takt 1 eines Abschnitts legen.
+**Arrangement**
+- **◐** Something new in the intro every 8–16 bars. At KAN the first bass hit comes in bar 17.
+- **●** Build: noise riser, opening filter, snare roll (sixteenths to 32nds, velocity from 50 to 100 %, possibly 1–2 semitones up), extra hats. Build 2 is more dramatic than build 1.
+- **◐** EDMProd Liquid: drums fully out 4 bars before the drop, the kick in quarters, then eighths, then sixteenths. Crash on beat 1 of the drop.
+- **●** Short silence before each drop. Don't put every change on bar 1 of a section.
 
 **Drums**
-- **●** Two-Step: **Kick auf 1 und 11, Snare auf 5 und 13**. KAN setzt die zweite Kick auf 9.
-- **◐** Varianten: Rolling/Liquid mit Kick auf 1 und 7 und einem Break-Loop über alle 16 Schritte. Halftime mit Kick auf 1 und 7, Snare auf 9. Amen/Jungle mit Kick auf 1, 3, 11, 12 und Ghosts auf 8, 10, 16.
-- **●** Ghost-Snares auf 3, 8, 10, 16, Velocity 30–50. Ein „Skip“-Snare auf Schritt 12 jeden zweiten Takt mit 50–70. Höchstens 1–2 Ghost-Kicks pro 2 Takte.
-- **◐** Hats in Achteln oder Sechzehnteln mit 70–80 % und zufälliger Velocity (KAN: abwechselnd 100/70). Ride in Achteln.
-- **◐** Haupt-Snares: die erste etwa 90 %, die zweite 100 %.
-- **◐** Variation: Shuffles in jedem vierten Takt, eine Ghost-Kick am Ende jedes achten Takts, die erste Kick jeden zweiten Takt weglassen.
-- **●** Breaks (Amen, Think, Apache) zerschnitten und neu angeordnet, ab 150–200 Hz gefiltert, unter Kick und Snare gelegt. Das braucht Samples, die API kann keine laden.
+- **●** Two-step: **kick on 1 and 11, snare on 5 and 13**. KAN puts the second kick on 9.
+- **◐** Variants: rolling/liquid with kick on 1 and 7 and a break loop over all 16 steps. Halftime with kick on 1 and 7, snare on 9. Amen/jungle with kick on 1, 3, 11, 12 and ghosts on 8, 10, 16.
+- **●** Ghost snares on 3, 8, 10, 16, velocity 30–50. A "skip" snare on step 12 every second bar at 50–70. At most 1–2 ghost kicks per 2 bars.
+- **◐** Hats in eighths or sixteenths at 70–80 % with random velocity (KAN: alternating 100/70). Ride in eighths.
+- **◐** Main snares: the first about 90 %, the second 100 %.
+- **◐** Variation: shuffles in every fourth bar, a ghost kick at the end of every eighth bar, leave out the first kick every second bar.
+- **●** Breaks (Amen, Think, Apache) chopped and rearranged, filtered from 150–200 Hz, layered under kick and snare. This needs samples; the API cannot load any.
 
 **Bass**
-- **●** Zwei Schichten: ein Sub (Sinus oder Dreieck, mono, Release 300–600 ms) und ein Mid- oder Reese-Bass (zwei verstimmte Sägezähne, Filter, Distortion, ab 80–100 Hz gefiltert).
-- **●** Lage: nicht tiefer als D#1 (etwa 39 Hz). Sweet Spot etwa **MIDI 27–32 für den Sub** (39–52 Hz). E-, F- und F#-Moll geben dem Bass Gewicht.
-- **◐** Liquid: lange, gezogene Noten, die den Akkorden folgen. Neuro und Jump-Up: Ein-Ton-Basslines mit rhythmischer Variation. Sub-Noten kurz halten, mit Sidechain.
-- **◐** EDMProd Liquid: eine Linie über 4 Takte als 16-Takt-Loop, ein zusätzlicher Lauf in jedem zweiten 4-Takt-Block, die letzten 2 Zählzeiten der 16 Takte stumm.
+- **●** Two layers: a sub (sine or triangle, mono, release 300–600 ms) and a mid or Reese bass (two detuned saws, filter, distortion, filtered from 80–100 Hz).
+- **●** Register: not lower than D#1 (about 39 Hz). Sweet spot about **MIDI 27–32 for the sub** (39–52 Hz). E, F and F# minor give the bass weight.
+- **◐** Liquid: long, sustained notes that follow the chords. Neuro and jump-up: one-note basslines with rhythmic variation. Keep sub notes short, with sidechain.
+- **◐** EDMProd Liquid: a 4-bar line as a 16-bar loop, an extra run in every second 4-bar block, the last 2 beats of the 16 bars muted.
 
-**Harmonik**
-- **●** Meist Moll. Liquid nutzt m7- und maj7-Akkorde in Dorisch oder natürlich Moll.
-- **●** Folgen: i–VI–III–VII mit **2 Takten pro Akkord**, i–III–VI–iv (Liquid), i–VII–VI–VII, i–iv–v. Pad-Loops mit 2–3 Akkorden.
-- **◐** Lage etwa C3–C5, nie unter C2, also etwa MIDI 48–72.
-- **●** Liquid mit gehaltenen Pads, Rhodes oder Klavier. Neuro mit kurzen Stabs und Drones. Dancefloor mit poppigen Akkorden.
+**Harmony**
+- **●** Mostly minor. Liquid uses m7 and maj7 chords in Dorian or natural minor.
+- **●** Progressions: i–VI–III–VII with **2 bars per chord**, i–III–VI–iv (liquid), i–VII–VI–VII, i–iv–v. Pad loops with 2–3 chords.
+- **◐** Register about C3–C5, never below C2, i.e. about MIDI 48–72.
+- **●** Liquid with sustained pads, Rhodes or piano. Neuro with short stabs and drones. Dancefloor with poppy chords.
 
-**Lead und Melodie** (dünn belegt)
-- **◐** Ein Loop über 4–8 Takte, der mit Variation wiederkehrt, dazu Synkopen und Triolen. Nur eine Hook. Bei EDMProd eine Glocken-Gegenmelodie über 8 Takte, eine Oktave höher wiederholt.
-- **◐** Call and Response über etwa einen halben Takt. Eine Linie nur aus Akkordtönen klingt „nach Eurodance“: also auch Durchgangstöne zulassen.
+**Lead and melody** (thinly sourced)
+- **◐** A 4–8-bar loop that returns with variation, plus syncopation and triplets. Only one hook. At EDMProd an 8-bar bell counter-melody, repeated an octave higher.
+- **◐** Call and response over about half a bar. A line made only of chord tones sounds "like Eurodance": so allow passing tones too.
 
 **Sounds**
-- Sub: Operator oder Drift (Sinus).
-- Reese: Analog mit zwei Oszillatoren, um ±0,27 Halbtöne verstimmt, mono (Attacks Patch), alternativ Wavetable.
-- Neuro-Bass: Operator oder Wavetable mit Roar oder Saturator.
-- Pads: Wavetable oder Drift.
+- Sub: Operator or Drift (sine).
+- Reese: Analog with two oscillators detuned by ±0.27 semitones, mono (Attack's patch), alternatively Wavetable.
+- Neuro bass: Operator or Wavetable with Roar or Saturator.
+- Pads: Wavetable or Drift.
 - Keys: Electric.
-- Bell- oder Pluck-Leads: Simpler oder Operator.
-- Breaks: Simpler im Slice-Modus.
+- Bell or pluck leads: Simpler or Operator.
+- Breaks: Simpler in Slice mode.
 
-**Filterfahrten** (Auto Filter, Clip-Automation)
+**Filter sweeps** (Auto Filter, clip automation)
 
-| Abschnitt | Drums (High-pass) | Chords (Low-pass) |
+| Section | Drums (high-pass) | Chords (low-pass) |
 |---|---|---|
-| Intro | offen | 200 Hz → 20 kHz, öffnet spät |
-| Build | 20 → 500 Hz | offen |
-| Breakdown | – | 150 Hz → 8 kHz, öffnet spät; Resonanz 0 → 35 % |
+| Intro | open | 200 Hz → 20 kHz, opens late |
+| Build | 20 → 500 Hz | open |
+| Breakdown | – | 150 Hz → 8 kHz, opens late; resonance 0 → 35 % |
 | Build 2 | 20 → 600 Hz | 8 → 20 kHz |
-| Outro | offen | 20 kHz → 150 Hz in 16 Takten |
+| Outro | open | 20 kHz → 150 Hz over 16 bars |
 
-Delay-Throws: Im Drop wirft der Lead auf der letzten Zählzeit jedes 8. Takts ins Delay.
+Delay throws: in the drop the lead throws into the delay on the last beat of every 8th bar.
 
-**Quellen:** KAN Samples (DnB Drums, Arrangement, Chord Progressions); DnB Academy (Drum Patterns, BPM & Structure); EDMProd (How to Make DnB, Liquid DnB); Attack Magazine (Raw DnB, Incessant DnB Beat, Reese Bass Redux); Unison (DnB Drum Patterns, How to Make DnB); Violet Recording (DnB); Beatportal (Sub Focus / Delta Heavy); iZotope (Basslines); Beat Kitchen (Swing); MusicRadar (Liquid Chords, nur Ausschnitt); Foren: DnB Forum, DJTechTools (schwächer belegt).
+**Sources:** KAN Samples (DnB Drums, Arrangement, Chord Progressions); DnB Academy (Drum Patterns, BPM & Structure); EDMProd (How to Make DnB, Liquid DnB); Attack Magazine (Raw DnB, Incessant DnB Beat, Reese Bass Redux); Unison (DnB Drum Patterns, How to Make DnB); Violet Recording (DnB); Beatportal (Sub Focus / Delta Heavy); iZotope (Basslines); Beat Kitchen (Swing); MusicRadar (Liquid Chords, excerpt only); forums: DnB Forum, DJTechTools (weaker sourcing).
 
 ---
 
-## Trap (EDM- und Festival-Trap)
+## Trap (EDM and festival trap)
 
-Festival-Trap, nicht Hip-Hop-Trap, mit denselben Wurzeln. Die Quellenlage ist dünner als bei den anderen Genres: Die MusicRadar-Artikel ließen sich nicht abrufen, von Attack, Sound On Sound und Ableton gab es nichts Trap-Spezifisches.
+Festival trap, not hip-hop trap, with the same roots. Sourcing is thinner than for the other genres: the MusicRadar articles could not be retrieved, and Attack, Sound On Sound and Ableton had nothing trap-specific.
 
-**Tempo und Swing**
-- **●** 140–150 BPM im Halftime-Gefühl (wirkt wie 70–75), härter bis 160. Die Angaben streuen von 128 bis 170.
-- **◐** Wenig Swing (8–15 % auf 808 und Hats) oder einzelne Hats von Hand verschieben. Velocities der Akkorde variieren, Noten leicht neben das Raster setzen.
+**Tempo and swing**
+- **●** 140–150 BPM with a halftime feel (feels like 70–75), harder styles up to 160. Figures range from 128 to 170.
+- **◐** Little swing (8–15 % on 808 and hats) or move individual hats by hand. Vary chord velocities, place notes slightly off the grid.
 
-**Struktur** (Phrasen 4/8)
-- **◐** Cymatics: Intro 4, Verse 8, Build 4–8, Drop 16, Breakdown/Verse 8, Build 4–8, Drop 2 16–32, Outro 8.
-- **◐** EDMProd: Intro 8–16, Build 8–16, Drop 16–32, Variation 16, Outro 16.
-- **◐** Gesamt 2–3,5 Minuten, kürzer als House oder Techno.
-- **○** Etwas ändert sich alle 4–8 Takte.
+**Structure** (phrases 4/8)
+- **◐** Cymatics: intro 4, verse 8, build 4–8, drop 16, breakdown/verse 8, build 4–8, drop 2 16–32, outro 8.
+- **◐** EDMProd: intro 8–16, build 8–16, drop 16–32, variation 16, outro 16.
+- **◐** Total 2–3.5 minutes, shorter than house or techno.
+- **○** Something changes every 4–8 bars.
 
-**Aufbau**
-- **◐** EDMProd-Beispiel: Kick ab Takt 9 nur auf der Eins. Ab Takt 13 verdichtet sie sich (alle 2 Zählzeiten, dann jede Zählzeit, dann halbe Zählzeiten), und ein Hochpass-Sweep läuft mit. Pad und Keys kommen kurz vor dem Drop, ein Tom-Fill eine Zählzeit davor.
-- **●** Snare-Roll in Achteln, dann Sechzehnteln, dann 32teln in den Drop, dazu ein steigender Pitch, Riser und Noise.
-- **●** Bass kurz vor dem Drop raus, Stille vor dem Drop (eine Zählzeit oder weniger), ein Vocal-Chop direkt davor, gelegentlich Fake-Drops.
-- **○** Kick und 808 in den letzten 1–2 Zählzeiten vor dem Drop stumm. Keine Quelle sagt das ausdrücklich.
+**Arrangement**
+- **◐** EDMProd example: kick from bar 9 only on the one. From bar 13 it gets denser (every 2 beats, then every beat, then every half beat), with a high-pass sweep running along. Pad and keys come in just before the drop, a tom fill one beat before it.
+- **●** Snare roll in eighths, then sixteenths, then 32nds into the drop, plus rising pitch, risers and noise.
+- **●** Bass out just before the drop, silence before the drop (one beat or less), a vocal chop right before it, occasionally fake drops.
+- **○** Kick and 808 muted in the last 1–2 beats before the drop. No source says this explicitly.
 
 **Drums**
-- **●** Snare oder Clap auf **Schritt 9** (Zählzeit 3 im Halftime-Gefühl). Manche Quellen schreiben das als „2 und 4“ im doppelten Tempo, gemeint ist dasselbe Gefühl.
-- **◐** Kick auf 1, eine zusätzliche Kick kurz vor der Snare (um Schritt 8) und Offbeat-Kicks. Nicht überladen.
-- **●** Hats als Grundmuster in Achteln oder Sechzehnteln. **Rolls** in 32teln oder 64teln vor Snares und am Taktende, dazu **Triolen** (1/8T, 1/16T). Rolls in der Tonhöhe verändern und die Velocity in den nächsten Takt hinein steigern.
-- **◐** Eine Open Hat auf einem Offbeat, die von der nächsten Closed Hat abgeschnitten wird. Vor einem großen Roll einen oder zwei Takte gerade Hats.
-- **◐** Rims und Shaker auf Kick oder Snare gelegt, Tom-Fills.
+- **●** Snare or clap on **step 9** (beat 3 in halftime feel). Some sources write this as "2 and 4" at double tempo; they mean the same feel.
+- **◐** Kick on 1, an extra kick just before the snare (around step 8) and offbeat kicks. Don't overload.
+- **●** Hats as a base pattern in eighths or sixteenths. **Rolls** in 32nds or 64ths before snares and at the end of the bar, plus **triplets** (1/8T, 1/16T). Vary the pitch of rolls and raise the velocity into the next bar.
+- **◐** An open hat on an offbeat, cut off by the next closed hat. Before a big roll, one or two bars of straight hats.
+- **◐** Rims and shakers layered on kick or snare, tom fills.
 
 **808**
-- **●** Ein 808-Ton unter jeder Kick, dazu ein paar Noten zum nächsten Takt hin, die der Snare antworten. Nicht jedes Sechzehntel füllen.
-- **◐** Monofon und legato mit überlappenden Noten für Glides, höchstens 1–2 Glides pro Takt, auf einen Akzent hin. Keine Quelle nennt eine Glide-Zeit.
-- **●** Folgt Tonart und Grundtönen: auf dem Grundton beginnen, zur Quinte gehen, im Drop tiefer. Bleibt meist innerhalb einer Oktave.
-- **◐** Lage etwa **MIDI 28–43** (E1–G2, rund 41–98 Hz). F-, F#- und G-Moll liegen gut im 808-Bereich. Unter etwa 150 Hz mono, Sidechain zur Kick.
+- **●** One 808 note under each kick, plus a few notes leading into the next bar that answer the snare. Don't fill every sixteenth.
+- **◐** Monophonic and legato with overlapping notes for glides, at most 1–2 glides per bar, toward an accent. No source gives a glide time.
+- **●** Follows key and roots: start on the root, move to the fifth, lower in the drop. Mostly stays within one octave.
+- **◐** Register about **MIDI 28–43** (E1–G2, about 41–98 Hz). F, F# and G minor sit well in the 808 range. Mono below about 150 Hz, sidechain to the kick.
 
-**Harmonik**
-- **●** Moll: natürlich Moll, harmonisch Moll, Phrygisch oder Dorisch.
-- **◐** Folgen: i–VI–v–i, i–v–iv, i–III–V–iv, i–iv–v, i–III–VI–VII, oft nur zwei Akkorde. Loops über 2–4 Takte.
-- **◐** Den Grundton weglassen, wenn die 808 ihn spielt. Terz, Septime und Erweiterungen behalten, Akkordnoten kurz gegen die 808.
-- **◐** Klavier oder Glocke oben, gedämpfte Pads darunter.
-- **○** 1 Akkord pro 1–2 Takte.
+**Harmony**
+- **●** Minor: natural minor, harmonic minor, Phrygian or Dorian.
+- **◐** Progressions: i–VI–v–i, i–v–iv, i–III–V–iv, i–iv–v, i–III–VI–VII, often just two chords. Loops over 2–4 bars.
+- **◐** Leave out the root when the 808 plays it. Keep third, seventh and extensions; chord notes short against the 808.
+- **◐** Piano or bell on top, muted pads underneath.
+- **○** 1 chord per 1–2 bars.
 
-**Lead und Hook**
-- **●** Kurzes Motiv über 2 Takte in einem Loop über 2–4 Takte, sparsam, dunkel, Moll. Melodien eher sparsam einsetzen.
-- **◐** Über der 808. Die Lead-Linie beginnt auf Quinte oder Septime statt auf dem Grundton.
-- **◐** EDMProd-Drop-Lead: jeder zweite Grundton-Schlag mit einem Slide um +12, die erste Note um 2 Zählzeiten verzögert, Variation bei jeder zweiten Wiederholung.
-- **●** Brass- oder Horn-Stabs im Drop.
+**Lead and hook**
+- **●** Short 2-bar motif in a 2–4-bar loop, sparse, dark, minor. Use melodies rather sparingly.
+- **◐** Above the 808. The lead line starts on the fifth or seventh instead of the root.
+- **◐** EDMProd drop lead: every second root hit with a slide of +12, the first note delayed by 2 beats, variation on every second repetition.
+- **●** Brass or horn stabs in the drop.
 
 **Sounds**
-- 808: Simpler mit langem gestimmtem Sample und Saturator, oder Operator mit Sinus und Pitch-Hüllkurve.
-- Drums: Drum Rack mit Drum Buss.
-- Lead: Wavetable oder Analog mit verstimmten Sägezähnen.
-- Brass-Stabs: Wavetable oder Analog mit schneller Filterhüllkurve.
-- Plucks und Glocken: Operator oder Drift.
-- Pads: Drift oder Wavetable.
-- Vocal-Chops: Simpler.
+- 808: Simpler with a long tuned sample and Saturator, or Operator with sine and pitch envelope.
+- Drums: Drum Rack with Drum Buss.
+- Lead: Wavetable or Analog with detuned saws.
+- Brass stabs: Wavetable or Analog with a fast filter envelope.
+- Plucks and bells: Operator or Drift.
+- Pads: Drift or Wavetable.
+- Vocal chops: Simpler.
 
-**Filterfahrten** (Auto Filter, Clip-Automation)
+**Filter sweeps** (Auto Filter, clip automation)
 
-| Abschnitt | Drums (High-pass) | Chords (Low-pass) |
+| Section | Drums (high-pass) | Chords (low-pass) |
 |---|---|---|
-| Intro | offen | 200 Hz → 20 kHz, öffnet spät |
-| Build, Build 2 | 20 → 300 Hz bzw. 400 Hz | offen |
-| Outro | offen | 20 kHz → 150 Hz |
+| Intro | open | 200 Hz → 20 kHz, opens late |
+| Build, Build 2 | 20 → 300 Hz or 400 Hz | open |
+| Outro | open | 20 kHz → 150 Hz |
 
-Delay-Throws: Der Lead wirft im Drop, die Chords im Verse, jeweils auf der letzten Zählzeit jedes 8. Takts.
+Delay throws: the lead throws in the drop, the chords in the verse, each on the last beat of every 8th bar.
 
-**Quellen:** Future Proof Music School (Festival Trap, Trap Beat in 10 Minutes, Genre Explorer); EDMProd (How to Make Trap); Cymatics (How to Make Trap); eMastered (Trap Drum Patterns, Trap Chord Progressions); Violet Recording (Trap Beats, 808 Patterns); Loopmasters (Top 10 Trap Tips); RouteNote (Build-ups, Drops); UJAM (Swells & Brass Stabs); Native Instruments (Hip-Hop Chord Progressions).
+**Sources:** Future Proof Music School (Festival Trap, Trap Beat in 10 Minutes, Genre Explorer); EDMProd (How to Make Trap); Cymatics (How to Make Trap); eMastered (Trap Drum Patterns, Trap Chord Progressions); Violet Recording (Trap Beats, 808 Patterns); Loopmasters (Top 10 Trap Tips); RouteNote (build-ups, drops); UJAM (Swells & Brass Stabs); Native Instruments (Hip-Hop Chord Progressions).
 
 ---
 
-## Was die Engine umsetzt und was nicht
+## What the engine implements and what it doesn't
 
-Stand nach dem Umbau auf die Rezepte (`compose/grooves.py`, `compose/hook.py`, Vorlagen in `compose/structures.py`).
+State after the rework to follow the recipes (`compose/grooves.py`, `compose/hook.py`, templates in `compose/structures.py`).
 
-**Umgesetzt**
+**Implemented**
 
-| Thema | Umsetzung |
+| Topic | Implementation |
 |---|---|
-| Drums | Spuren als Daten pro Genre (Schritte, Velocity, Ghost-Notes, Zyklen), Swing nur auf den Spuren, die schwingen dürfen; wechselnde Fills alle 8 Takte, ein Roll in neue Abschnitte, Hat- und Clap-Rolls (Trap, Peak-Time); Spuren ohne passenden Pad im Kit fallen weg |
-| Aufbau | Teile steigen innerhalb eines Abschnitts ein und aus (`"kick_hats:8,groove"`), eine Zählzeit Stille vor Drops, Drums 4 Takte vor dem D&B-Drop raus, der Bass verlässt das Outro zuerst, späte Spuren (Open Hat, Ride) erst in der zweiten Drop-Hälfte |
-| Bass | Muster pro Genre: House offbeat, Peak-Time rollende Sechzehntel, Melodic zwischen den Kicks, D&B-Sub lang, Trap-808 unter den Kicks mit Glide; Lagen aus den Rezepten |
-| Harmonik | Genre-Loops nach Tonart (Dur/Moll), Septakkorde für House und Liquid, parallele Moll-Stabs mit Akkordverschiebung für Peak-Time, Trap ohne Grundton |
-| Lead | House, D&B, Trap: Hook mit Ruf/Antwort; Melodic: Arpeggio; Peak-Time: Acid-Line, die sich alle 8 Takte entwickelt und im letzten Peak steigt |
-| Struktur | Vorlagen nach den Rezepten (Tempo: House 124, Melodic Techno 122, Peak-Time 128, D&B 174, Trap 145 BPM, mit `set_tempo` gesetzt); Längen Radio/Standard/Extended oder Minuten; mit `reference` folgen Abschnittsfolge und -längen einem vom Reference Analyzer analysierten Song, eingerastet auf das Phrasenraster des Genres (ein ungewarpter Song nur im eigenen Tempo); die Abschnittsarten ohne Gegenstück im Genre fallen auf eine verwandte zurück |
-| Sounds | Neue Spuren bekommen Kit und Presets des Genres aus der Core Library; die Drum-Noten landen auf den Pads des Kits |
-| Mix | Ein Reverb- und ein Delay-Return (vorhandene nutzt der Song), Fader-Pegel und Sends pro Rolle für neue Spuren; vorhandene Spuren behalten ihren Fader und senden nur in neue Returns. Nachhall und Delay-Zeit pro Genre, z. B. Melodic Techno 4,5 s, House 1,8 s |
-| Automation | Auto-Filter-Fahrten pro Clip in allen Genres, dazu Resonanz-Fahrten (Acid in Peak-Time, Pads in Breaks und Builds). Delay-Throws: Der Send einer Rolle springt auf der letzten Zählzeit jedes 8. Takts auf -4 dB und fällt danach auf seinen Pegel zurück |
-| Sidechain | Bass und Pads ducken unter der Kick. Eine eigene, stumme Spur „Sidechain“ ganz vorne im Set (Operator, Fader auf -inf) spielt über den ganzen Song 1/16-Noten auf den Kick-Schritten des Genres, auch dort, wo die Kick pausiert (House, Melodic, Peak-Time jede Zählzeit, D&B Schritte 1 und 11, Trap 1, 8 und 11). Ein Compressor (4:1, Attack 1 ms) auf Bass und Pads hört ihr Post-FX-Signal. Threshold und Release pro Genre: House Bass -24 / Chords -18 dB, 160 ms; Melodic -22 / -16 dB, 200 ms; Peak-Time -24 / -20 dB, 120 ms; D&B nur Bass -18 dB, 90 ms; Trap nur 808 -14 dB, 100 ms |
-| FX | Ein Riser füllt die letzten Takte (höchstens 8) vor jedem Drop, der auf einen anderen Abschnitt folgt, und endet an der Pause davor; Lautstärke und Filter-Makro steigen exponentiell. Ein Impact (Sub 808 Pitch Boom) trifft die Eins des Drops. Riser-Presets: House und Trap Riser Basic, Melodic und Peak-Time Hyper Riser, D&B ENCOM Riser |
+| Drums | Lanes as data per genre (steps, velocity, ghost notes, cycles), swing only on the lanes allowed to swing; varying fills every 8 bars, a roll into new sections, hat and clap rolls (Trap, Peak-Time); lanes without a matching pad in the kit are dropped |
+| Arrangement | Parts enter and leave within a section (`"kick_hats:8,groove"`), one beat of silence before drops, drums out 4 bars before the D&B drop, the bass leaves the outro first, late lanes (open hat, ride) only in the second half of the drop |
+| Bass | Patterns per genre: House offbeat, Peak-Time rolling sixteenths, Melodic between the kicks, D&B sub long, Trap 808 under the kicks with glide; registers from the recipes |
+| Harmony | Genre loops by key (major/minor), seventh chords for House and Liquid, parallel minor stabs with chord shift for Peak-Time, Trap without root |
+| Lead | House, D&B, Trap: hook with call/response; Melodic: arpeggio; Peak-Time: acid line that evolves every 8 bars and rises in the last peak |
+| Structure | Templates after the recipes (tempo: House 124, Melodic Techno 122, Peak-Time 128, D&B 174, Trap 145 BPM, set with `set_tempo`); lengths radio/standard/extended or minutes; with `reference`, section order and lengths follow a song analyzed by the Reference Analyzer, snapped to the genre's phrase grid (an unwarped song only at its own tempo); section types without a counterpart in the genre fall back to a related one |
+| Sounds | New tracks get the genre's kit and presets from the Core Library; the drum notes land on the kit's pads |
+| Mix | One reverb and one delay return (the song uses existing ones), fader levels and sends per role for new tracks; existing tracks keep their fader and only send into new returns. Reverb decay and delay time per genre, e.g. Melodic Techno 4.5 s, House 1.8 s |
+| Automation | Auto Filter sweeps per clip in all genres, plus resonance sweeps (acid in Peak-Time, pads in breaks and builds). Delay throws: a role's send jumps to -4 dB on the last beat of every 8th bar and then falls back to its level |
+| Sidechain | Bass and pads duck under the kick. A dedicated, silent track "Sidechain" at the very front of the set (Operator, fader at -inf) plays 1/16 notes on the genre's kick steps across the whole song, even where the kick pauses (House, Melodic, Peak-Time every beat, D&B steps 1 and 11, Trap 1, 8 and 11). A Compressor (4:1, attack 1 ms) on bass and pads listens to its post-FX signal. Threshold and release per genre: House bass -24 / chords -18 dB, 160 ms; Melodic -22 / -16 dB, 200 ms; Peak-Time -24 / -20 dB, 120 ms; D&B bass only -18 dB, 90 ms; Trap 808 only -14 dB, 100 ms |
+| FX | A riser fills the last bars (at most 8) before every drop that follows a different section, and ends at the pause before it; volume and filter macro rise exponentially. An impact (Sub 808 Pitch Boom) hits the one of the drop. Riser presets: House and Trap Riser Basic, Melodic and Peak-Time Hyper Riser, D&B ENCOM Riser |
 
-**Noch offen**
+**Still open**
 
-| Thema | Warum |
+| Topic | Why |
 |---|---|
-| Vergleich mit echten Tracks | wie gut ein Song klingt, prüft bisher nur das Ohr. Ein Referenzsong gibt nur Abschnittsfolge und -längen vor (`reference`), die Klänge und Noten vergleicht die Engine nicht mit ihm |
-| Weitere Genres | Trance, Dubstep, Hardstyle u. a. lassen sich als Vorlage ergänzen, sobald es ein Rezept gibt |
-| Andere Taktarten | die Grooves sind 16-Schritt-Takte; `plan_song` braucht deshalb 4/4 und meldet das sonst |
+| Comparison with real tracks | how good a song sounds is so far only checked by ear. A reference song only sets section order and lengths (`reference`); the engine does not compare sounds and notes against it |
+| More genres | Trance, Dubstep, Hardstyle etc. can be added as templates once there is a recipe |
+| Other time signatures | the grooves are 16-step bars; `plan_song` therefore needs 4/4 and reports otherwise |
 
-## Master-Kette (`plan_master`)
+## Master chain (`plan_master`)
 
-`plan_master` setzt drei native Geräte ans Ende der Master-Spur: EQ Eight, Glue Compressor, Limiter. Das ist ein Startpunkt und kein fertiges Mastering, denn MidiBakery hört den Song nicht. Die Kette macht den Song nicht lauter, und eine Lautheit (LUFS) misst sie nicht.
+`plan_master` puts three native devices at the end of the master track: EQ Eight, Glue Compressor, Limiter. This is a starting point, not finished mastering, because MidiBakery does not hear the song. The chain does not make the song louder, and it does not measure loudness (LUFS).
 
-| Gerät | Einstellung | House, Melodic Techno, Peak-Time Techno | Drum & Bass, Trap |
+| Device | Setting | House, Melodic Techno, Peak-Time Techno | Drum & Bass, Trap |
 |---|---|---|---|
-| EQ Eight | Low Cut (Band 1) | 30 Hz, 12 dB/Oktave | 20 Hz, 48 dB/Oktave |
-| Glue Compressor | Ratio, Attack, Release | 2:1, 30 ms, Auto | gleich |
-| Glue Compressor | Threshold | -10 dB als Startwert | gleich |
-| Glue Compressor | Sidechain-EQ | High Pass 150 Hz | gleich |
-| Limiter | Ceiling, Modus | -1 dB, True Peak (einstellbar -3 bis -0,1 dB) | gleich |
-| Limiter | Input Gain | 0 dB | gleich |
+| EQ Eight | Low Cut (band 1) | 30 Hz, 12 dB/octave | 20 Hz, 48 dB/octave |
+| Glue Compressor | Ratio, Attack, Release | 2:1, 30 ms, Auto | same |
+| Glue Compressor | Threshold | -10 dB as a starting value | same |
+| Glue Compressor | Sidechain EQ | High Pass 150 Hz | same |
+| Limiter | Ceiling, mode | -1 dB, True Peak (adjustable -3 to -0.1 dB) | same |
+| Limiter | Input Gain | 0 dB | same |
 
-- **●** Limiter als letztes Gerät, Ceiling -1 dBTP für Streaming. Spotify empfiehlt -2 dBTP nur für Master, die lauter als -14 LUFS sind.
-- **●** Glue als Bus-Kompressor: 2:1, Attack 30 ms (die Transienten der Kick kommen durch), Release Auto, in den lautesten Teilen 1–2 dB Gain Reduction.
-- **◐** Sidechain-EQ des Glue: Hochpass um 150 Hz, damit Kick und Sub nicht den ganzen Mix pumpen lassen. Das sagt nur eine Quelle.
-- **◐** Low Cut auf dem Master bei 20–30 Hz entfernt Rumpeln unterhalb des Hörbaren. Die Quellen widersprechen sich, ob er auf den Master gehört oder nur auf einzelne Spuren:
-  - Ein sanfter Cut bei 30 Hz gilt als unhörbar.
-  - Sub-lastige Genres (808, Reese-Subs bis 25 Hz) brauchen einen tieferen, steilen Cut.
-  - EQ Eight bietet als Steilheit nur 12 oder 48 dB/Oktave; eine Quelle nennt 24 dB/Oktave.
-- **○** Glue-Threshold -10 dB: Das nennt keine Quelle. Weil die Kette nichts hört, ist es nur ein Startwert. Stelle den Threshold beim lautesten Teil so ein, dass die Nadel 1–2 dB zeigt.
-- **○** Limiter Input Gain 0 dB ist Absicht: Lauter machen ohne Messung wäre geraten.
+- **●** Limiter as the last device, ceiling -1 dBTP for streaming. Spotify recommends -2 dBTP only for masters louder than -14 LUFS.
+- **●** Glue as bus compressor: 2:1, attack 30 ms (the kick's transients get through), release Auto, 1–2 dB gain reduction in the loudest parts.
+- **◐** Glue sidechain EQ: high-pass around 150 Hz so kick and sub don't make the whole mix pump. Only one source says this.
+- **◐** A low cut on the master at 20–30 Hz removes rumble below the audible range. The sources disagree on whether it belongs on the master or only on individual tracks:
+  - A gentle cut at 30 Hz is considered inaudible.
+  - Sub-heavy genres (808, Reese subs down to 25 Hz) need a lower, steep cut.
+  - EQ Eight only offers 12 or 48 dB/octave as slopes; one source names 24 dB/octave.
+- **○** Glue threshold -10 dB: no source names this. Because the chain hears nothing, it is only a starting value. Set the threshold during the loudest part so the needle shows 1–2 dB.
+- **○** Limiter Input Gain 0 dB is intentional: making it louder without measuring would be guesswork.
 
-Gemessen in Live 12.4:
-- Die Parameternamen der drei Geräte.
-- Glue Attack, Ratio und Release sind Stufen (roh 0–6, 0–2, 0–6).
-- Ein Batch, der Geräte einfügt und danach ihre Parameter setzt, hinterlässt zwei Undo-Schritte. `apply_plan` schreibt die Kette deshalb in zwei Batches; zwei Undo-Schritte entfernen sie.
+Measured in Live 12.4:
+- The parameter names of the three devices.
+- Glue Attack, Ratio and Release are steps (raw 0–6, 0–2, 0–6).
+- A batch that inserts devices and then sets their parameters leaves two undo steps. `apply_plan` therefore writes the chain in two batches; two undo steps remove it.
 
-`plan_master` setzt keine Kette auf einen Master, der schon einen Limiter, einen EQ Eight oder einen Glue Compressor hat. Andere Geräte dort bleiben vor der Kette; das MidiBakery Loudness Meter bleibt dahinter.
+`plan_master` does not add a chain to a master that already has a Limiter, an EQ Eight or a Glue Compressor. Other devices there stay before the chain; the MidiBakery Loudness Meter stays after it.
 
-**Quellen:**
-- Violet Recording (Bus-Kompressoren, Mastering-Kompressoren)
-- MusicHub (Compressor-Einstellungen)
-- Ableton-Forum (Glue Compressor auf dem Master)
-- Production Advice (Spotify True Peak)
-- Flux (True-Peak-Limiting)
-- AES TD1008, nur über Zusammenfassungen
-- Soundbridge (Sub-Bass)
-- Richie ZXY (Mastering Drum & Bass)
-- Gearspace, schwächer belegt (808, High-Pass-Filter, Master-Bus-Kompression)
+**Sources:**
+- Violet Recording (bus compressors, mastering compressors)
+- MusicHub (compressor settings)
+- Ableton forum (Glue Compressor on the master)
+- Production Advice (Spotify true peak)
+- Flux (true peak limiting)
+- AES TD1008, only via summaries
+- Soundbridge (sub bass)
+- Richie ZXY (mastering drum & bass)
+- Gearspace, weaker sourcing (808, high-pass filters, master bus compression)
 
 
-## Lautheit messen (`measure_master`)
+## Measuring loudness (`measure_master`)
 
-Das Max-for-Live-Gerät **MidiBakery Loudness Meter** sitzt als letztes Gerät auf dem Master und misst nach ITU-R BS.1770-4. `measure_master` liest seine Werte.
+The Max for Live device **MidiBakery Loudness Meter** sits as the last device on the master and measures according to ITU-R BS.1770-4. `measure_master` reads its values.
 
-- **K-Filter:** pro Kanal zwei biquad~ (Pre-Filter als High Shelf, dann RLB-Hochpass). Die Koeffizienten berechnet `loudness.js` für die aktuelle Samplerate nach den Formeln von libebur128; bei 48 kHz sind es die Tabellenwerte aus BS.1770 (Test prüft das).
-- **Blöcke:** average~ rms über 100 ms pro Kanal, alle 100 ms gelesen. Momentary = die letzten 4 Blöcke (400 ms), Short-term = die letzten 30 (3 s), wie EBU Tech 3341 sie festlegt.
-- **Integrated:** jeder 400-ms-Block (75 % Überlappung) seit dem Reset; Gates bei -70 LUFS absolut und 10 LU unter dem ungegateten Mittel.
-- **Kalibrierung:** ein 997-Hz-Sinus mit 0 dBFS in einem Kanal ergibt -3,01 LUFS (Test mit derselben Filterkette in Node).
-- **In Live geprüft (Live 12.4, 48 kHz):** ein gemasterter Referenzsong (5 min, MP3) zeigte integriert -11,3 LUFS; pyloudnorm misst dieselbe Datei offline mit -11,34 LUFS.
-- **Grenzen:** Sample-Peak statt True Peak (bis ~0,5 dB darunter). Max liest die Blöcke im Scheduler-Takt, nicht samplegenau: eine Näherung, kein geeichtes Messgerät.
+- **K-filter:** two biquad~ per channel (pre-filter as high shelf, then RLB high-pass). `loudness.js` computes the coefficients for the current sample rate using the libebur128 formulas; at 48 kHz they are the table values from BS.1770 (a test checks this).
+- **Blocks:** average~ rms over 100 ms per channel, read every 100 ms. Momentary = the last 4 blocks (400 ms), short-term = the last 30 (3 s), as EBU Tech 3341 defines them.
+- **Integrated:** every 400 ms block (75 % overlap) since the reset; gates at -70 LUFS absolute and 10 LU below the ungated mean.
+- **Calibration:** a 997 Hz sine at 0 dBFS in one channel gives -3.01 LUFS (test with the same filter chain in Node).
+- **Checked in Live (Live 12.4, 48 kHz):** a mastered reference song (5 min, MP3) showed -11.3 LUFS integrated; pyloudnorm measures the same file offline at -11.34 LUFS.
+- **Limits:** sample peak instead of true peak (up to ~0.5 dB below). Max reads the blocks at the scheduler rate, not sample-accurately: an approximation, not a calibrated meter.
 
-## Lautheitsziele (`plan_loudness`)
+## Loudness targets (`plan_loudness`)
 
-`plan_loudness` bringt den Master in Runden an ein Lautheitsziel. Eine Runde:
-1. Sie liest den integrierten Wert des Loudness Meters, mindestens 30 s seit dem letzten Reset.
-2. Sie stellt die Differenz zum Ziel am **Input Gain** des Limiters ein, höchstens 6 dB pro Runde und insgesamt höchstens +12 dB. Ab +6 dB warnt sie vor starkem Limiting.
-3. `apply_plan` setzt den Wert (ein Undo-Schritt) und setzt das Meter zurück; dann spielt man den Song noch einmal.
+`plan_loudness` brings the master to a loudness target in rounds. One round:
+1. It reads the Loudness Meter's integrated value, at least 30 s since the last reset.
+2. It sets the difference to the target on the Limiter's **Input Gain**, at most 6 dB per round and at most +12 dB in total. From +6 dB it warns about heavy limiting.
+3. `apply_plan` sets the value (one undo step) and resets the meter; then you play the song again.
 
-Der Limiter macht aus einem Teil jedes zusätzlichen dB Gain-Reduction, darum bewegt eine Runde die Lautheit weniger als ihr Gain. Die Runden enden innerhalb von ±0,5 LU. Der Ceiling bleibt, also bleiben auch die Spitzen.
+The limiter turns part of every extra dB into gain reduction, so a round moves the loudness less than its gain. The rounds end within ±0.5 LU. The ceiling stays, so the peaks stay too.
 
-Die Ziele sind der Median der integrierten Lautheit veröffentlichter Tracks des Genres, gemessen mit einem Stereo-Meter nach BS.1770, also so wie das Loudness Meter misst.
+The targets are the median integrated loudness of released tracks of the genre, measured with a stereo meter according to BS.1770, i.e. the way the Loudness Meter measures.
 
-| Ziel | LUFS | Spanne | Grundlage | Bewertung |
+| Target | LUFS | Range | Basis | Rating |
 |---|---|---|---|---|
-| House | -8,0 | -9,0 bis -7,1 (mittlere 50 %) | TrackSensei, 54 Tracks | gut: Messung |
-| Melodic Techno | -8,8 | -9,9 bis -8,0 (mittlere 50 %) | TrackSensei, 56 Tracks | gut: Messung |
-| Peak-Time Techno | -7,7 | – | TrackSensei, 308 Tracks | gut: Messung |
-| Drum & Bass | -6,3 | -9,0 bis -4,0 (mittlere 80 %) | WeFoundDNB, 101 Tracks | mittel: Messung, Methode nur teilweise beschrieben |
-| Trap | -8,4 | -9,4 bis -7,3 | Blog-Messungen und Mastering-Ratgeber | schwach: kein offener Datensatz |
-| Streaming | -14,0 | – | Spotify für Artists | gut: offizielle Angabe |
+| House | -8.0 | -9.0 to -7.1 (middle 50 %) | TrackSensei, 54 tracks | good: measurement |
+| Melodic Techno | -8.8 | -9.9 to -8.0 (middle 50 %) | TrackSensei, 56 tracks | good: measurement |
+| Peak-Time Techno | -7.7 | – | TrackSensei, 308 tracks | good: measurement |
+| Drum & Bass | -6.3 | -9.0 to -4.0 (middle 80 %) | WeFoundDNB, 101 tracks | medium: measurement, method only partly described |
+| Trap | -8.4 | -9.4 to -7.3 | blog measurements and mastering guides | weak: no open dataset |
+| Streaming | -14.0 | – | Spotify for Artists | good: official figure |
 
-TrackSensei weist ausdrücklich darauf hin, dass seine eigene Skala (Mono-Summe) etwa 3,3 LU tiefer liegt. Die Tabelle nimmt die Stereo-Werte. Für Spotify empfiehlt Spotify bei lauteren Masters als -14 LUFS einen True Peak unter -2 dB; `plan_master` setzt -1 dB, der Ceiling lässt sich mit `ceiling_db` ändern.
+TrackSensei explicitly notes that its own scale (mono sum) sits about 3.3 LU lower. The table uses the stereo values. For Spotify, Spotify recommends a true peak below -2 dB for masters louder than -14 LUFS; `plan_master` sets -1 dB, and the ceiling can be changed with `ceiling_db`.
 
-Eine eigene Prüfung: Katoff – The Signal (Extended, VANDIT Alternative), ein Melodic-Track, misst -11,3 LUFS, also leiser als der Median, aber in der Breite veröffentlichter Tracks.
+A check of our own: Katoff – The Signal (Extended, VANDIT Alternative), a melodic track, measures -11.3 LUFS, i.e. quieter than the median, but within the spread of released tracks.
 
-In Live 12.4 geprüft, derselbe Song mit der House-Kette auf dem Master, Ziel Melodic Techno (-8,8 LUFS):
+Checked in Live 12.4, the same song with the House chain on the master, target Melodic Techno (-8.8 LUFS):
 
-| Runde | Input Gain | Integriert |
+| Round | Input Gain | Integrated |
 |---|---|---|
-| vorher (Kette, Gain 0) | 0,0 dB | -13,9 LUFS |
-| 1 | +5,1 dB | -9,4 LUFS |
-| 2 | +5,7 dB | -9,0 LUFS, im Ziel |
+| before (chain, gain 0) | 0.0 dB | -13.9 LUFS |
+| 1 | +5.1 dB | -9.4 LUFS |
+| 2 | +5.7 dB | -9.0 LUFS, on target |
 
-Glue Compressor und Ceiling nehmen dem Song zuerst 2,6 LU. Von den +5,1 dB der ersten Runde schluckte der Limiter 0,6 dB. Der Peak blieb bei -1,0 dB.
+Glue Compressor and ceiling first take 2.6 LU from the song. Of the +5.1 dB of the first round, the limiter swallowed 0.6 dB. The peak stayed at -1.0 dB.
 
-**Quellen:**
-- TrackSensei, „563 Techno & House Tracks: Real LUFS Data“
-- WeFoundDNB, „How Loud Should Drum & Bass Be? LUFS From the Pros and 101 Measured Tracks“
-- Violet Recording (Hip-Hop-Mastering), TrackScore (Genre-Bänder)
-- Spotify für Artists, „Loudness normalization“
+**Sources:**
+- TrackSensei, "563 Techno & House Tracks: Real LUFS Data"
+- WeFoundDNB, "How Loud Should Drum & Bass Be? LUFS From the Pros and 101 Measured Tracks"
+- Violet Recording (hip-hop mastering), TrackScore (genre bands)
+- Spotify for Artists, "Loudness normalization"
 
-## Quellen der Lautheitsmessung
+## Loudness measurement sources
 
-- ITU-R BS.1770-4 (K-Filter, Gating, Kalibrierung)
-- EBU R 128 und EBU Tech 3341 (Momentary, Short-term, Integrated)
-- libebur128 (Koeffizienten für beliebige Sampleraten)
+- ITU-R BS.1770-4 (K-filter, gating, calibration)
+- EBU R 128 and EBU Tech 3341 (momentary, short-term, integrated)
+- libebur128 (coefficients for arbitrary sample rates)
 
-## Lücken
+## Gaps
 
-- **Lead-Dichte und Stab-Länge** nennen die Quellen kaum in Zahlen. Die Werte oben sind Konventionen (○) und gehören nach Gehör justiert.
-- **Notenraster aus Attacks „Beat Dissected“** liegen nur als Bilder vor. Die Schrittpositionen stammen aus den Texten und aus anderen Quellen.
-- **Sound-Techniken** wie Rumble, Reese und Sidechain sind Klangbearbeitung. Die Engine deutet sie durch Pausen, Dichte und Velocity an; Sidechain baut sie als Compressor, den eine stumme Trigger-Spur steuert. Filterfahrten und Resonanz schreibt sie als Clip-Automation eines Auto Filters, Delay-Throws als Send-Automation, Riser als Preset mit Hüllkurven auf Lautstärke und Filter-Makro.
-- **Breaks und Samples** (Amen, Vocal-Chops, 808-Samples) kann Lives API nicht laden.
+- **Lead density and stab length** are hardly given in numbers by the sources. The values above are conventions (○) and should be adjusted by ear.
+- **Note grids from Attack's "Beat Dissected"** only exist as images. The step positions come from the texts and from other sources.
+- **Sound techniques** such as rumble, Reese and sidechain are sound design. The engine hints at them through rests, density and velocity; it builds sidechain as a Compressor driven by a silent trigger track. It writes filter sweeps and resonance as clip automation of an Auto Filter, delay throws as send automation, risers as a preset with envelopes on volume and filter macro.
+- **Breaks and samples** (Amen, vocal chops, 808 samples) cannot be loaded by Live's API.

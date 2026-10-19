@@ -6,7 +6,8 @@ import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
 from fake_song import DrumRackDevice
-from midibakery.compose.song import _batch_steps, _sweep
+from midibakery.compose.rollback import batch_steps
+from midibakery.compose.song import _sweep
 from midibakery.compose.structures import TEMPLATES, bar_grid, from_reference, parse_segments, sized
 from midibakery.mcp import build_server
 
@@ -125,8 +126,8 @@ def test_sweeps_with_curves_and_waves():
 
 
 def test_live_closes_the_undo_step_at_a_new_return():
-    ops = [{"op": o} for o in ("track.create", "return.create", "device.set_param", "return.create", "mixer.set")]
-    assert [_batch_steps(ops, done) for done in range(6)] == [0, 1, 1, 2, 1, 2]
+    ops = ["track.create", "return.create", "device.set_param", "return.create", "mixer.set"]
+    assert [batch_steps(ops, done) for done in range(6)] == [0, 1, 1, 2, 1, 2]
 
 
 async def test_the_sets_own_reverb_is_used_and_left_as_it_is(client, live):
@@ -550,6 +551,22 @@ async def test_a_failed_apply_takes_back_tracks_and_clips(client, live):
         await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     assert "were undone, Live is unchanged" in str(exc.value)
     assert live.on_main(lambda: live.song.undo_calls) - before == 6  # the clip already written, the tempo, two presets, the new tracks and returns (2 steps in Live)
+
+
+class _FailingLocators(_FailingEdit):
+    async def call(self, op, params=None, **kwargs):
+        if op == "arrangement.locators" and len(params["actions"]) > 1:
+            params = {"actions": params["actions"][:2] + [{"action": "delete_locator", "time": 9999}]}
+        return await self._client.call(op, params, **kwargs)
+
+
+async def test_failing_locators_keep_the_song_and_none_of_the_locators(client, live):
+    _studio(live)
+    server = build_server(_FailingLocators(client))
+    preview = await _plan(server)
+    result = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    assert result["locators"].startswith("not set: No locator at beat 9999")
+    assert result["clips"] > 0 and (await client.call("arrangement.get", {}))["locators"] == []
 
 
 async def test_songs_need_four_four(client, live):

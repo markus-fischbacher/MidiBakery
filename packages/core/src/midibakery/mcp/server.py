@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import secrets
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from importlib.resources import files
 from typing import Annotated, Any, Literal
 
@@ -36,6 +38,7 @@ from midibakery.compose import (
 )
 from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
 from midibakery.compose.plan import Plan, new_seed
+from midibakery.compose.rollback import locators as read_locators, restore_locators, undo_batch, undo_edit
 from midibakery.compose.references import find_reference, load_references
 from midibakery.compose.loudness import LoudnessPlan, LoudnessRequest, apply_loudness, build_loudness
 from midibakery.compose.master import MasterPlan, MasterRequest, apply_master, build_master
@@ -301,6 +304,26 @@ def _piano_roll_html() -> str:
     return files("midibakery.mcp").joinpath("piano_roll.html").read_text(encoding="utf-8")
 
 
+def _track_identity(tracks: list[dict[str, Any]]) -> tuple[Any, ...]:
+    return tuple((t.get("id"), t.get("name"), t.get("kind"), tuple((c["slot"], c["name"], c["length"]) for c in t.get("clips", [])))
+                 for t in tracks)
+
+
+@dataclass
+class PendingCall:
+    """A destructive call a client without elicitation made: kept until apply_plan, after the user said yes."""
+
+    id: str
+    op: str
+    args: dict[str, Any]
+    message: str
+    tracks: tuple[Any, ...]
+
+    def preview(self) -> dict[str, Any]:
+        return {"plan_id": self.id, "not_applied": self.message, "next": "Ask the user exactly this; only after a yes, "
+                "apply_plan(plan_id) runs it (one undo step). This client cannot show a confirmation dialog."}
+
+
 def build_server(client: BridgeClient | None = None) -> MCPServer:
     bridge = client or BridgeClient()
     plans = PlanStore()
@@ -347,6 +370,21 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         if clip.get("is_midi"):
             clip["notes"] = (await bridge.call("notes.get", args))["notes"]
         return clip
+
+    async def call_op(op: str, args: dict[str, Any]) -> Any:
+        if op != "batch":
+            return await bridge.call(op, args)
+        try:
+            return await bridge.call(op, args)
+        except BridgeError as exc:  # all or nothing, like a plan
+            await undo_batch(bridge.call, exc, [_item_op(item) for item in args.get("ops", [])])
+            raise
+
+    async def defer(op: str, args: dict[str, Any], message: str) -> dict[str, Any]:
+        tracks = _track_identity((await bridge.call("tracks.list"))["tracks"])
+        pending = PendingCall(secrets.token_hex(4), op, args, message, tracks)
+        plans.put(pending)  # type: ignore[arg-type]  # apply_plan tells pending calls apart
+        return pending.preview()
 
     async def describe(op: str, params: dict[str, Any]) -> str:
         """Human wording for a destructive op, with track and clip names."""
@@ -411,10 +449,23 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         locators = [a for a in actions if a["action"] in ("set_locator", "delete_locator")]
         result: dict[str, Any] = {}
         song = await bridge.call("song.get")
-        if clips:
-            result.update(await bridge.call("arrangement.edit", {"actions": clips}))
+        # All or nothing: locators first (restored from a snapshot, Live makes each its own undo step),
+        # then the clips (one undo step, on top of the stack when they fail).
+        before = await read_locators(bridge.call) if locators else []
         if locators:
-            result["locators"] = (await bridge.call("arrangement.locators", {"actions": locators}))["locators"]
+            try:
+                result["locators"] = (await bridge.call("arrangement.locators", {"actions": locators}))["locators"]
+            except BridgeError as exc:
+                await restore_locators(bridge.call, exc, before)
+                raise
+        if clips:
+            try:
+                result.update(await bridge.call("arrangement.edit", {"actions": clips}))
+            except BridgeError as exc:
+                await undo_edit(bridge.call, exc)
+                if locators:
+                    await restore_locators(bridge.call, exc, before)
+                raise
         # Copying a session clip moves Live's play position to the copy's end; put it back where the user was.
         if not song["is_playing"] and (await bridge.call("song.get"))["current_song_time"] != song["current_song_time"]:
             await bridge.call("song.position", {"beat": song["current_song_time"]})
@@ -434,17 +485,18 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
 
         async def run(args: dict[str, Any], ctx: Context | None, _op: str = op_name) -> Any:
             if _op in CONFIRM_OPS:
-                asked = await confirm(ctx, await describe(_op, args))
+                asked = await confirm(ctx, await describe(_op, args), later=lambda m: defer(_op, args, m))
                 if asked is not None:
                     return asked
             elif _op == "batch":
                 risky = [item for item in args.get("ops", []) if _item_op(item) in CONFIRM_OPS]
                 if risky:
                     questions = [await describe(_item_op(i), _item_params(i)) for i in risky]
-                    asked = await confirm(ctx, "Run this batch? It will " + " ".join(q[0].lower() + q[1:] for q in questions))
+                    asked = await confirm(ctx, "Run this batch? It will " + " ".join(q[0].lower() + q[1:] for q in questions),
+                                          later=lambda m: defer(_op, args, m))
                     if asked is not None:
                         return asked
-            return await bridge.call(_op, args)
+            return await call_op(_op, args)
 
         server.add_tool(
             _make_tool(spec.params, run, free=spec.read_only or op_name == "history.step"),
@@ -459,12 +511,19 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             ),
         )
 
-    async def ask_before_replacing(plan: Plan, ctx: Context | None, state: dict[str, Any] | None = None):
+    async def ask_before_replacing(plan: Plan, ctx: Context | None, state: dict[str, Any] | None = None, defer_plan: bool = False):
         removed = plan.removes_existing
         if not removed:
             return None
         clips = ", ".join(_clip_label(c) for c in plan.changes if c.removes_existing)
-        return await confirm(ctx, f"Replace {removed} existing note(s) in {clips}?", state)
+
+        async def later(message: str) -> CallToolResult:
+            plans.put(plan)
+            return _with_roll(plan, {**plan.preview(), "not_applied": message, "next": "Ask the user exactly this; only "
+                                     "after a yes, apply_plan(plan_id) writes it. This client cannot show a confirmation dialog."}, False)
+
+        # apply_plan is itself the go-ahead for a plan the user saw
+        return await confirm(ctx, f"Replace {removed} existing note(s) in {clips}?", state, later if defer_plan else None)
 
     for tool_name, model, title, description in COMPOSE_TOOLS:
 
@@ -481,7 +540,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             if preview:
                 plans.put(plan)
                 return _with_roll(plan, {**plan.preview(), "next": "apply_plan(plan_id) writes this as one undo step"}, False)
-            asked = await ask_before_replacing(plan, ctx, {"seed": args["seed"]})
+            asked = await ask_before_replacing(plan, ctx, {"seed": args["seed"]}, defer_plan=True)
             if asked is not None:
                 return asked
             applied = await apply_plan(bridge.call, plan, verify=False)
@@ -535,6 +594,13 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             result = await apply_song(bridge.call, plan)
             plans.applied(plan.id)
             return result
+        if isinstance(plan, PendingCall):
+            plans.pop(plan.id)
+            if _track_identity((await bridge.call("tracks.list"))["tracks"]) != plan.tracks:
+                raise BridgeError("CONFLICT", f"Tracks or clips changed since {plan.id} was prepared ({plan.message}); call the tool again")
+            result = await call_op(plan.op, plan.args)
+            plans.applied(plan.id)
+            return result
         if isinstance(plan, (MasterPlan, LoudnessPlan)):
             plans.pop(plan.id)
             result = await (apply_master(bridge.call, plan) if isinstance(plan, MasterPlan) else apply_loudness(bridge.call, plan))
@@ -565,7 +631,11 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
     )
     async def compose_takes(args: dict[str, Any], ctx: Context | None) -> Any:
         actions, summary = await build_takes(bridge.call, TakesRequest.model_validate(args))
-        await bridge.call("arrangement.edit", {"actions": actions})
+        try:
+            await bridge.call("arrangement.edit", {"actions": actions})
+        except BridgeError as exc:
+            await undo_edit(bridge.call, exc)
+            raise
         return summary
 
     server.add_tool(

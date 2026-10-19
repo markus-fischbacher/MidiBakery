@@ -84,7 +84,7 @@ Der Unterschied zum Chat-Gerät: Claude Desktop und Claude Code können **mehr**
 
 - **Undo:** Jede Änderung ist ein Schritt in Lives Rückgängig-Liste (⌘Z / Strg+Z). Das Werkzeug `undo` kann Claude selbst aufrufen.
 - **Nachfrage:** Beim **Löschen von Spuren oder Clips** und beim **Ersetzen vorhandener Noten** (`compose`, `transform_notes`, `apply_plan`) fragt MidiBakery vorher nach. Ein Song-Plan überschreibt nie vorhandene Arrangement-Clips. Programme, die Rückfragen können (die meisten), zeigen dir eine Bestätigung. Lehnst du ab, bleibt alles, wie es ist, und Claude erfährt `CANCELLED`.
-- **Programme ohne Rückfrage-Funktion** werden nicht gefragt. Dort schützen nur Undo und der Hinweis „destruktiv“, den manche Programme selbst anzeigen. Prüfe in so einem Programm, was Claude vorhat.
+- **Programme ohne Rückfrage-Funktion** können die Bestätigung nicht zeigen. Darum wird dort nichts sofort gelöscht oder ersetzt: Claude bekommt die Frage und eine `plan_id` zurück, muss dich im Chat fragen, und erst `apply_plan` führt es aus. Haben sich Spuren oder Clips inzwischen geändert, lehnt `apply_plan` mit `CONFLICT` ab.
 - **Vorschau vor Änderung:** Ganze Songs (`plan_song`) und Pläne (`plan_changes`) ändern **nichts**, bevor `apply_plan` aufgerufen wird.
 - **Alles bleibt auf deinem Rechner,** was MidiBakery selbst betrifft: Der Server spricht nur mit Live. Claude (das Programm, in dem du bist) bekommt natürlich zu sehen, was die Werkzeuge zurückgeben: Spur- und Clipnamen, Noten, Tempo.
 
@@ -138,7 +138,7 @@ Die Spalte **Art** zeigt: **lesen** (ändert nichts), **schreiben**, **fragt nac
 | `delete_clip` | **fragt nach** | Einen Clip löschen (Session per `slot`, Arrangement per `arrangement_clip`). |
 | `edit_notes` | schreiben (als „destruktiv“ markiert, ohne Rückfrage) | Noten **als Diff** hinzufügen (`add`), ändern (`modify`) oder entfernen (`remove`) nach `note_id`. Unberührte Noten behalten Daten und Ids. |
 | `write_clip_envelope` | schreiben | Clip-Automation (Punkte oder Formen) auf einen bestehenden Clip schreiben; Geräteparameter und Spurmixer (Lautstärke, Pan, Sends). `clear`, `replace_envelopes`. |
-| `edit_arrangement` | schreiben | Im Arrangement: MIDI-Clips mit Noten anlegen, Session-Clips kopieren, Clips **verschieben, tauschen, löschen**, Locators setzen oder löschen. Clip-Aktionen zuerst (ein Undo-Schritt), dann Locators (Transport muss stehen). Ein Clip landet nie auf einem anderen. Take Lanes: `compose_takes`. |
+| `edit_arrangement` | schreiben | Im Arrangement: MIDI-Clips mit Noten anlegen, Session-Clips kopieren, Clips **verschieben, tauschen, löschen**, Locators setzen oder löschen. Locators zuerst (Transport muss stehen), dann die Clip-Aktionen (ein Undo-Schritt). Alles oder nichts: Scheitert eine Aktion, werden die Clips rückgängig gemacht und die Locators wiederhergestellt. Ein Clip landet nie auf einem anderen. Take Lanes: `compose_takes`. |
 
 ### Mixer, Geräte, Klänge
 
@@ -150,7 +150,7 @@ Die Spalte **Art** zeigt: **lesen** (ändert nichts), **schreiben**, **fragt nac
 | `load_browser_item` | schreiben | Browser-Eintrag auf eine Spur laden (`path`); ein Instrument oder Kit ersetzt das vorhandene Instrument. |
 | `set_device_parameter` | schreiben | Einen Geräteparameter setzen (`parameter`, `value` oder `display`). |
 | `update_rack` | schreiben | Macros setzen, Ketten ändern oder eine Kette hinzufügen. |
-| `run_batch` | **fragt nach**, wenn ein Löschen enthalten ist | Mehrere Operationen **atomar in einem Undo-Schritt** (`ops`, `label`). |
+| `run_batch` | **fragt nach**, wenn ein Löschen enthalten ist | Mehrere Operationen **atomar in einem Undo-Schritt** (`ops`, `label`). Scheitert eine, werden die bereits gelaufenen rückgängig gemacht. |
 
 ### Komponieren und Bearbeiten
 
@@ -163,7 +163,7 @@ Die Spalte **Art** zeigt: **lesen** (ändert nichts), **schreiben**, **fragt nac
 | `measure_master` | lesen | Liest die **Lautheit des Masters** vom Gerät MidiBakery Loudness Meter (letztes Gerät auf dem Master): Momentary, Short-term und Integrated LUFS (BS.1770), Sample-Peak, gemessene Sekunden, ob Live gerade spielt. `reset=true` startet Integrated und Peak neu. Ohne das Gerät: Fehler mit dem Hinweis, wo es im Browser liegt. |
 | `plan_loudness` | lesen | Eine **Runde zur Ziel-Lautheit**: liest den integrierten Wert des Loudness Meters (mind. 30 s seit dem Reset) und plant den Input Gain des Limiters auf dem Master (höchstens 6 dB pro Runde, insgesamt +12 dB). `target`: Genre oder `streaming` (-14 LUFS), oder `target_lufs`. Innerhalb von 0,5 LU meldet es `on_target`. `apply_plan` setzt den Wert in einem Undo-Schritt und setzt das Meter zurück. |
 | `plan_master` | lesen | Plant eine **Master-Kette** (EQ Eight mit Low Cut, Glue Compressor, Limiter mit -1 dB True Peak) mit den Werten des Genres (`genre`, optional; `ceiling_db`). Ein Startpunkt: Sie hört nichts und macht nicht lauter. Liefert Vorschau und `plan_id`; `apply_plan` schreibt sie in zwei Undo-Schritten. Ein Master mit Limiter, EQ Eight oder Glue Compressor bleibt unberührt. |
-| `apply_plan` | **fragt nach** (beim Ersetzen von Noten) | Schreibt einen Plan als **einen Undo-Schritt** nach Live. Schlägt mit `CONFLICT` fehl, wenn sich ein Ziel-Clip seit der Planung geändert hat; dann neu planen. |
+| `apply_plan` | **fragt nach** (beim Ersetzen von Noten) | Schreibt einen Plan als **einen Undo-Schritt** nach Live, oder führt ein Löschen oder Ersetzen aus, das auf dein OK gewartet hat (Programme ohne Rückfrage-Funktion). Schlägt mit `CONFLICT` fehl, wenn sich ein Ziel-Clip seit der Planung geändert hat; dann neu planen. Ein gescheitertes Schreiben wird rückgängig gemacht. Pläne liegen im Speicher des Servers (die letzten 32): nach einem Neustart neu planen. |
 | `compose_takes` | schreiben | Mehrere **Varianten** eines Teils (`kind`: Hook, Melodie, Bass, Akkorde, Drums; `count`) über denselben Akkorden, jede auf einer **Take Lane** im Arrangement (Live 12.2+), zum Comping in Live. Ein Undo-Schritt. |
 
 ### Vorschau (Piano Roll)
@@ -182,5 +182,5 @@ Die Spalte **Art** zeigt: **lesen** (ändert nichts), **schreiben**, **fragt nac
 ### Für Entwickler
 
 - Befehle: `midibakery mcp` (stdio), `midibakery mcp --http [--port 8765]`.
-- Der Server ist `midibakery.mcp.server.build_server`; die Operationen an Live stehen im Katalog `midibakery.catalog` und werden über die Brücke (Port 47681, Token in `bridge.json`) an das Remote Script gegeben. Mehr in [ARCHITEKTUR.md](../ARCHITEKTUR.md).
+- Der Server ist `midibakery.mcp.server.build_server`; die Operationen an Live stehen im Katalog `midibakery.catalog` und werden über die Brücke (Port 47681, Token in `bridge.json`) an das Remote Script gegeben. Mehr in [ARCHITECTURE.md](../ARCHITECTURE.md) (Englisch).
 - Dieselben Werkzeuge nutzt der Chat-Agent (`midibakery chat` im Terminal, oder das Chat-Gerät); sie sind **nicht** doppelt gepflegt.

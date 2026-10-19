@@ -10,7 +10,6 @@ from midibakery.agent.providers.base import Emit, Provider, ToolCall, ToolResult
 from midibakery.agent.tools import ToolSpec
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
-MODELS = ("claude-sonnet-5-5", "claude-opus-5-5")
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 JSON_RETRIES = 2
 

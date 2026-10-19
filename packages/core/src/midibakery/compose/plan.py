@@ -36,6 +36,7 @@ from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.chord_templates import template_scale
 from midibakery.compose.parts import generate_part
 from midibakery.compose.patterns import mood_template
+from midibakery.compose.rollback import undo_batch
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.specs import (
     BassSpec,
@@ -420,7 +421,10 @@ class Plan:
 
 
 class PlanStore:
-    """Recent plans kept in memory until applied (oldest dropped first)."""
+    """Recent plans kept in memory until applied (oldest dropped first).
+
+    Per process and lost on restart, on purpose: a plan is a short-lived proposal, and apply_plan checks
+    it against Live anyway (fingerprints, track identity, Master devices) and refuses a stale one."""
 
     def __init__(self, capacity: int = 32):
         self._plans: OrderedDict[str, Plan] = OrderedDict()
@@ -437,7 +441,8 @@ class PlanStore:
         try:
             return self._plans.pop(plan_id)
         except KeyError:
-            raise BridgeError("NOT_FOUND", f"Unknown or already applied plan '{plan_id}'; call plan_changes again") from None
+            raise BridgeError("NOT_FOUND", f"Unknown or already applied plan '{plan_id}'. Plans live in the memory of the "
+                              "server that made them (its last 32): after a restart, or from another client, plan again") from None
 
     def get(self, plan_id: str) -> Plan | None:
         return self._plans.get(plan_id)
@@ -960,21 +965,6 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
     return plan
 
 
-async def _roll_back(call: Call, plan: Plan, error: BridgeError) -> None:
-    """A batch stops at its first failing op but keeps what already ran (one undo step).
-    Undo that step so a plan is applied completely or not at all. Only when ops did
-    run: undoing an empty batch would revert the user's previous action instead."""
-    if not error.details.get("completed"):
-        return
-    try:
-        await call("history.step", {"action": "undo"})
-    except BridgeError as undo_error:
-        error.message += f" (rolling back the {len(error.details['completed'])} completed op(s) failed: {undo_error.message})"
-        return
-    error.message += f"; the {len(error.details['completed'])} op(s) that had already run were undone, Live is unchanged"
-    error.details["rolled_back"] = True
-
-
 async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, Any]:
     """Run the plan as one batch (one undo step) after checking nothing changed underneath it."""
     if verify:
@@ -1004,7 +994,7 @@ async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, A
         try:
             results = (await call("batch", {"ops": ops, "label": f"MidiBakery plan {plan.id}"}))["results"]
         except BridgeError as exc:
-            await _roll_back(call, plan, exc)
+            await undo_batch(call, exc, [op["op"] for op in plan.ops()])
             raise
         cursor = 0
         for change in plan.changes:

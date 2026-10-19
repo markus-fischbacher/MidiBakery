@@ -4,14 +4,17 @@ On protocol 2026-07-28 the tool answers the first call with an
 ``InputRequiredResult`` carrying a form elicitation; the client asks the user
 and retries the same call with the answer in ``input_responses``. Older
 sessions use a classic ``elicitation/create`` round trip. Clients without the
-elicitation capability are not asked: they rely on the tools' ``destructiveHint``
-and on Live's undo.
+elicitation capability cannot ask: the change is not run but deferred (the tool
+passes ``later``), returned as a preview with a plan_id that only ``apply_plan``
+writes, so the model has to show it and get the user's go-ahead first. Calls
+outside a client request (in-process, tests) run directly.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from mcp.server.mcpserver import Context
@@ -40,23 +43,26 @@ _reported: set[str] = set()
 
 
 def _report_once(reason: str) -> None:
-    """Say once per process why destructive calls run unconfirmed (shows up in the client's MCP log)."""
+    """Say once per process why destructive calls are deferred to apply_plan (shows up in the client's MCP log)."""
     if reason not in _reported:
         _reported.add(reason)
-        log.warning("destructive changes run without confirmation: %s", reason)
+        log.warning("destructive changes wait for apply_plan instead of a confirmation dialog: %s", reason)
 
 
 class ConfirmForm(BaseModel):
     confirm: bool = Field(True, title="Go ahead", description="The change can be undone in Live with one undo step.")
 
 
+_DIRECT = object()
+
+
 def _capabilities(ctx: Context | None) -> Any:
     if ctx is None:
-        return None
+        return _DIRECT
     try:
         return ctx.client_capabilities
     except (LookupError, RuntimeError, ValueError):
-        return None  # called outside a client request (tests, direct calls)
+        return _DIRECT  # called outside a client request (in-process, tests)
 
 
 def _modern(ctx: Context) -> bool:
@@ -88,22 +94,27 @@ def _declined() -> ToolError:
     return ToolError("CANCELLED: the user declined the change; nothing was written to Live")
 
 
-async def confirm(ctx: Context | None, message: str, state: dict[str, Any] | None = None) -> InputRequiredResult | None:
+Later = Callable[[str], Awaitable[Any]]
+
+
+async def confirm(
+    ctx: Context | None, message: str, state: dict[str, Any] | None = None, later: Later | None = None
+) -> Any:
     """Ask the user before a destructive change.
 
     Returns None when the call may go ahead, an InputRequiredResult the tool must
     return as-is when the client still has to ask, and raises ToolError when the
-    user declined.
+    user declined. A client that cannot ask gets ``await later(message)`` (a deferred
+    plan the tool returns as-is); without ``later`` (apply_plan, itself the go-ahead)
+    the call goes ahead.
     """
     capabilities = _capabilities(ctx)
-    if ctx is None:
+    if capabilities is _DIRECT:
         return None
-    if capabilities is None:
-        _report_once("the client declared no capabilities")
-        return None
-    if capabilities.elicitation is None:
-        _report_once("the client does not declare the elicitation capability")
-        return None
+    assert ctx is not None
+    if capabilities is None or capabilities.elicitation is None:
+        _report_once("the client declared no capabilities" if capabilities is None else "the client does not declare the elicitation capability")
+        return await later(message) if later is not None else None
 
     if _modern(ctx):
         responses = ctx.input_responses or {}
