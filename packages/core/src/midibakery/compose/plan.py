@@ -442,6 +442,10 @@ class PlanStore:
     def get(self, plan_id: str) -> Plan | None:
         return self._plans.get(plan_id)
 
+    def pending(self) -> list[Plan]:
+        """Plans not applied yet, oldest first."""
+        return list(self._plans.values())
+
     def applied(self, plan_id: str) -> None:
         """Remember that the plan went into Live: applying it again (the user pressed Apply in the preview,
         then the model asks too) says so instead of failing."""

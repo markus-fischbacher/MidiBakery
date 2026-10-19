@@ -196,6 +196,10 @@ def _signature_from_model(model: type[BaseModel], skip: tuple[str, ...] = ()) ->
     return inspect.Signature(params, return_annotation=dict[str, Any])
 
 
+# The newest server's plans: a track a song plan creates is unknown to Live until apply_plan (see build_server)
+_unapplied_track: Callable[[int], str | None] = lambda index: None
+
+
 def _make_tool(
     model: type[BaseModel], run: Runner, skip: tuple[str, ...] = (), extra: dict[str, Any] | None = None,
     free: bool = False,
@@ -212,6 +216,9 @@ def _make_tool(
             result = await run(kwargs, ctx)
         except BridgeError as exc:
             hint = f" Details: {exc.details}" if exc.details else ""
+            track = exc.details.get("track") if exc.code == "NOT_FOUND" and isinstance(exc.details, dict) else None
+            if isinstance(track, int) and exc.message.startswith("No track index") and (planned := _unapplied_track(track)):
+                hint = f" {planned}"
             raise ToolError(f"{exc.code}: {exc.message}.{hint}") from None
         except ValidationError as exc:
             raise ToolError(f"INVALID_PARAMS: {_validation_message(exc, model)}") from None
@@ -297,6 +304,18 @@ def _piano_roll_html() -> str:
 def build_server(client: BridgeClient | None = None) -> MCPServer:
     bridge = client or BridgeClient()
     plans = PlanStore()
+
+    def unapplied_track(index: int) -> str | None:
+        song = next((p for p in reversed(plans.pending()) if isinstance(p, SongPlan)
+                     and any(t.new and t.index == index for t in p.roles.values())), None)
+        if song is None:
+            return None
+        name = next(t.name for t in song.roles.values() if t.new and t.index == index)
+        return (f"Track index {index} '{name}' comes from song plan {song.id}, which is not applied yet: "
+                f"apply_plan({song.id}) first (or ask the user to press Apply), then this call works")
+
+    global _unapplied_track
+    _unapplied_track = unapplied_track
     apps = Apps()
     apps.add_html_resource(
         PIANO_ROLL_URI,
