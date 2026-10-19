@@ -26,6 +26,7 @@ class Segment:
 class Harmony:
     segments: tuple[Segment, ...]
     source: str  # "progression", "auto" or "clip"
+    explicit: bool = False  # chords the user named: generators must keep their quality as written
 
     def at(self, time: float) -> Segment:
         for segment in self.segments:
@@ -55,7 +56,7 @@ class Harmony:
                     break
                 segments.append(Segment(start, min(segment.length, total - start), segment.chord))
             offset += cycle
-        return Harmony(tuple(segments), self.source)
+        return Harmony(tuple(segments), self.source, self.explicit)
 
 
 def segment_count(meter: Meter, bars: int, chords_per_bar: float) -> int:

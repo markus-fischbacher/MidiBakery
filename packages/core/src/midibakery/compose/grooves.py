@@ -452,14 +452,17 @@ def _voicing(chord: Chord, low: int, high: int, previous: tuple[int, ...] | None
 
 
 def seventh_harmony(harmony: Harmony, scale: Scale) -> Harmony:
-    """The same chords as diatonic 7th chords (m7, maj7, 7), as House and Liquid recipes ask."""
+    """Generated diatonic triads as 7th chords (m7, maj7, 7), as House and Liquid recipes ask.
+    Chords the user named are kept as written (E stays E in A minor)."""
+    if harmony.explicit:
+        return harmony
     segments = []
     for segment in harmony.segments:
         chord = segment.chord
         if chord.degree is not None and len(scale) == 7 and len(chord.intervals) == 3:
             chord = diatonic_chord(scale, chord.degree, 4)
         segments.append(Segment(segment.start, segment.length, chord))
-    return Harmony(tuple(segments), harmony.source)
+    return Harmony(tuple(segments), harmony.source, harmony.explicit)
 
 
 def generate_recipe_chords(pattern: ChordPattern, harmony: Harmony, meter: Meter, bars: int, swing: float, stabs: bool, pad: bool) -> list[Note]:

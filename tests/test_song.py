@@ -307,6 +307,21 @@ async def test_reused_clip_changed_after_planning(client, live):
     assert not (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"]
 
 
+async def test_named_progression_keeps_its_chord_quality_under_genre_sevenths(client, live):
+    _studio(live)
+
+    def minor():
+        live.song.root_note, live.song.scale_name = 9, "Minor"
+        live.song.scale_intervals = (0, 2, 3, 5, 7, 8, 10)
+
+    live.on_main(minor)
+    server = build_server(client)
+    preview = await _plan(server, progression="Am F E G")
+    assert preview["harmony"]["main"][:4] == ["Am (i)", "F (VI)", "E (V)", "G (VII)"]  # what plays: no Em7, no Fmaj7
+    chords = await client.call("arrangement.get", {})
+    assert not chords["tracks"][0]["clips"]  # a preview changes nothing
+
+
 async def test_without_creating_tracks_parts_are_left_out(client, live):
     _studio(live)
     server = build_server(client)

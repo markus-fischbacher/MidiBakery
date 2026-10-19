@@ -602,7 +602,7 @@ def _from(harmony: Harmony, start: float, length: float) -> Harmony:
         begin, end = max(segment.start, start), min(segment.end, start + length)
         if end > begin + EPSILON:
             segments.append(harmony_mod.Segment(begin - start, end - begin, segment.chord))
-    return Harmony(tuple(segments), harmony.source)
+    return Harmony(tuple(segments), harmony.source, harmony.explicit)
 
 
 def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Random) -> tuple[Harmony, Harmony]:
@@ -616,7 +616,7 @@ def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Rando
         loops.append(loops[0])
     if request.progression:
         try:
-            loops[0] = harmony_mod.from_progression(request.progression, scale, meter, 8, style.chords_per_bar)
+            loops[0] = replace(harmony_mod.from_progression(request.progression, scale, meter, 8, style.chords_per_bar), explicit=True)
         except ValueError as exc:
             raise BridgeError("INVALID_PARAMS", str(exc)) from None
     return loops[0], loops[1]
