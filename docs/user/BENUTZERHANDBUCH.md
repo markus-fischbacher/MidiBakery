@@ -321,7 +321,7 @@ Du kannst Deutsch und Englisch mischen. Spuren und Clips kannst du beim Namen ne
 
 ### Einzelne Teile
 
-Einen Teil schreibst du als **neuen Clip in den ersten freien Slot** einer Spur. Vorhandene Clips werden nicht überschrieben, außer du verlangst es (dann fragt MidiBakery nach).
+Einen Teil schreibst du als **neuen Clip in den ersten freien Slot** einer Spur. Vorhandene Clips werden nicht überschrieben, außer du verlangst es (dann fragt MidiBakery nach). Eine MIDI-Spur ohne Instrument bekommt nach den Noten eins: ein 909-Kit, Analogue Bass, Analog Soft Pad oder Basic Pluck Keys aus der Core Library (sonst Lives Drum Rack, Drift, Wavetable oder Operator).
 
 | Teil | Wichtige Stellschrauben (alle in normalen Worten verlangbar) |
 |---|---|

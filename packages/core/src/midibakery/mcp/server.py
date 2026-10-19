@@ -468,7 +468,8 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             applied = await apply_plan(bridge.call, plan, verify=False)
             result = plan.preview()
             result.pop("plan_id")
-            return _with_roll(plan, {**result, "applied": applied["applied"]}, True)
+            extra = {k: applied[k] for k in ("instruments", "warnings") if k in applied}
+            return _with_roll(plan, {**result, "applied": applied["applied"], **extra}, True)
 
         server.add_tool(
             _make_tool(model, compose, skip=() if model is ComposeRequest else ("kind",), extra={"preview": (Annotated[bool, PREVIEW_FIELD], False)}),

@@ -52,6 +52,14 @@ from midibakery.compose.theory import Scale, pitch_name
 
 Call = Callable[..., Awaitable[Any]]
 MAX_BATCH_OPS = 256
+# A part written onto a MIDI track without devices (a model's create_track) gets a Core Library preset after
+# the notes, else Live's own instrument: notes nobody hears look like a failure.
+SOUNDS: dict[str, tuple[tuple[str, ...], str]] = {
+    "drums": (("packs", "Core Library", "Racks", "Drum Racks", "Drum Machines", "909 Core Kit.adg"), "Drum Rack"),
+    "bass": (("sounds", "Bass", "Analogue Bass.adv"), "Drift"),
+    "chords": (("sounds", "Pad", "Analog Soft Pad.adv"), "Wavetable"),
+    "melody": (("sounds", "Synth Keys", "Basic Pluck Keys.adg"), "Operator"),
+}
 PREVIEW_NOTES = 48
 
 
@@ -387,6 +395,7 @@ class Plan:
     fingerprints: dict[Place, str]
     scale: str
     meter: str
+    sounds: dict[int, str] = field(default_factory=dict)  # track index -> part kind: it gets SOUNDS[kind]
 
     def ops(self) -> list[dict[str, Any]]:
         return [op for change in self.changes for op in change.ops()]
@@ -900,6 +909,7 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
     session = await Session(call).load()
     changes = []
     targets: set[Place] = set()
+    sounds: dict[int, str] = {}
     expanded = [part for step in steps for part in await _arranged_counter(session, step)]
     for step in expanded:
         step = await _by_index(session, step)
@@ -920,6 +930,10 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
             # a model asked to vary the second half of 'Breakdown Bass' rewrote all of it with kind 'bass'
             change.info["note"] = (f"Replaces all {len(change.existing)} notes of this arrangement clip with a new part. "
                                    "To vary it or only part of it, use transform_notes (operation 'variation', half 'second').")
+        if (step.kind in SOUNDS and key.track not in sounds and not session.track(key.track).get("devices")
+                and session.track(key.track).get("kind") == "midi"):
+            sounds[key.track] = step.kind
+            change.info["instrument"] = f"{SOUNDS[step.kind][0][-1].rsplit('.', 1)[0]} (the track has no instrument)"
         changes.append(change)
     fingerprints = {}
     for key in targets:
@@ -931,6 +945,7 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
         fingerprints,
         session.scale.describe(),
         f"{session.meter.numerator}/{session.meter.denominator}",
+        sounds,
     )
     if len(plan.ops()) > MAX_BATCH_OPS:
         raise BridgeError("INVALID_PARAMS", f"Plan needs {len(plan.ops())} ops; split it (max {MAX_BATCH_OPS})")
@@ -996,4 +1011,32 @@ async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, A
             if change.seed is not None:
                 entry["seed"] = change.seed
             applied.append(entry)
-    return {"plan_id": plan.id, "applied": applied, "op_count": len(ops), "undo": "one undo step reverts the whole plan"}
+    result: dict[str, Any] = {"plan_id": plan.id, "applied": applied, "op_count": len(ops), "undo": "one undo step reverts the whole plan"}
+    if plan.sounds:
+        result["instruments"], warnings = await _give_sounds(call, plan.sounds)
+        result["undo"] = "one undo step reverts the notes; each loaded instrument is one more"
+        if warnings:
+            result["warnings"] = warnings
+    return result
+
+
+async def _give_sounds(call: Call, sounds: dict[int, str]) -> tuple[dict[int, str], list[str]]:
+    """The preset for each instrument-less track a part was written to, else Live's own instrument."""
+    given: dict[int, str] = {}
+    warnings: list[str] = []
+    for track, kind in sounds.items():
+        path, native = SOUNDS[kind]
+        try:
+            await call("browser.load", {"track": track, "path": list(path)})
+            given[track] = path[-1].rsplit(".", 1)[0]
+            continue
+        except BridgeError as exc:
+            if exc.code == "LIVE_ERROR" and exc.message.startswith("Live did not load"):
+                warnings.append(f"{path[-1]} may still appear on track index {track}; if not, drop an instrument on it")
+                continue  # it may land later: a second instrument would play on top
+        try:
+            await call("device.insert", {"track": track, "name": native})
+            given[track] = native
+        except BridgeError as exc:
+            warnings.append(f"Track index {track} has no instrument ({exc.message}): drop one on it to hear the notes")
+    return given, warnings

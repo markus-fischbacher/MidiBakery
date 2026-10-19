@@ -230,3 +230,24 @@ async def test_the_sidechain_track_is_no_lead(client, live):
         "kind": "melody", "track": 0, "seed": 1, "counter_to": {"track": 3, "arrangement_clip": "Breakdown Lead"}}))["changes"]
     assert [(c["start"], c["counter_to"]) for c in changes] == [
         (32.0, "arrangement clip index 1 on track index 1"), (64.0, "arrangement clip index 2 on track index 1")]
+
+
+def _devices(live, track):
+    return live.on_main(lambda: [d.name for d in live.song.tracks[track].devices])
+
+
+async def test_a_new_empty_track_gets_an_instrument(client, live):
+    # the chat's create_track made "Counter Melody" without an instrument: the counter melody played nothing
+    await _song(client, live)
+    server = build_server(client)
+    assert _devices(live, 0) == []
+    result = _payload(await server.call_tool("compose", {
+        "kind": "melody", "track": 0, "seed": 4, "counter_to": {"track": 1, "arrangement_clip": "Breakdown Lead"}}))
+    assert result["changes"][0]["instrument"] == "Basic Pluck Keys (the track has no instrument)"
+    assert result["instruments"] == {"0": "Basic Pluck Keys"} and _devices(live, 0) == ["Basic Pluck Keys"]
+    # a preset this Live lacks: its own synth; a track with an instrument stays as it is
+    live.on_main(lambda: live.song.create_midi_track(-1))
+    chords = _payload(await server.call_tool("compose", {"kind": "chords", "track": 3, "slot": 0}))
+    assert chords["instruments"] == {"3": "Wavetable"} and _devices(live, 3) == ["Wavetable"]
+    again = _payload(await server.call_tool("compose", {"kind": "chords", "track": 3, "slot": 1}))
+    assert "instruments" not in again and _devices(live, 3) == ["Wavetable"]
