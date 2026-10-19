@@ -329,11 +329,11 @@ A part is written as a **new clip into the first free slot** of a track. Existin
 | **Chords** | Rhythm: sustain, pulse, offbeat, stabs. 3 or 4 voices, pitch range, seventh chords, own progression. |
 | **Melody** | Density, pitch range, follows the chords. Can also be a [counter melody](#counter-melody) to a lead. |
 
-Common: **length** in bars (default 4), **swing** (how far off-beats lean back), **seed** (reproducible).
+Common: **length** in bars (default 4), **swing** (engine strength 0 = straight, 1 = triplet feel; 0.6 equals a 60 % MPC-style ratio, not Live Groove Pool Amount), **seed** (reproducible).
 
 **How parts fit together:** bass and melody follow the chords of a clip ("fitting the chords on track 3"). The bass follows the kick of a drum clip. If you ask for several parts in one request, they share the same chord progression.
 
-Everything is **in the key and time signature of your set**. So set key (*Scale* in Live) and tempo first.
+The **key and time signature of your set** provide the default context, so set key (*Scale* in Live) and tempo first. Named patterns can deliberately select another scale mode on the same tonic or introduce chromatic chords: `dreamy_indie` includes major II in minor; `resolute_major` borrows bVII in major. Mood names are suggestions, not guaranteed emotions. See [pattern conventions and exceptions](../PATTERNS.md).
 
 ### Counter melody
 
@@ -354,12 +354,12 @@ Modes (say them in words):
 
 Four fixed figures (the lead only sets register and clashes; they ignore its rhythm):
 
-- **dotted_eighth_pulse**: a steady dotted-eighth pulse (3-3-3-3-3-1) on one chord tone per bar.
+- **dotted_eighth_pulse**: six onsets at 16th steps 1, 4, 7, 10, 13, 16 on one chord tone per bar. The cyclic gaps are 3-3-3-3-3-1: the figure resets each bar, rather than continuing dotted eighths across bar lines.
 - **scale_staircase**: the same pulse climbing one scale step every one or two bars, one step back before the loop restarts.
 - **trance_dotted_eighth_staircase**: the Trance tutorial's 8-bar figure: the pulse on scale degrees 1, 2, 3 and 5, two bars each.
 - **echo_gap_answer**: in long notes of the lead (1.25 beats or more) three or four short notes moving by a step, then one longer note that keeps sounding when the lead comes back. Over a lead without long notes it writes nothing.
 
-Register (`counter_register`): **above** the lead (default, a third or more above its highest note, never above C7), **below** it (the default when above would pass C7), or **same** (then it never starts together with the lead). On strong beats it plays thirds, fifths, sixths or octaves to the lead.  A figure note that would clash on a strong beat moves to the nearest fitting scale tone.
+Register (`counter_register`): **above** the lead (default, a third or more above its highest note, never above MIDI 96, Live C6), **below** it (the default when above would pass MIDI 96), or **same** (then it never starts together with the lead). The overall range is MIDI 36–96 (Live C1–C6). On strong beats it plays thirds, fifths, sixths or octaves to the lead. A figure note that would clash on a strong beat moves to the nearest fitting scale tone. These are conservative generator constraints, not universal musical rules; a shared rhythm or intentional dissonance can also work.
 
 ### Whole songs by genre
 
@@ -382,7 +382,7 @@ You name the genre, MidiBakery plans the song, shows a **preview** (timeline of 
 - **Markers:** it sets **locators** at the sections.
 - **Mix (on):** a reverb and a delay return (existing ones are reused), levels and sends for new tracks.
 - **Automation (on):** filter sweeps, delay throws.
-- **Sidechain (on):** bass and pads duck under the kick, via a silent helper track.
+- **Sidechain (on):** bass and pads pump to a silent helper track's genre kick pattern, including passages where the audible kick stops. This is continuous rhythmic pumping, not automatic detection of the actual kick; fixed thresholds do not guarantee a particular amount of ducking.
 - **FX (on):** a riser before each drop and an impact on the drop's downbeat.
 - **Start:** after the last clip in the Arrangement, or at a bar you name ("from bar 17"). **It never overwrites existing Arrangement clips**; it tells you the first free bar instead.
 
@@ -437,7 +437,7 @@ MidiBakery changes existing notes as a **diff**: only what changes is touched. T
 
 ## 11. The Reference Analyzer
 
-It looks at a **reference song** you like and shows how it is built: sections (intro, build, drop, break, outro), key, tempo and per bar the energy of kick, lows, mids and highs. You learn how long an intro typically is and when the drop arrives. And you can ask MidiBakery to build **your song after this structure**.
+It analyzes a **reference song** and estimates sections (intro, build, drop, break, outro), key, tempo and per-bar energy lanes. The kick lane uses onset/low-frequency heuristics; the low, mid and high lanes summarize frequency bands, not isolated instruments. Key estimation uses major/minor pitch profiles and may misread modal, chromatic or ambiguous material. Section names are genre-based interpretations, not ground truth. Listen and verify labels, tempo and the bar grid before asking MidiBakery to build **your song after this estimated structure**. One reference describes one track, not what every track in the genre should do.
 
 ### Analyze
 
@@ -452,7 +452,7 @@ It looks at a **reference song** you like and shows how it is built: sections (i
 
 ### Settings
 
-- **Genre** (Auto or one of the five genres): sets the section names (e.g. "Lift/Peak" for peak-time techno), the phrase length (16 bars for drum & bass) and settles half or double tempo.
+- **Genre** (Auto or one of the five genres): guides section names (e.g. "Lift/Peak" for peak-time techno), phrase-length assumptions (16 bars for drum & bass) and half/double-tempo interpretation. Verify these estimates by ear.
 - **Sensitivity** (0–100 each, default 50, for Kick, Lows, Mids, Hats): how finely the song is split. At **100** every change found becomes a section. At **50** similar neighbours merge into one section (four breaks in a row are one long break). Lower: a drop and its groove become one. The **ratio** of the four fields decides what counts as a change: "Hats 30, the rest 100" lets hi-hat changes pass, "only Kick high" splits the song where the kick stops and returns. The analysis reruns by itself when you let go of a field.
 - **Lock** (on): when one field changes, the others move by the same amount.
 - **Set Locators:** sets markers at the sections in the Arrangement. The transport must be stopped.
@@ -479,24 +479,24 @@ MidiBakery can read and set Live parameters. It **hears nothing**. You make the 
 - **Automation:** clip automation for device parameters and the track mixer (volume, pan, sends): ramps, sine, triangle etc. "Sweep the cutoff up over 8 bars." In the Arrangement MidiBakery rebuilds the clip for this; the notes stay, existing envelopes of that clip are replaced.
 - **Sidechain, reverb, delay and filters for whole songs:** handled by `plan_song` (chapter 8).
 - **Master chain:** "Set up a master chain for house" puts EQ Eight, Glue Compressor and Limiter with the genre's settings at the end of the Master track. It is a **starting point, not a finished master**. What the devices do:
-  - The EQ cuts low rumble: 30 Hz, or 20 Hz for drum & bass and trap.
-  - The Glue Compressor gently "glues" the mix (2:1, attack 30 ms, release Auto). Play the loudest part and turn its **threshold** until the needle shows 1–2 dB.
-  - The Limiter catches peaks at -1 dB true peak. It does **not** make the song louder.
+  - The EQ applies a low cut at 30 Hz, or 20 Hz for drum & bass and trap. It can remove unwanted rumble but also change wanted bass, phase and transients; compare with bypass rather than assuming it is inaudible.
+  - The Glue Compressor starts at 2:1, attack 30 ms, release Auto and threshold -10 dB. That does not guarantee gentle compression. If subtle glue is wanted, adjust its **threshold** for about 1–2 dB gain reduction in loud passages; bypass it if it does not help.
+  - The Limiter starts with a -1 dB true-peak ceiling and 0 dB Input Gain. The chain adds no intentional loudness gain, but processing can still change loudness and dynamics. For Spotify masters louder than -14 LUFS, its guidance recommends below -2 dBTP; request a lower `ceiling_db` and verify the rendered file with a true-peak meter.
   - As with songs you get a preview first and write with **Apply**. Pressing **Undo** twice removes the chain.
   - If your Master already has a Limiter, EQ Eight or Glue Compressor, MidiBakery leaves it alone.
   - Where the settings come from: [GENRES.md](../GENRES.md#master-chain-plan_master).
 - **Measuring loudness:** drag the **MidiBakery Loudness Meter** device (browser: Audio Effects › Max Audio Effect › MidiBakery) onto the Master track as its **last device**, after the Limiter. While Live plays it shows:
   - **Momentary** (the last 0.4 s), **Short-term** (the last 3 s) and **Integrated** (everything since the start or a reset) in LUFS, after ITU-R BS.1770 / EBU R 128.
-  - **Peak**: the highest sample peak since the reset in dB. A true peak can be up to about 0.5 dB higher.
-  - **Reset** restarts Integrated and Peak. For a number to compare: reset, then play the whole song (or the drop).
+  - **Peak**: the highest sample peak since the reset in dB. True peak can exceed it by more than 0.5 dB; this reading cannot verify a true-peak ceiling.
+  - **Reset** restarts Integrated and Peak. For comparison with whole-track integrated references, reset and play the whole song once. A drop-only reading describes just that excerpt.
   - In the chat: "How loud is the song?" MidiBakery reads the device with `measure_master`. Without the device on the Master, MidiBakery names no LUFS figure.
-  - The values are a good approximation, not a calibrated meter: Max reads the blocks on its scheduler's 100 ms clock.
+  - The values are approximate, not a calibrated or conformance-validated meter: Max reads the blocks on its scheduler's 100 ms clock.
 - **Bringing the song to a target loudness:** "Make the song as loud as house" or "to -14 LUFS for Spotify". This needs the master chain and the Loudness Meter on the Master. It works in rounds:
-  1. Reset the meter, play the song (or at least 30 s of the loudest part).
+  1. Reset the meter and play the **whole song once**. The software checks only a 30 s minimum, not whether the whole song was measured; an excerpt cannot establish whole-track loudness.
   2. MidiBakery proposes how many dB to change the Limiter's **Input Gain** (at most 6 dB per round) and writes it with **Apply**. One undo takes it back.
-  3. The meter starts again: play again, then the next round. Within 0.5 LU of the target, MidiBakery says so.
-  - Targets: house -8, melodic techno -8.8, peak-time techno -7.7, drum & bass -6.3, trap -8.4, streaming -14 LUFS. They are medians of released tracks ([GENRES.md](../GENRES.md#loudness-targets-plan_loudness)), not rules.
-  - Louder here means more limiting. Listen for pumping and flat drums; MidiBakery never gives the Limiter more than +12 dB.
+  3. The meter starts again: repeat the same complete playback before the next round. Within 0.5 LU of the target, MidiBakery reports `on_target` for the reading, even if only an excerpt was measured. It does not verify whole-song coverage or guarantee convergence.
+  - Presets: house -8, melodic techno -8.8, peak-time techno -7.7, drum & bass -6.3, trap -8.4, streaming -14 LUFS. The House/Techno figures are vendor-reported corpus medians; Drum & Bass is less fully documented, and Trap is a weak estimate rather than a verified median. Spotify's -14 is its Normal playback level and mastering recommendation, not a universal delivery requirement. See [sources and limitations](../GENRES.md#loudness-targets-plan_loudness).
+  - Higher gain may mean more limiting. Listen for pumping, distortion and flattened drums; stop if the result worsens. The +12 dB input-gain cap and warnings do not measure actual gain reduction or guarantee a good master.
 
 For ear questions ("sounds muddy") you get hints but no measurement. For accurate audio analysis use Live's own analyzers.
 

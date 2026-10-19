@@ -330,11 +330,11 @@ Einen Teil schreibst du als **neuen Clip in den ersten freien Slot** einer Spur.
 | **Akkorde** | Rhythmus: sustain, pulse, offbeat, stabs. 3 oder 4 Stimmen, Tonhöhenbereich, Vierklänge, eigene Akkordfolge. |
 | **Melodie** | Dichte, Tonhöhenbereich, folgt den Akkorden. Auch als [Gegenmelodie](#gegenmelodie) zu einem Lead. |
 
-Gemeinsam: **Länge** in Takten (Standard 4), **Swing** (wie sehr die Offbeats nach hinten schwingen), **Seed** (reproduzierbar).
+Gemeinsam: **Länge** in Takten (Standard 4), **Swing** (Engine-Stärke 0 = gerade, 1 = triolisch; 0,6 entspricht einem MPC-Verhältnis von 60 %, nicht Lives Groove-Pool-Amount), **Seed** (reproduzierbar).
 
 **Wie die Teile zusammenpassen:** Bass und Melodie richten sich nach den Akkorden eines Clips („passend zu den Akkorden auf Spur 3“). Der Bass richtet sich nach der Kick eines Drum-Clips. Bittest du um mehrere Teile in einem Auftrag, teilen sie sich dieselbe Akkordfolge.
 
-Alles liegt **in der Tonart und im Takt deines Sets**. Stelle also zuerst Tonart (*Scale* in Live) und Tempo ein.
+**Tonart und Takt deines Sets** sind der Standardkontext. Stelle also zuerst Tonart (*Scale* in Live) und Tempo ein. Benannte Patterns können bewusst eine andere Skala auf demselben Grundton oder chromatische Akkorde verwenden: `dreamy_indie` enthält eine Dur-II in Moll, `resolute_major` eine entlehnte bVII in Dur. Stimmungsnamen sind Anregungen, keine garantierten Gefühle. Siehe [Pattern-Konventionen und Ausnahmen](../PATTERNS.md) (Englisch).
 
 ### Gegenmelodie
 
@@ -355,12 +355,12 @@ Modi (in Worten sagen):
 
 Vier feste Figuren (der Lead bestimmt nur Lage und Reibungen; sie folgen nicht seinem Rhythmus):
 
-- **dotted_eighth_pulse**: ein gleichmäßiger punktierter Achtelpuls (3-3-3-3-3-1) auf einem Akkordton pro Takt.
+- **dotted_eighth_pulse**: sechs Einsätze auf den 16tel-Schritten 1, 4, 7, 10, 13, 16, auf einem Akkordton pro Takt. Die zyklischen Abstände sind 3-3-3-3-3-1: Die Figur startet jeden Takt neu, statt punktierte Achtel über Taktgrenzen fortzusetzen.
 - **scale_staircase**: derselbe Puls, der alle ein bis zwei Takte eine Tonleiterstufe steigt und vor dem Neustart eine Stufe zurückgeht.
 - **trance_dotted_eighth_staircase**: die 8-Takt-Figur aus dem Trance-Tutorial: der Puls auf den Stufen 1, 2, 3 und 5, je zwei Takte.
 - **echo_gap_answer**: in langen Noten des Leads (ab 1,25 Schlägen) drei bis vier kurze Noten in Schritten, dann eine längere Note, die beim Wiedereinsatz des Leads weiterklingt. Über einem Lead ohne lange Noten schreibt sie nichts.
 
-Lage (`counter_register`): **above** über dem Lead (Standard, eine Terz oder mehr über seinem höchsten Ton, nie über C7), **below** darunter (Standard, wenn über dem Lead C7 überschritten würde) oder **same** (dann beginnt sie nie gleichzeitig mit dem Lead). Auf betonten Zählzeiten spielt sie Terzen, Quinten, Sexten oder Oktaven zum Lead. Eine Figurennote, die auf einer betonten Zählzeit reiben würde, rückt auf den nächsten passenden Tonleiterton.
+Lage (`counter_register`): **above** über dem Lead (Standard, eine Terz oder mehr über seinem höchsten Ton, nie über MIDI 96, in Live C6), **below** darunter (Standard, wenn darüber MIDI 96 überschritten würde) oder **same** (dann beginnt sie nie gleichzeitig mit dem Lead). Der gesamte Bereich ist MIDI 36–96 (Live C1–C6). Auf betonten Zählzeiten spielt sie Terzen, Quinten, Sexten oder Oktaven zum Lead. Eine dort reibende Figurennote rückt auf den nächsten passenden Tonleiterton. Das sind konservative Generatorregeln, keine allgemeinen Musikgesetze; gleicher Rhythmus oder bewusste Dissonanz können ebenfalls funktionieren.
 
 ### Ganze Songs nach Genre
 
@@ -383,7 +383,7 @@ Du sagst das Genre, MidiBakery plant den Song, zeigt dir eine **Vorschau** (Zeit
 - **Marker:** Es setzt **Locators** (Marker) an die Abschnitte.
 - **Mix (an):** je ein Hall- und ein Delay-Return (vorhandene werden verwendet), Pegel und Sends für neue Spuren.
 - **Automation (an):** Filterfahrten, Delay-Würfe.
-- **Sidechain (an):** Bass und Pads ducken unter der Kick, über eine stumme Hilfsspur.
+- **Sidechain (an):** Bass und Pads pumpen zum Genre-Kick-Muster einer stummen Hilfsspur, auch wenn die hörbare Kick pausiert. Das ist durchgehendes rhythmisches Pumpen, keine Erkennung der tatsächlichen Kick; feste Threshold-Werte garantieren keine bestimmte Absenkung.
 - **FX (an):** ein Riser vor jedem Drop und ein Impact auf der Eins des Drops.
 - **Start:** hinter dem letzten Clip im Arrangement, oder an einem Takt, den du nennst („ab Takt 17“). **Es überschreibt nie vorhandene Arrangement-Clips**; es nennt dir stattdessen den ersten freien Takt.
 
@@ -438,7 +438,7 @@ MidiBakery ändert vorhandene Noten als **Unterschied** („Diff“): nur das, w
 
 ## 11. Der Reference Analyzer
 
-Er schaut sich einen **Referenzsong** an, den du magst, und zeigt, wie er aufgebaut ist: Abschnitte (Intro, Build, Drop, Break, Outro), Tonart, Tempo und pro Takt die Energie von Kick, Tiefen, Mitten und Höhen. Du lernst daraus, wie lang ein Intro typischerweise ist, wann der Drop kommt. Und du kannst MidiBakery bitten, **deinen Song nach diesem Aufbau** zu bauen.
+Er analysiert einen **Referenzsong** und schätzt Abschnitte (Intro, Build, Drop, Break, Outro), Tonart, Tempo und Energie pro Takt. Die Kick-Bahn nutzt Heuristiken für Einsätze und tiefe Frequenzen; Tiefen, Mitten und Höhen sind Frequenzbänder, keine getrennten Instrumente. Die Tonarterkennung verwendet Dur-/Moll-Tonhöhenprofile und kann modales, chromatisches oder mehrdeutiges Material falsch einordnen. Abschnittsnamen sind genreabhängige Deutungen, keine gesicherten Fakten. Prüfe Bezeichnungen, Tempo und Taktraster beim Hören, bevor du **deinen Song nach diesem geschätzten Aufbau** bauen lässt. Eine Referenz beschreibt einen Track, nicht das ganze Genre.
 
 ### Analysieren
 
@@ -453,7 +453,7 @@ Er schaut sich einen **Referenzsong** an, den du magst, und zeigt, wie er aufgeb
 
 ### Einstellungen
 
-- **Genre** (Auto oder eines der fünf Genres): bestimmt die Abschnittsnamen (z. B. „Lift/Peak“ bei Peak-Time Techno), die Phrasenlänge (16 Takte bei Drum & Bass) und klärt halbes oder doppeltes Tempo.
+- **Genre** (Auto oder eines der fünf Genres): steuert Abschnittsnamen (z. B. „Lift/Peak“ bei Peak-Time Techno), angenommene Phrasenlängen (16 Takte bei Drum & Bass) und die Deutung als halbes oder doppeltes Tempo. Prüfe diese Schätzungen nach Gehör.
 - **Sensitivity** (je 0–100, Standard 50, für Kick, Lows, Mids, Hats): wie fein der Song geteilt wird. Bei **100** wird jede gefundene Änderung ein Abschnitt. Bei **50** werden gleichartige Nachbarn zu einem Abschnitt (vier Breaks hintereinander sind ein langer Break). Niedriger: Ein Drop und sein Groove werden einer. Das **Verhältnis** der vier Felder bestimmt, was als Änderung zählt: „Hats 30, der Rest 100“ lässt Hi-Hat-Wechsel durch, „nur Kick hoch“ teilt den Song dort, wo die Kick aufhört und wiederkommt. Die Analyse läuft von selbst neu, sobald du ein Feld loslässt.
 - **Lock** (an): ändert sich ein Feld, bewegen sich die anderen um den gleichen Betrag.
 - **Set Locators:** setzt Marker an die Abschnitte im Arrangement. Der Transport muss stehen.
@@ -480,24 +480,24 @@ MidiBakery kann Live-Parameter lesen und setzen. Es **hört nichts**. Zeitliche 
 - **Automation:** Clip-Automation für Geräteparameter und den Mixer der Spur (Lautstärke, Pan, Sends): Rampen, Sinus, Dreieck u. a. „Fahre den Cutoff über 8 Takte auf.“ Im Arrangement baut MidiBakery dafür den Clip neu auf; die Noten bleiben, vorhandene Hüllkurven dieses Clips werden dabei ersetzt.
 - **Sidechain, Hall, Delay und Filter für ganze Songs:** übernimmt `plan_song` (Kapitel 8).
 - **Master-Kette:** „Leg eine Master-Kette für House an“ setzt EQ Eight, Glue Compressor und Limiter mit den Werten des Genres ans Ende der Master-Spur. Das ist ein **Startpunkt, kein fertiges Mastering**. Was die Geräte tun:
-  - Der EQ schneidet tiefes Rumpeln weg: 30 Hz, bei Drum & Bass und Trap 20 Hz.
-  - Der Glue Compressor „klebt“ den Mix sanft zusammen (2:1, Attack 30 ms, Release Auto). Spiel den lautesten Teil ab und dreh seinen **Threshold**, bis die Nadel 1–2 dB zeigt.
-  - Der Limiter fängt Spitzen bei -1 dB True Peak ab. Er macht den Song **nicht lauter**.
+  - Der EQ setzt einen Low Cut bei 30 Hz, bei Drum & Bass und Trap 20 Hz. Das kann Rumpeln entfernen, aber auch erwünschten Bass, Phase und Transienten ändern. Mit Bypass vergleichen, nicht pauschal als unhörbar ansehen.
+  - Der Glue Compressor startet mit 2:1, Attack 30 ms, Release Auto und Threshold -10 dB. Das garantiert keine sanfte Kompression. Wenn dezente Verdichtung gewünscht ist, stelle den **Threshold** in lauten Passagen auf etwa 1–2 dB Gain Reduction; überbrücke das Gerät, wenn es nicht hilft.
+  - Der Limiter startet mit -1 dB True-Peak-Ceiling und 0 dB Input Gain. Die Kette erhöht den Gain nicht absichtlich, kann Lautheit und Dynamik aber verändern. Für Spotify-Master über -14 LUFS empfiehlt Spotify unter -2 dBTP: einen niedrigeren `ceiling_db` anfordern und den Export mit einem True-Peak-Meter prüfen.
   - Wie bei Songs siehst du erst eine Vorschau und schreibst mit **Apply**. Zweimal **Undo** entfernt die Kette wieder.
   - Hat dein Master schon einen Limiter, EQ Eight oder Glue Compressor, lässt MidiBakery ihn in Ruhe.
   - Woher die Werte stammen, steht in [GENRES.md](../GENRES.md#master-chain-plan_master) (Englisch).
 - **Lautheit messen:** Zieh das Gerät **MidiBakery Loudness Meter** (Browser: Audio Effects › Max Audio Effect › MidiBakery) als **letztes Gerät** auf die Master-Spur, nach dem Limiter. Während Live spielt, zeigt es:
   - **Momentary** (die letzten 0,4 s), **Short-term** (die letzten 3 s) und **Integrated** (alles seit dem Start oder Reset) in LUFS, nach ITU-R BS.1770 / EBU R 128.
-  - **Peak**: die höchste Sample-Spitze seit dem Reset in dB. Eine echte True-Peak-Spitze kann bis etwa 0,5 dB höher liegen.
-  - **Reset** startet Integrated und Peak neu. Für eine Zahl zum Vergleichen: Reset, dann den ganzen Song (oder den Drop) abspielen.
+  - **Peak**: die höchste Sample-Spitze seit dem Reset in dB. True Peak kann auch mehr als 0,5 dB darüber liegen; diese Anzeige kann keine True-Peak-Grenze nachweisen.
+  - **Reset** startet Integrated und Peak neu. Für den Vergleich mit integrierten Ganztrack-Werten: zurücksetzen und den ganzen Song einmal abspielen. Eine Drop-Messung beschreibt nur diesen Ausschnitt.
   - Im Chat: „Wie laut ist der Song?“ MidiBakery liest das Gerät mit `measure_master`. Ohne das Gerät auf dem Master nennt MidiBakery keine LUFS-Zahl.
-  - Die Werte sind eine gute Näherung, kein geeichtes Messgerät: Max liest die Blöcke im 100-ms-Takt seines Schedulers.
+  - Die Werte sind Näherungen, kein kalibriertes oder auf Normkonformität geprüftes Messgerät: Max liest die Blöcke im 100-ms-Takt seines Schedulers.
 - **Auf eine Ziel-Lautheit bringen:** „Mach den Song so laut wie House“ oder „auf -14 LUFS für Spotify“. Das braucht die Master-Kette und das Loudness Meter auf dem Master. Dann geht es in Runden:
-  1. Reset am Meter, den Song (oder mindestens 30 s vom lautesten Teil) abspielen.
+  1. Meter zurücksetzen und den **ganzen Song einmal** abspielen. Die Software prüft nur mindestens 30 s Messdauer, nicht die Abdeckung des ganzen Songs; ein Ausschnitt belegt keine Ganztrack-Lautheit.
   2. MidiBakery schlägt vor, um wie viel dB es den **Input Gain** des Limiters ändert (höchstens 6 dB pro Runde), und schreibt es mit **Apply**. Ein Undo nimmt es zurück.
-  3. Das Meter fängt neu an: noch einmal abspielen, dann die nächste Runde. Liegt der Song innerhalb von 0,5 LU am Ziel, sagt MidiBakery das.
-  - Ziele: House -8, Melodic Techno -8,8, Peak-Time Techno -7,7, Drum & Bass -6,3, Trap -8,4, Streaming -14 LUFS. Es sind Mediane veröffentlichter Tracks ([GENRES.md](../GENRES.md#loudness-targets-plan_loudness), Englisch), keine Pflicht.
-  - Lauter heißt hier: mehr Limiting. Hör auf Pumpen und flache Drums; mehr als +12 dB gibt MidiBakery dem Limiter nicht.
+  3. Das Meter fängt neu an: denselben vollständigen Durchlauf vor jeder weiteren Runde wiederholen. Innerhalb von 0,5 LU meldet MidiBakery `on_target` für den Messwert, auch bei einem bloßen Ausschnitt. Vollständige Abdeckung und Erreichen des Ziels sind nicht garantiert.
+  - Presets: House -8, Melodic Techno -8,8, Peak-Time Techno -7,7, Drum & Bass -6,3, Trap -8,4, Streaming -14 LUFS. House/Techno sind vom Anbieter berichtete Korpus-Mediane; Drum & Bass ist weniger vollständig dokumentiert, Trap eine schwache Schätzung statt eines belegten Medians. Spotifys -14 ist der Normal-Wiedergabepegel und eine Mastering-Empfehlung, keine allgemeine Auslieferungspflicht. Siehe [Quellen und Grenzen](../GENRES.md#loudness-targets-plan_loudness) (Englisch).
+  - Mehr Gain kann mehr Limiting bedeuten. Hör auf Pumpen, Verzerrungen und flache Drums; hör auf, wenn das Ergebnis schlechter wird. Die +12-dB-Grenze und Warnungen messen keine tatsächliche Gain Reduction und garantieren kein gutes Master.
 
 Bei Ohren-Fragen („klingt matschig“) bekommst du Hinweise, aber keine Messung. Für genaue Analysen von Audio benutze Lives eigene Analyzer.
 

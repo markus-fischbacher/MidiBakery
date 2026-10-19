@@ -4,6 +4,8 @@
 
 Provenance: most voice-overs name notes and rhythms only briefly, so some rhythms are rebuilt from the description (`source: described`); patterns whose piano roll was readable say `roll`. Treat both as a starting point, not a transcription.
 
+Tutorial names and pattern IDs are provenance hints, not claims of endorsement or verified note-for-note transcription. Exact source links and timestamps remain a documentation gap. Descriptors such as "evil", "happy" and "euphoric" are browsing labels, not guaranteed emotional effects: tempo, register, timbre, articulation, context and listener background also matter ([research overview](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2013.00487/full)). Sound-design and automation suggestions below are not promises that a MIDI pattern applies them.
+
 | Family | Field | Count |
 |---|---|---|
 | Bass | `kind: bass`, `pattern` | 23 |
@@ -11,7 +13,7 @@ Provenance: most voice-overs name notes and rhythms only briefly, so some rhythm
 | Drums (techno) | `kind: drums`, `pattern` | 6 |
 | Emotion progressions | `kind: chords`, `pattern` | 15 |
 
-A chords pattern sets the progression and the voicing (roots doubled, thirds up, pedal tone). Bass and melody that follow it in the same plan use its chords.
+A chords pattern sets the progression and the voicing (roots doubled, thirds up, pedal tone). Bass and melody that follow it in the same plan use its chords. Some templates select a different scale mode on the song's tonic or contain chromatic chords; a pattern does not guarantee that every generated pitch stays in the original song scale.
 
 ## Bass patterns
 
@@ -38,7 +40,7 @@ A chords pattern sets the progression and the voicing (roots doubled, thirds up,
 | `evil_kick_locked` | Evil pattern locked to the kick, sidechained. Make a bass note where the kick hits and sidechain the other bass to that kick. |
 | `rolling_bass` | Rolling bass. The root note, duplicated once, then once more, looped; sidechained so the kick cuts it off. The most common techno rolling bass line. |
 | `offbeat_bass` | Offbeat bass. Two main notes, on the beat and off the beat, made bigger. The offbeat bass. |
-| `groovy_bass` | Groovy bass with jumps. One note, a second one, then jumps (and bigger jumps), extend the notes, loop it; extend the pattern again to make it groove. Never forget to sidechain the kick. |
+| `groovy_bass` | Groovy bass with jumps. One note, a second one, then larger jumps and extended notes. Kick sidechain is one sound-design option; arrangement and envelope choices can also manage overlap. |
 | `evil_spirits` | Evil spirits: semitone bass. Starts on the root and uses the power of semitones for a dark, evil bass line. |
 
 ## Lead patterns
@@ -46,16 +48,16 @@ A chords pattern sets the progression and the voicing (roots doubled, thirds up,
 | `pattern` | What it is |
 |---|---|
 | `descending_pedal` | Descending pedal-tone motif (Ben Bohmer). Fifth down to the second, restarted every bar: each note three 16ths after the last, the final one 16th restarts the loop and re-syncs to the kick. The eight bars vary at the start and the end. |
-| `ascending_energy` | Ascending lead with pitch bend. Tonic knocked down an octave, then rising second, third, fourth, fifth; the last bar holds the second for tension. Going up adds energy, going down feels emotional. |
+| `ascending_energy` | Ascending lead with pitch-bend inspiration. Tonic down an octave, then rising second, third, fourth, fifth; the last bar holds the second. Rising contour can suggest increased energy, but its effect depends on context. |
 | `arp_third_start` | Looping arp starting on the third. Starts on the third instead of the root, falls, rises, ends on the fifth an octave up; it follows every chord of the song and keeps its pattern. |
-| `half_step_trick` | Half-step trick. Three notes only; the emotion lives in the half step between second and third. Repeat with a small change at the end, and keep the half step: going back to the root would lose it. |
+| `half_step_trick` | Three-note figure emphasizing the half step between second and minor third, repeated with a small ending change. Returning to the root is an alternative resolution, not a mistake. |
 | `bass_lead_bodzin` | Bass lead with octave jumps (Stefan Bodzin). Starts on the sixth and descends to the root in every progression, with high octave jumps and a little glide into the next note, even off-scale. |
 | `top_note_complement` | Sparse top note over piano chords. A second lead above piano chords: seventh, second and third of the chord with a lot of space. Space is part of the melody. |
 | `gated_vocal` | Gated vocal lead. Seventh on the first notes, the root an octave up after them; positions 1 and 3 with gaps instead of a stream of 16ths. |
 | `triad_voicing_dance` | Wide triad voicing with a dancing top note (Oscar Mattke). Root, third two octaves up and fifth one octave up; long notes against short ones played off the kick every three 16ths; a little top-note dance in every second bar. Follows the bass line. |
 | `chord_complement` | Lead that complements the chords. Starts on the third and mostly plays the third and fifth against the chord; one rhythm replicated through the song with small variations. |
 | `lfo_chord_lead` | LFO chord lead (Lydian). Sustained chords following the bass; the movement comes from automation. Lydian (or Mixolydian, Dorian) gives a dreamy feeling instead of plain major or minor. |
-| `third_of_bass` | Third of the bass line. The lead plays the third of every bass note: playing the bass note itself or the fifth would be boring. The groove comes from notes on positions 1, 2, 3 and 4 of the 16ths, not only with the kick. |
+| `third_of_bass` | Third of the bass line. The lead emphasizes thirds rather than roots or fifths, with 16th-grid accents beyond the kick positions. Roots and fifths are valid alternatives, not inherently boring. |
 | `notes_and_chords` | Notes and chords alternating over a pedal tone. One bar plays chords, the next plays notes around a repeating pedal tone (fifth, sixth, third, second); notes and chords have a different character, so the repetition stays interesting. |
 | `pitch_mod_one_note` | One note with pitch modulation. One note in different lengths on groovy 16th positions; the pitch bend gives it the movement, so it needs no melody. |
 | `minor_chord_lead` | Minor chord lead with rave voicing. Tone an octave down plus third (and fifth); put the third and fifth up for the rave feeling. Lengths mix a 16th, a 32nd and an 8th. Use a different progression in the buildup and let it go at the drop. |
@@ -80,12 +82,12 @@ A chords pattern sets the progression and the voicing (roots doubled, thirds up,
 | `contrasting_rhythm` | An onset pattern that differs from the main's per bar. | `described` |
 | `harmonic_notes` | Follows the main's onsets on another consonant note, never the same pitch class. | `roll` + `described` |
 | `note_layering` | The main's own pitch classes an octave away, same time or delayed. | `roll` + `described` |
-| `dotted_eighth_pulse` | Fixed 3-3-3-3-3-1 pulse, one chord tone per bar. | `roll` rhythm |
+| `dotted_eighth_pulse` | Six onsets at 16th steps 1, 4, 7, 10, 13, 16; cyclic gaps 3-3-3-3-3-1, reset each bar, one chord tone per bar. Not continuous dotted eighths across bar lines. | `roll` rhythm interpretation |
 | `scale_staircase` | The pulse climbing one scale step every one or two bars, one step back before the restart. | `roll` + `described` |
 | `trance_dotted_eighth_staircase` | The Trance video's 8-bar figure, scale degrees 0 0 1 1 2 2 4 4, then the loop restarts. | `roll` rhythm, `described` pitches |
 | `echo_gap_answer` | In a main note of 1.25 beats or more: 3-4 short stepwise notes, then one longer note that sustains under the re-entry. | `roll` |
 
-All keep the register window (`counter_register`: above, below, same), never cross the main and keep thirds, fifths, sixths or octaves to it on strong beats; a figure note that would clash moves to the nearest consonant scale tone. Not built: `bass_mimic`, `timbre_split` (hint only), `octave_separation` (that is `counter_register`).
+All keep the register window (`counter_register`: above, below, same), avoid crossing the main and favor thirds, fifths, sixths or octaves to it on strong beats; a figure note that would clash moves to the nearest consonant scale tone. These and the parallel-fifth/octave restrictions are conservative engine choices, not universal musical rules. Shared rhythms, unisons, parallel motion and expressive dissonance can be intentional. `note_layering` may act as doubling rather than an independent line. Not built: `bass_mimic`, `timbre_split` (hint only); `octave_separation` is represented by `counter_register`, not a separate mode.
 
 ## Drum patterns (techno)
 
@@ -95,25 +97,27 @@ All keep the register window (`counter_register`: above, below, same), never cro
 | `hat_16` | 16th hats with velocity play. One hat duplicated on all sixteen 16ths; the trick is the velocity: accents on the beat, soft between. |
 | `hat_open_offbeat` | Open hat on the offbeat. The classic offbeat open hat on the 3rd 16th of every beat; boring alone, so it wants accents around it. |
 | `hat_open_accents` | Open hat with accents around it. The offbeat open hat plus short closed-hat accents on the 16ths around it, which makes the pattern better. |
-| `hat_triplets` | Triplet hats. For those who enjoy triplets: six hats per beat instead of four; you can alter the 16th pattern by mixing the two. |
+| `hat_triplets` | Sixteenth-note triplet hats: six hits per quarter-note beat instead of four straight sixteenths. |
 | `kick_rumble` | Rumble: kick resampled to a bass. The kick routed to a second channel with lots of effects and resampled; one transient on the last quarter (laid back a little), another on the offbeat, extended, so the transition is obvious. |
 
 ## Emotion progressions (chords)
 
+Names describe the intended preset character, not a reliable emotion classifier. Roman numerals below follow the **engine's notation**: in minor, III, VI and VII refer to natural-minor scale degrees. The suffix `7` adds the diatonic seventh where the numeral's case matches the scale's triad quality, so `III7` in C minor is **Ebmaj7**, not Eb7. For example, `groove_funk` in C minor gives Cm7, Ebmaj7, Fm7, Fm7. These conventions are not a universal Roman-numeral standard.
+
 | `pattern` | What it is |
 |---|---|
 | `uplifting_sweet` | Uplifting sweet. The 6, 1, 3 and 7 of the minor scale: triads with the thirds an octave up, the roots copied an octave down, and the tonic as a pedal tone because the chord changes are big. Progression: `VI i III VII` (minor). |
-| `groove_funk` | Groove funk. The 1, 3 and 4 of the minor scale with seventh chords (the third even as a sus2); roots down an octave, funky bass line, hits on the upbeats. Progression: `i7 III7 iv7 iv7` (minor). |
-| `dark_cinematic` | Dark cinematic. The darkest, most ominous progression is a single minor chord held for the whole phrase: cinematic dark, not a song. Progression: `i` (minor). |
-| `dark_serious` | Dark serious. 1 for two half notes, down to 6, 4 and up to 5 on a deep bass synth, with triads built on top: three minor chords out of four make the darker vibe. Best way: drop the thirds and fifths and keep one unchanging minor chord for the vocal. Progression: `i VI iv v` (minor). |
+| `groove_funk` | Minor-key seventh chords on degrees 1, 3 and 4, with lowered roots and upbeat hits. Progression: `i7 III7 iv7 iv7` (minor). The tutorial's sus2 suggestion is not encoded by that progression. |
+| `dark_cinematic` | A single minor chord held for the phrase, leaving room for texture and orchestration. It can support a dark character, but is not inherently the "darkest" choice. Progression: `i` (minor). |
+| `dark_serious` | Minor-key motion through degrees 1, 6, 4 and 5 with triads and a low register. Simplifying upper voices is an arrangement option, not the best solution for every vocal. Progression: `i VI iv v` (minor). |
 | `pure_joy` | Pure joy. 6, 4 and 1 in a major scale, closed with one more chord, the ii (D minor in C); roots pulled down an octave, thirds on top, fifths pulled down, tonic as the pedal tone. Progression: `vi IV I ii` (major). |
-| `funk_light` | Light funk. 1, 7, 3, 4, 6, 7 in a minor scale; the first, fifth and sixth chords are sevenths (not every chord, or the emotion washes out); upbeat hits, some extended, a seventh added to one chord. Progression: `i7 VII III iv VI7 VII7` (minor). |
+| `funk_light` | Degrees 1, 7, 3, 4, 6, 7 in minor, with sevenths on the first, fifth and sixth chords and upbeat hits. Adding sevenths to other chords is also valid. Progression: `i7 VII III iv VI7 VII7` (minor). |
 | `happy` | Happy. 6, 4, 1, 5 in any major scale; the first chord is shortened so the next starts on the upbeat; roots down an octave and no fifths; a classic synth and a fun rhythm. Progression: `vi IV I V` (major). |
 | `sad` | Sad. Long drawn out chords (two whole notes each) moving down; roots doubled, a seventh, a ninth and a passing note; a pedal tone on the tonic and cellos to go one step further. Progression: `i VII VI v` (minor). |
-| `bittersweet` | Bittersweet sad. The 6 for two whole notes, up to the 1, down to the 7 (single whole notes). Already sad before it is voiced, gorgeous in any voicing. Progression: `VI VI i VII` (minor). |
-| `dreamy_indie` | Dreamy indie. Half-note chords on the 1, 6, 3 and 2 of the minor scale; the diminished chord on the 2 is swapped for its major neighbour (it ruins the progression); thirds on top, roots doubled, a pulsing root and a tonic pedal for the indie nostalgia. Progression: `i VI III II` (minor). |
+| `bittersweet` | Degree 6 held for two whole notes, then tonic and degree 7 for one whole note each. Voicing and performance determine whether it reads as bittersweet. Progression: `VI VI i VII` (minor). |
+| `dreamy_indie` | Half-note chords on degrees 1, 6, 3 and a chromatic major II, with raised thirds, doubled roots and tonic pedal. In C minor: Cm, Ab, Eb, **D major** (F# is outside C natural minor). This is an intentional color, not a correction to an invalid diminished chord. Progression: `i VI III II` (minor with chromatic II). |
 | `sad_neutral` | Sad neutral. Whole-note chords descending 1, 7, 6, 7 in a minor scale, thirds on top. Musical sad, not cinematic; a pedal tone on the tonic crushes it deeper. Progression: `i VII VI VII` (minor). |
 | `heroic_pivot` | Heroic pivot (sad neutral turned hopeful). The sad neutral progression pivoted: the first chord goes to the 6, the 6 takes the place of the 1, and the pedal tone moves to the third degree (the relative major tonic): more hopeful, more heroic. Progression: `VI VII i VII` (minor). |
 | `melancholic` | Melancholic. 1, 3 and 5 of a minor scale; melancholic progressions love pedal tones, notes that stay through the whole progression and carry a dreaminess; re-voice the chords up high. Progression: `i III v` (minor). |
-| `resolute_major` | Emotional toughness (descending from a major tonic). 1, 7, 6, 5 in a major scale: it moves downward, which usually sounds sad, but starting on the major tonic it carries happy energy and standing-your-ground toughness. It gets cheesy with a cheap instrument, so voice and articulate it well. Progression: `I bVII vi V` (major). |
-| `euphoric_neutral` | Euphoric neutral. 5, 6, 1, 7 in a minor scale on a soft emotional piano: the 5, 6 and 7 are the most emotional chords of the minor scale; triads, thirds on top, a double pedal tone. Progression: `v VI i VII` (minor). |
+| `resolute_major` | Descending roots from a major tonic with borrowed **bVII**, not a purely diatonic major progression. In C: C, **Bb**, Am, G. "Resolute" is the intended preset character, not a guaranteed perception. Progression: `I bVII vi V` (major with borrowed bVII). |
+| `euphoric_neutral` | Degrees 5, 6, 1 and 7 in minor, with triads, raised thirds and a double pedal tone. Its intended euphoric character depends on voicing, sound and performance. Progression: `v VI i VII` (minor). |

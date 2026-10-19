@@ -1,34 +1,36 @@
 # Genre recipes for the song engine
 
-What typically defines House, Melodic Techno, Peak-Time Techno, Drum & Bass and EDM Trap, compiled from trade articles and tutorials (as of October 2026). The templates in `packages/core/src/midibakery/compose/structures.py` and the generators should follow these recipes.
+Starting points for House, Melodic Techno, Peak-Time Techno, Drum & Bass and EDM Trap, compiled from trade articles and tutorials (as of October 2026). The templates in `packages/core/src/midibakery/compose/structures.py` and the generators implement selected recipes, not definitions of these genres or guarantees of professional results.
 
-**How reliable a statement is:**
-- **●** several sources say the same thing
-- **◐** only one source, or sources disagree (the variants are listed)
-- **○** no source states it explicitly: common convention, to be checked by ear
+**How to read the evidence:**
+- **●** several cited sources describe the approach; agreement among tutorials is not independent validation
+- **◐** one source or differing examples; the variants are listed
+- **○** an editorial suggestion without an explicit source
+
+These markers describe sourcing, not musical correctness. An **observed example** describes a particular track or tutorial; a **preset choice** is an engine default; an **implemented constraint** is a software limit, not a rule of music. The implementation table below records defaults. Standards and professional guidance used in this review are linked under [Review sources](#review-sources); the older genre source lists are research leads, not a fully traceable bibliography. Unlinked article claims and tutorial reconstructions still need exact URLs and, for videos, timestamps before being presented as verified transcriptions.
 
 **Notation:**
 - Steps count within a bar of 16 sixteenths, step 1 = beat 1. Step 5 is beat 2, step 9 beat 3, step 13 beat 4. The offbeats are 3, 7, 11 and 15.
 - MIDI notes are as in Live: 60 = C3. Sources name octaves differently, so registers here are converted via frequency.
-- Swing in percent in the MPC sense: 50 % = straight. In Live's Groove Pool this roughly corresponds to "Amount" from 0.
+- Swing uses two different conventions here: an **MPC-style ratio** has 50 % = straight and about 66.7 % = triplets. The engine's **swing strength** runs from 0 = straight to 1 = triplets: 0.6 gives a 60 % ratio; 0.15 gives about 52.5 %. Live's Groove Pool Timing and Global Amount scale a selected groove and have no universal conversion to either convention. Unspecified percentages quoted from tutorials cannot be converted without knowing their controls.
 
-Recipes are conventions, not laws. A track made by recipe sounds typical of the genre; whether it sounds good only shows after listening. For beginners a reference track helps: the Reference Analyzer device splits a song you like into sections, and `plan_song` with `reference` builds the new song after its structure (see below).
+Recipes are conventions, not laws. Judge the result with listening and level-matched references. The Reference Analyzer estimates sections, key and tempo from audio; its band-energy lanes are proxies, not isolated instruments. Verify its labels and grid before using `plan_song` with `reference` to follow the estimated structure (see below).
 
 ---
 
-## Common ground rules (all genres)
+## Common starting points for these templates
 
-- **●** Sections are multiples of 8 bars, usually 16 or 32.
-- **●** Something small changes every 4 to 8 bars (hat, clap, fill). Something big changes every 16 bars (bass, chords, melody).
-- **●** Fills and drop-outs sit in the last bar of a phrase, just before the change.
-- **●** A DJ-friendly intro and outro consists of drums with few elements and no or little sub bass. The outro breaks down instead of copying the intro.
-- **●** Before the drop the kick disappears, and there is often a short silence.
-- **●** The second drop is not identical to the first: different variation, more energy.
-- **●** No flat velocities. Ghost notes are clearly quieter, about 30 to 50 % or 6 to 12 dB.
-- **●** The bass does not stick to the kick: it plays in the gaps or under the kick with sidechain, but never against it.
-- **●** Minor dominates. Chord progressions have 2 to 4 chords and loop over 2 to 8 bars.
-- **●** One hook, not many: a short motif over 2 to 4 bars that returns and varies. The melody sits above the chords, not in the same octave.
-- **●** Typical beginner mistakes are a loop without development, too many elements at once, everything rigidly on the grid, all changes always on bar 1 of a section, an overloaded intro and a kick that collides with the bass.
+- **●** Sections commonly use multiples of 8 bars, often 16 or 32; shorter, extended and asymmetric phrases also work.
+- **●** Small changes every 4 to 8 bars and larger changes every 16 bars are useful defaults, not a schedule every track must follow.
+- **●** Fills and drop-outs often anticipate a phrase change.
+- **●** Sparse drum-led intros and outros can help DJ mixing. Bass content and the order of exits depend on the track and mix strategy.
+- **●** Removing the kick or leaving silence before a drop is one way to create contrast; continuous transitions are valid too.
+- **●** A second drop can develop the first through variation, subtraction or a change in energy; it need not be louder or busier.
+- **●** Velocity accents can separate main hits from ghosts. Constant kick velocity can be intentional. MIDI velocity percentages are not dB: loudness and timbre depend on the instrument's velocity response.
+- **●** Kick and bass need compatible timing, envelopes and spectral balance. Gaps, overlap, sound selection, EQ and sidechain are alternative or complementary tools; sidechain is not mandatory.
+- **●** Minor-key loops with 2 to 4 chords over 2 to 8 bars are common in these examples, but major, modal, chromatic and single-note material are valid.
+- **●** A recognizable motif with repetition and variation helps establish a hook. Register, rhythm and timbre can separate it from other parts without always placing it an octave above the chords.
+- **●** Useful checks are development, intentional density, phrase contrast and low-end clarity. Straight grids and repeated velocities are not mistakes by themselves.
 
 ---
 
@@ -37,8 +39,8 @@ Recipes are conventions, not laws. A track made by recipe sounds typical of the 
 A family of mainstream, deep and tech house. Deep house is slower and jazzier, with seventh and ninth chords. Tech house is drier and more percussive; the hook is often a tuned percussion riff.
 
 **Tempo and swing**
-- **●** 120–128 BPM. Deep house 120–124, mainstream 124–126, tech house 125–128.
-- **◐** Swing on sixteenths, 55–65 % depending on style, tech house up to 75 %. Attack swings all tracks, not just the shaker. Default: **about 58–62 %**.
+- **●** The selected examples center on 120–128 BPM: deep house 120–124, mainstream 124–126, tech house 125–128. These are reference ranges, not genre boundaries.
+- **◐** Sixteenth swing at an MPC-style ratio of 55–65 % is one approach. The engine default is **strength 0.6, equivalent to 60 %**. Swinging several parts together is an option, not a requirement. The previously cited 75 % example needs its original control convention verified and is outside the engine's current triplet-limited range.
 
 **Structure** (phrases 8/16/32)
 - **●** Intro 16–32 bars, drums first. Elektronauts recommends a sparser 8–16 bars with at most 2–3 elements.
@@ -100,11 +102,11 @@ The drops are open. In the break the chords' resonance rises with the cutoff fro
 
 ## Melodic Techno
 
-Melodic techno (e.g. Afterlife: Anyma, ARTBAT, Stephan Bodzin) is slower and more harmonic than peak-time techno. It has 2 to 4 chords, pads and an arpeggio or lead hook. Raw/industrial techno is faster and almost atonal; that does not belong here.
+The melodic techno examples (e.g. Afterlife: Anyma, ARTBAT, Stephan Bodzin) emphasize harmonic loops, pads and an arpeggio or lead hook. Raw and industrial approaches are outside this preset's scope; tempo and tonality alone do not define the boundary between styles.
 
 **Tempo and swing**
-- **●** 120–125 BPM, typically 122. Attack's deep melodic beat sits at 120–123.
-- **◐** Light swing: Attack 10 %, Beatportal "subtle" on hats and shakers. Default: **0–15 % only on hats and percussion, never on the kick**.
+- **●** The selected slower examples use 120–125 BPM; the engine default is 122. Attack's deep melodic beat sits at 120–123. This is not a limit on the genre.
+- **◐** Light swing on hats and percussion, with a straight kick, is the preset choice. The engine uses **strength 0.1, about 51.7 % MPC-style ratio**. Attack's quoted 10 % and Beatportal's "subtle" are not interchangeable measurements without the original groove settings.
 
 **Structure**
 - **●** Sections are multiples of 8 bars. DJ intro and outro with 16–32 bars of drums and percussion.
@@ -124,7 +126,7 @@ Melodic techno (e.g. Afterlife: Anyma, ARTBAT, Stephan Bodzin) is slower and mor
 
 **Bass**
 - **●** Follows the chord roots. NI changes the root every 2 bars.
-- **◐** Register about MIDI 32–48 (NI: Ab1).
+- **◐** Suggested register about MIDI 32–48 (Live G#0–C2, about 52–131 Hz); octave names in source DAWs may differ.
 
 **Harmony**
 - **●** 1 chord per 1–2 bars in a loop over 4–8 bars. Examples: Am–F–C–G, Am–Dm–Em–C.
@@ -156,12 +158,12 @@ In the build the pads' resonance rises from 10 to 35 %. Delay throws: in the bre
 
 ## Peak-Time Techno
 
-Peak-time or driving techno is the Beatport category "Peak Time / Driving", the Drumcode style: Adam Beyer, Amelie Lens, Charlotte de Witte, Enrico Sangiuliano, Layton Giordani, Eli Brown. It is percussive, driving and gets by with almost no harmony. Tension comes from gradual change, not from big drops.
+The peak-time preset draws on the Beatport category "Peak Time / Driving" and selected material associated with Adam Beyer, Amelie Lens, Charlotte de Witte, Enrico Sangiuliano, Layton Giordani and Eli Brown. It emphasizes percussion, gradual change and limited harmonic movement. This is one approach within a broad category; big drops and more harmonic material also occur.
 
 **Tempo and swing**
-- **●** 126–132 BPM, Beatportal recommends 128 as a start. The Drumcode style sits more around 135, newer releases by Amelie Lens and Charlotte de Witte around 138. From 140 it is hard techno, no longer this style.
+- **●** The selected examples include 126–132 BPM, with 128 as the template starting point, and faster material around 135–138. There is no hard 140 BPM boundary between peak-time and hard techno: era, sound and scene also matter.
 - **●** The tempo has been rising for years: long around 127, then the wave at 150 and above (Attack, MusicTech).
-- **●** Hardly any swing: 0–20 % only on hats, shakers and percussion. Kick and bass stay straight.
+- **●** A straight kick and bass with lightly swung hats, shakers and percussion is the preset choice. The engine uses **strength 0.15, about 52.5 % MPC-style ratio**; the quoted 0–20 % tutorial amounts are control-dependent.
 - Default: **128 BPM** like the reference below.
 
 **Structure** (sections as multiples of 8 bars, usually 16 or 32)
@@ -173,21 +175,21 @@ Peak-time or driving techno is the Beatport category "Peak Time / Driving", the 
 - **◐** Breakdowns of 8, 16 or 32 bars (Attack: 24 = 3 × 8, or 32). The kick is out. Percussion, clap, offbeat hat, a high-pass-filtered bass, texture and the hook keep running.
 - **●** Tension without a big drop: the peak runs at least 32 bars, optionally with mini breaks of 1–2 bars inside. Often it is enough to briefly remove kick or bass; a riser is not needed.
 
-**References** (analysis from October 2026; measured per bar was the energy of kick, bass, mids and highs; melodies cannot be read from the finished mix this way):
+**References** (analysis from October 2026; per-bar onset and band-energy estimates, not isolated kick, bass or synth measurements. Tempo/key and the musical interpretations below need listening verification; melodies cannot be transcribed from these lanes):
 - Y-Traxx – Mystery Land (Spektre Remix): 128 BPM, A minor, 7:30, about 232 bars.
 - Katoff – The Signal: 126 BPM, D# minor; only a 3-minute version without DJ intro and outro.
 - T78 – Nezquik (Original Mix): 128 BPM, A minor, 7:00, about 220 bars.
 
-What all three do:
+Working interpretations of all three (not independent source-separation results):
 - **●** Before each big drop the bass goes first for about 8 bars, then the kick is filtered out over 3–5 bars. The last 2–3 bars run without kick, and exactly then the synth is loudest.
 - **●** In the outro the bass goes first, then the kick; at the end the hats remain.
 
-What two of three do:
+Working interpretations of two of three:
 - **◐** After a breakdown the hats come in late: 8–16 bars of kick, bass and synth with few hats, then full (Katoff, T78).
 - **◐** After a peak, 8 bars of only kick and bass, without hats and synth (Spektre, T78).
 - **◐** In the breakdown without kick the bass keeps rumbling quietly (Katoff, T78).
 
-Individual tracks:
+Individual-track interpretations:
 - **◐** T78 removes kick and bass for one bar at the end of many 8- and 16-bar phrases.
 - **◐** Katoff puts a synth accent at the start of every 8-bar phrase in the groove and, in the breakdown, plays the synth alternating 2 bars on, 2 bars off, with 2 bars of silence before the drop.
 
@@ -257,7 +259,7 @@ Instead of a straight line, a section can also run a curve or wave: `300>8000~ex
   - Sub MIDI 28–36 (41–65 Hz).
   - Rolling mid bass MIDI 36–48 (65–131 Hz). Attack's main note sits at 98 Hz, i.e. MIDI 43.
   - Acid one octave above the bass.
-- **●** The kick is tuned to the root; its resonance usually sits at 47–60 Hz (MIDI 30–35). Attack tunes it to F (43.65 Hz, MIDI 29).
+- **●** Tuning a sustained, pitched kick to the root is one approach, not a requirement for every kick. Check its decay and interaction with the bass as well as pitch; matching pitch alone does not ensure phase compatibility. MIDI 30–35 is about 46–62 Hz. Attack's F example is 43.65 Hz, MIDI 29 (Live F0).
 
 **Stabs, synths and hooks**
 - **●** Hook: a 1–2-bar loop, minimal and repetitive. It moves via cutoff, resonance and LFO, not via new notes. A 3-note motif (root, fifth, minor seventh) with rests.
@@ -266,13 +268,13 @@ Instead of a straight line, a section can also run a curve or wave: `300>8000~ex
   - Each hit is one sixteenth long, mostly off the one.
   - 2 bars become 4 by muting or moving 1–2 hits.
   - ○ About 3–6 hits per bar.
-- **●** **Acid** in 303 style: sawtooth, 16 steps. Slides only between short notes, because if every note glides, the slide no longer stands out. Few accents before the kicks, cutoff low and resonance high, opened up over the course of the track.
+- **●** **Acid** in 303 style: a sawtooth or square-wave sound with a repeating sequence. Selective slides and accents are one way to create contrast; slide behavior depends on the instrument and is not restricted to short notes. Cutoff and resonance provide movement.
 - **◐** Riff variation: change one parameter every 8–16 bars or swap one note every 8 bars; the core stays.
 - **◐** Register of the stabs MIDI 60–79 (C3–G4).
 - **●** Vocals as short, repeated snippets, often also toward the end.
 
 **Harmony**
-- **●** Very little, often no classical scale. "Atonal" is fine (EDMProd).
+- **●** Some examples have little harmonic movement and emphasize texture or percussion. A single-note riff, drone or chromatically shifted stab is not necessarily atonal; use "atonal" only when no tonal center is established.
 - **●** Minor, e.g. F minor or E minor. One chord or a drone is standard. A shift between two chords adds movement.
 - **◐** A minor triad in root position, optionally with the root doubled an octave higher. Chords, if at all, appear in the breakdown.
 
@@ -284,7 +286,7 @@ Instead of a straight line, a section can also run a curve or wave: `300>8000~ex
 - Stabs: Wavetable with detuned saws or square, Roar, Echo ping-pong, Hybrid Reverb (~1.5 s).
 - FM hits: Operator. Vocals and textures: Simpler. Filter sweeps: Auto Filter.
 
-**Beginner mistakes:** overdriving too early, copying the intro as the outro, no sidechain on the bass, washed-out layers with no room for the kick, judging a pattern after just one bar, too many layers too early, arranging after the limiter, letting every acid note glide or accenting too much.
+**Checks before finishing:** unintended distortion, low-end masking, an outro that does not serve the intended mix, too many layers too early, and slides or accents that have lost their contrast. Sidechain and arranging into a limiter are workflow choices, not requirements or mistakes by themselves.
 
 **Sources:** Beatportal (peak-time/driving in the style of Layton Giordani, Eli Brown, Adam Beyer); Mixed In Key (techno arrangement); EDMProd (How to Make Techno); The Producer School (Drumcode Beats); Attack Magazine (Rolling Techno, Big Beat Techno, Warehouse Rolling Bass, Parallel Chord Stabs, Techno Synth Stabs, Effective Breakdown, tempo trend); MusicTech (Sam Paganini); Lost Stories Academy (DJ-friendly); Production Music Live (Techno); Skiddle (interview with Charlotte de Witte); Aulart (kick tuning, Hannes Bieger); Roland (TB-303); Elektronauts and Ableton forum (weaker sourcing).
 
@@ -295,11 +297,11 @@ Instead of a straight line, a section can also run a curve or wave: `300>8000~ex
 Three flavors:
 - **Liquid:** pads, Rhodes, groove via velocity and micro-timing.
 - **Dancefloor:** poppy chords.
-- **Neurofunk:** Reese and FM basses, short stabs, almost atonal.
+- **Neurofunk:** Reese and FM basses, short stabs and a focus on sound design. This need not be atonal.
 
 **Tempo and swing**
 - **●** 170–176 BPM, standard **174**. Liquid 170–176, neuro 172–174, halftime 170–175 (feels like ~87).
-- **◐** Swing only on the hats (52–60 %). Kick and main snares stay on the grid, otherwise the track is hard to mix.
+- **◐** Swing on hats with straight kick and main snare is one approach; shuffled breaks and micro-timed snares are also valid. The cited 52–60 % range is MPC-style. The engine's lighter default is **strength 0.1, about 51.7 % MPC-style ratio**.
 
 **Structure** (phrases 4/8/16/32/64)
 - **●** Intro 16–32, build 8–16, drop 32–64, breakdown 16–32 without drums, build 2 8–16, drop 2 32–64 (harder, different bass), outro 16–32. About 256 bars, just under 6 minutes. At 174 BPM one bar lasts about 1.38 seconds.
@@ -324,19 +326,19 @@ Three flavors:
 
 **Bass**
 - **●** Two layers: a sub (sine or triangle, mono, release 300–600 ms) and a mid or Reese bass (two detuned saws, filter, distortion, filtered from 80–100 Hz).
-- **●** Register: not lower than D#1 (about 39 Hz). Sweet spot about **MIDI 27–32 for the sub** (39–52 Hz). E, F and F# minor give the bass weight.
+- **●** Suggested sub register: **MIDI 27–32** (Live D#0–G#0, about 39–52 Hz). This is not a lower limit: choose register, harmonics and key for the material and playback system rather than assuming particular keys guarantee weight.
 - **◐** Liquid: long, sustained notes that follow the chords. Neuro and jump-up: one-note basslines with rhythmic variation. Keep sub notes short, with sidechain.
 - **◐** EDMProd Liquid: a 4-bar line as a 16-bar loop, an extra run in every second 4-bar block, the last 2 beats of the 16 bars muted.
 
 **Harmony**
 - **●** Mostly minor. Liquid uses m7 and maj7 chords in Dorian or natural minor.
 - **●** Progressions: i–VI–III–VII with **2 bars per chord**, i–III–VI–iv (liquid), i–VII–VI–VII, i–iv–v. Pad loops with 2–3 chords.
-- **◐** Register about C3–C5, never below C2, i.e. about MIDI 48–72.
+- **◐** One suggested chord register is **MIDI 48–72 (Live C2–C4)**. Higher voicings also work; avoid low-register density when it masks the bass rather than imposing a universal lowest note.
 - **●** Liquid with sustained pads, Rhodes or piano. Neuro with short stabs and drones. Dancefloor with poppy chords.
 
 **Lead and melody** (thinly sourced)
 - **◐** A 4–8-bar loop that returns with variation, plus syncopation and triplets. Only one hook. At EDMProd an 8-bar bell counter-melody, repeated an octave higher.
-- **◐** Call and response over about half a bar. A line made only of chord tones sounds "like Eurodance": so allow passing tones too.
+- **◐** Call and response over about half a bar. Passing and neighbor tones can add motion; a chord-tone-only melody is also valid and does not determine the genre.
 
 **Sounds**
 - Sub: Operator or Drift (sine).
@@ -369,7 +371,7 @@ Festival trap, not hip-hop trap, with the same roots. Sourcing is thinner than f
 
 **Tempo and swing**
 - **●** 140–150 BPM with a halftime feel (feels like 70–75), harder styles up to 160. Figures range from 128 to 170.
-- **◐** Little swing (8–15 % on 808 and hats) or move individual hats by hand. Vary chord velocities, place notes slightly off the grid.
+- **◐** Light swing on 808 and hats or individual timing edits are options. The engine uses **strength 0.12, about 52 % MPC-style ratio**. The cited 8–15 % tutorial amounts need their original control convention to be comparable. Velocity and timing variation are optional, not compulsory humanization.
 
 **Structure** (phrases 4/8)
 - **◐** Cymatics: intro 4, verse 8, build 4–8, drop 16, breakdown/verse 8, build 4–8, drop 2 16–32, outro 8.
@@ -384,7 +386,7 @@ Festival trap, not hip-hop trap, with the same roots. Sourcing is thinner than f
 - **○** Kick and 808 muted in the last 1–2 beats before the drop. No source says this explicitly.
 
 **Drums**
-- **●** Snare or clap on **step 9** (beat 3 in halftime feel). Some sources write this as "2 and 4" at double tempo; they mean the same feel.
+- **●** Snare or clap on **step 9** (beat 3 at the written fast tempo, e.g. 140 BPM). The same recurring backbeat can be counted on beats 2 and 4 at **half that tempo** (70 BPM), across two fast-tempo bars.
 - **◐** Kick on 1, an extra kick just before the snare (around step 8) and offbeat kicks. Don't overload.
 - **●** Hats as a base pattern in eighths or sixteenths. **Rolls** in 32nds or 64ths before snares and at the end of the bar, plus **triplets** (1/8T, 1/16T). Vary the pitch of rolls and raise the velocity into the next bar.
 - **◐** An open hat on an offbeat, cut off by the next closed hat. Before a big roll, one or two bars of straight hats.
@@ -394,7 +396,7 @@ Festival trap, not hip-hop trap, with the same roots. Sourcing is thinner than f
 - **●** One 808 note under each kick, plus a few notes leading into the next bar that answer the snare. Don't fill every sixteenth.
 - **◐** Monophonic and legato with overlapping notes for glides, at most 1–2 glides per bar, toward an accent. No source gives a glide time.
 - **●** Follows key and roots: start on the root, move to the fifth, lower in the drop. Mostly stays within one octave.
-- **◐** Register about **MIDI 28–43** (E1–G2, about 41–98 Hz). F, F# and G minor sit well in the 808 range. Mono below about 150 Hz, sidechain to the kick.
+- **◐** Suggested register **MIDI 28–43** (Live E0–G1, about 41–98 Hz). Choose key and register for the sample's tuning and playback system. Mono low end and kick sidechain are useful options, not a fixed 150 Hz rule or a requirement.
 
 **Harmony**
 - **●** Minor: natural minor, harmonic minor, Phrygian or Dorian.
@@ -449,7 +451,7 @@ State after the rework to follow the recipes (`compose/grooves.py`, `compose/hoo
 | Sounds | New tracks get the genre's kit and presets from the Core Library; the drum notes land on the kit's pads |
 | Mix | One reverb and one delay return (the song uses existing ones), fader levels and sends per role for new tracks; existing tracks keep their fader and only send into new returns. Reverb decay and delay time per genre, e.g. Melodic Techno 4.5 s, House 1.8 s |
 | Automation | Auto Filter sweeps per clip in all genres, plus resonance sweeps (acid in Peak-Time, pads in breaks and builds). Delay throws: a role's send jumps to -4 dB on the last beat of every 8th bar and then falls back to its level |
-| Sidechain | Bass and pads duck under the kick. A dedicated, silent track "Sidechain" at the very front of the set (Operator, fader at -inf) plays 1/16 notes on the genre's kick steps across the whole song, even where the kick pauses (House, Melodic, Peak-Time every beat, D&B steps 1 and 11, Trap 1, 8 and 11). A Compressor (4:1, attack 1 ms) on bass and pads listens to its post-FX signal. Threshold and release per genre: House bass -24 / chords -18 dB, 160 ms; Melodic -22 / -16 dB, 200 ms; Peak-Time -24 / -20 dB, 120 ms; D&B bass only -18 dB, 90 ms; Trap 808 only -14 dB, 100 ms |
+| Sidechain | Optional continuous rhythmic pumping, not detection of the audible kick. A dedicated, silent track "Sidechain" at the very front of the set (Operator, fader at -inf) plays 1/16 notes on the genre's kick steps across the whole song, even where the kick pauses (House, Melodic, Peak-Time every beat, D&B steps 1 and 11, Trap 1, 8 and 11). A Compressor (4:1, attack 1 ms) on bass and pads listens to its post-FX signal. Preset threshold and release: House bass -24 / chords -18 dB, 160 ms; Melodic -22 / -16 dB, 200 ms; Peak-Time -24 / -20 dB, 120 ms; D&B bass only -18 dB, 90 ms; Trap 808 only -14 dB, 100 ms. These settings do not guarantee a particular gain reduction; audition the result |
 | FX | A riser fills the last bars (at most 8) before every drop that follows a different section, and ends at the pause before it; volume and filter macro rise exponentially. An impact (Sub 808 Pitch Boom) hits the one of the drop. Riser presets: House and Trap Riser Basic, Melodic and Peak-Time Hyper Riser, D&B ENCOM Riser |
 
 **Still open**
@@ -460,9 +462,11 @@ State after the rework to follow the recipes (`compose/grooves.py`, `compose/hoo
 | More genres | Trance, Dubstep, Hardstyle etc. can be added as templates once there is a recipe |
 | Other time signatures | the grooves are 16-step bars; `plan_song` therefore needs 4/4 and reports otherwise |
 
+All cutoff frequencies, resonance values, sends, dynamics settings and section timings above are preset choices. They do not establish optimal settings for arbitrary instruments, samples or mixes. A genre label does not substitute for listening.
+
 ## Master chain (`plan_master`)
 
-`plan_master` puts three native devices at the end of the master track: EQ Eight, Glue Compressor, Limiter. This is a starting point, not finished mastering, because MidiBakery does not hear the song. The chain does not make the song louder, and it does not measure loudness (LUFS).
+`plan_master` puts three native devices at the end of the master track: EQ Eight, Glue Compressor, Limiter. This is an optional preset to audition, not finished mastering, because MidiBakery does not hear the song. It adds no Limiter input gain, but filtering, compression and limiting can still change level, timbre and transients. It does not measure loudness (LUFS). The table describes current implementation settings, not settings every mix needs.
 
 | Device | Setting | House, Melodic Techno, Peak-Time Techno | Drum & Bass, Trap |
 |---|---|---|---|
@@ -473,14 +477,12 @@ State after the rework to follow the recipes (`compose/grooves.py`, `compose/hoo
 | Limiter | Ceiling, mode | -1 dB, True Peak (adjustable -3 to -0.1 dB) | same |
 | Limiter | Input Gain | 0 dB | same |
 
-- **●** Limiter as the last device, ceiling -1 dBTP for streaming. Spotify recommends -2 dBTP only for masters louder than -14 LUFS.
-- **●** Glue as bus compressor: 2:1, attack 30 ms (the kick's transients get through), release Auto, 1–2 dB gain reduction in the loudest parts.
-- **◐** Glue sidechain EQ: high-pass around 150 Hz so kick and sub don't make the whole mix pump. Only one source says this.
-- **◐** A low cut on the master at 20–30 Hz removes rumble below the audible range. The sources disagree on whether it belongs on the master or only on individual tracks:
-  - A gentle cut at 30 Hz is considered inaudible.
-  - Sub-heavy genres (808, Reese subs down to 25 Hz) need a lower, steep cut.
-  - EQ Eight only offers 12 or 48 dB/octave as slopes; one source names 24 dB/octave.
-- **○** Glue threshold -10 dB: no source names this. Because the chain hears nothing, it is only a starting value. Set the threshold during the loudest part so the needle shows 1–2 dB.
+- **Professional guidance:** Spotify recommends below -1 dBTP and below -2 dBTP for masters louder than -14 LUFS. The current -1 dB default is therefore not the recommended Spotify ceiling for the louder genre presets. Set `ceiling_db` to -2 dB or lower for that use and verify the rendered file with a true-peak meter.
+- **Preset choice:** Glue at 2:1, attack 30 ms, release Auto. A slower attack may preserve more transient energy, but the result depends on the signal. If subtle bus compression is wanted, audition around 1–2 dB gain reduction in loud passages; bypassing compression is valid.
+- **Preset choice:** a 150 Hz high-pass in the Glue detector reduces its sensitivity to low frequencies. It does not guarantee the absence of pumping.
+- **Professional guidance:** filter the master only when the result helps. A 20–30 Hz low cut can remove unwanted subsonic energy but can also attenuate wanted bass and change phase and transients; a 30 Hz cut is not inherently inaudible. A 48 dB/octave slope is not automatically preferable for sub-heavy music. Compare level-matched with bypass, and consider a gentler cut, a shelf or no filter.
+- **Implemented constraint:** the preset always enables its low cut and compressor; this review does not change that behavior. No automatic analysis establishes whether either is needed.
+- **○** Glue threshold -10 dB is an uncalibrated starting value. Input level determines gain reduction; the threshold alone cannot predict it. Adjust while listening or bypass the compressor.
 - **○** Limiter Input Gain 0 dB is intentional: making it louder without measuring would be guesswork.
 
 Measured in Live 12.4:
@@ -504,36 +506,36 @@ Measured in Live 12.4:
 
 ## Measuring loudness (`measure_master`)
 
-The Max for Live device **MidiBakery Loudness Meter** sits as the last device on the master and measures according to ITU-R BS.1770-4. `measure_master` reads its values.
+The Max for Live device **MidiBakery Loudness Meter** sits as the last device on the master and approximates the ITU-R BS.1770-4 loudness algorithm. `measure_master` reads its values; compliance with the full meter specification has not been established.
 
 - **K-filter:** two biquad~ per channel (pre-filter as high shelf, then RLB high-pass). `loudness.js` computes the coefficients for the current sample rate using the libebur128 formulas; at 48 kHz they are the table values from BS.1770 (a test checks this).
 - **Blocks:** average~ rms over 100 ms per channel, read every 100 ms. Momentary = the last 4 blocks (400 ms), short-term = the last 30 (3 s), as EBU Tech 3341 defines them.
-- **Integrated:** every 400 ms block (75 % overlap) since the reset; gates at -70 LUFS absolute and 10 LU below the ungated mean.
-- **Calibration:** a 997 Hz sine at 0 dBFS in one channel gives -3.01 LUFS (test with the same filter chain in Node).
+- **Integrated:** every 400 ms block (75 % overlap) since the reset; gates at -70 LUFS absolute and 10 LU below the mean of the blocks that pass the absolute gate.
+- **Analytical check:** a 997 Hz sine at 0 dBFS in one channel gives -3.01 LUFS (test with the same filter chain in Node).
 - **Checked in Live (Live 12.4, 48 kHz):** a mastered reference song (5 min, MP3) showed -11.3 LUFS integrated; pyloudnorm measures the same file offline at -11.34 LUFS.
-- **Limits:** sample peak instead of true peak (up to ~0.5 dB below). Max reads the blocks at the scheduler rate, not sample-accurately: an approximation, not a calibrated meter.
+- **Limits:** sample peak instead of true peak. Intersample peaks can exceed sample peaks by more than 0.5 dB; this meter cannot verify a true-peak ceiling. Max reads the blocks at the scheduler rate, not sample-accurately: an approximation, not a calibrated or independently certified meter. One reference-file comparison is not a conformance test.
 
 ## Loudness targets (`plan_loudness`)
 
-`plan_loudness` brings the master to a loudness target in rounds. One round:
-1. It reads the Loudness Meter's integrated value, at least 30 s since the last reset.
-2. It sets the difference to the target on the Limiter's **Input Gain**, at most 6 dB per round and at most +12 dB in total. From +6 dB it warns about heavy limiting.
+`plan_loudness` proposes Limiter gain adjustments toward a selected loudness reference. This is not an assessment of mastering quality. One round:
+1. Reset the meter and play the **whole song once** for comparison with whole-track integrated references. The current implementation checks only that 30 s have elapsed: it cannot verify full-song coverage. A drop-only reading describes that excerpt, not the whole track, and must not be treated as reaching a whole-track target.
+2. It proposes adding the difference to the target to the Limiter's **Input Gain**, at most 6 dB per round and at most +12 dB total input gain. Above +6 dB it warns about possible heavy limiting; this is an input-gain heuristic, not a gain-reduction measurement.
 3. `apply_plan` sets the value (one undo step) and resets the meter; then you play the song again.
 
-The limiter turns part of every extra dB into gain reduction, so a round moves the loudness less than its gain. The rounds end within ±0.5 LU. The ceiling stays, so the peaks stay too.
+Limiting may absorb part of an input gain increase, so the loudness response is signal-dependent. After each change, reset and measure the same complete playback again. The implementation reports `on_target` when the reading is within ±0.5 LU, regardless of which passage was measured; it does not guarantee convergence or acceptable dynamics. The ceiling setting is unchanged, but the sample-peak meter does not independently verify true peak. Stop if transients, distortion or pumping worsen, even if the number is below the reference.
 
-The targets are the median integrated loudness of released tracks of the genre, measured with a stereo meter according to BS.1770, i.e. the way the Loudness Meter measures.
+The genre presets below are published reference figures, not industry standards. The House and Techno values reproduce a vendor's reported stereo measurements of a selected corpus; the Drum & Bass figure has only partly described methodology, and Trap has no open dataset. The figures have not been independently reproduced here. An excerpt measurement is not interchangeable with their full-track integrated values.
 
 | Target | LUFS | Range | Basis | Rating |
 |---|---|---|---|---|
-| House | -8.0 | -9.0 to -7.1 (middle 50 %) | TrackSensei, 54 tracks | good: measurement |
-| Melodic Techno | -8.8 | -9.9 to -8.0 (middle 50 %) | TrackSensei, 56 tracks | good: measurement |
-| Peak-Time Techno | -7.7 | – | TrackSensei, 308 tracks | good: measurement |
-| Drum & Bass | -6.3 | -9.0 to -4.0 (middle 80 %) | WeFoundDNB, 101 tracks | medium: measurement, method only partly described |
-| Trap | -8.4 | -9.4 to -7.3 | blog measurements and mastering guides | weak: no open dataset |
-| Streaming | -14.0 | – | Spotify for Artists | good: official figure |
+| House | -8.0 | -9.0 to -7.1 (middle 50 %) | TrackSensei, 54 tracks | vendor-reported corpus; selection bias, not a standard |
+| Melodic Techno | -8.8 | -9.9 to -8.0 (middle 50 %) | TrackSensei, 56 tracks | vendor-reported corpus; selection bias, not a standard |
+| Peak-Time Techno | -7.7 | – | TrackSensei, 308 tracks | vendor-reported corpus; selection bias, not a standard |
+| Drum & Bass | -6.3 | -9.0 to -4.0 (middle 80 %) | WeFoundDNB, 101 tracks | reported reference; method only partly described |
+| Trap | -8.4 | -9.4 to -7.3 | blog measurements and mastering guides | weak: no open dataset or verified median |
+| Streaming | -14.0 | – | Spotify for Artists | official Normal playback level and mastering recommendation; not a universal streaming requirement |
 
-TrackSensei explicitly notes that its own scale (mono sum) sits about 3.3 LU lower. The table uses the stereo values. For Spotify, Spotify recommends a true peak below -2 dB for masters louder than -14 LUFS; `plan_master` sets -1 dB, and the ceiling can be changed with `ceiling_db`.
+TrackSensei explicitly notes that its own scale (mono sum) sits about 3.3 LU lower for its corpus. The table uses its published stereo values; 3.3 LU is not a universal mono-to-stereo conversion. Choose a musically appropriate range with level-matched references, not the median at any cost. Spotify's -14 LUFS is its Normal playback normalization level and also its published mastering recommendation, not a requirement shared by all streaming services. For Spotify masters louder than -14 LUFS, its recommendation is true peak below -2 dB; `plan_master` currently defaults to -1 dB, configurable via `ceiling_db`.
 
 A check of our own: Katoff – The Signal (Extended, VANDIT Alternative), a melodic track, measures -11.3 LUFS, i.e. quieter than the median, but within the spread of released tracks.
 
@@ -545,13 +547,13 @@ Checked in Live 12.4, the same song with the House chain on the master, target M
 | 1 | +5.1 dB | -9.4 LUFS |
 | 2 | +5.7 dB | -9.0 LUFS, on target |
 
-Glue Compressor and ceiling first take 2.6 LU from the song. Of the +5.1 dB of the first round, the limiter swallowed 0.6 dB. The peak stayed at -1.0 dB.
+In this reported example the chain reduced integrated loudness by 2.6 LU. The first +5.1 dB input-gain change increased the reading by 4.5 LU, consistent with nonlinear dynamics processing; this difference is not a measurement of Limiter gain reduction. The reported peak stayed at -1.0 dB, which does not independently establish a true-peak ceiling. This single example does not establish behavior for other songs.
 
 **Sources:**
-- TrackSensei, "563 Techno & House Tracks: Real LUFS Data"
-- WeFoundDNB, "How Loud Should Drum & Bass Be? LUFS From the Pros and 101 Measured Tracks"
+- [TrackSensei, "563 Techno & House Tracks: Real LUFS Data"](https://tracksensei.com/blog/we-analyzed-563-techno-house-tracks) (vendor methodology and selection limits)
+- WeFoundDNB, "How Loud Should Drum & Bass Be? LUFS From the Pros and 101 Measured Tracks"; [reference library](https://wefounddnb.com/tools/reference-tracks) (the numerical summary still needs a reproducible dataset/method reference)
 - Violet Recording (hip-hop mastering), TrackScore (genre bands)
-- Spotify for Artists, "Loudness normalization"
+- [Spotify for Artists, "Loudness normalization"](https://support.spotify.com/us/artists/article/loudness-normalization/)
 
 ## Loudness measurement sources
 
@@ -565,3 +567,32 @@ Glue Compressor and ceiling first take 2.6 LU from the song. Of the +5.1 dB of t
 - **Note grids from Attack's "Beat Dissected"** only exist as images. The step positions come from the texts and from other sources.
 - **Sound techniques** such as rumble, Reese and sidechain are sound design. The engine hints at them through rests, density and velocity; it builds sidechain as a Compressor driven by a silent trigger track. It writes filter sweeps and resonance as clip automation of an Auto Filter, delay throws as send automation, risers as a preset with envelopes on volume and filter macro.
 - **Breaks and samples** (Amen, vocal chops, 808 samples) cannot be loaded by Live's API.
+
+## Assessment and implementation impact
+
+The October 2026 review supports the engine as a controllable musical sketching assistant, not an autonomous professional composer or mastering engineer. The documentation corrections do not change generated notes, presets, target values or tool schemas.
+
+| Finding | Current implementation | Follow-up |
+|---|---|---|
+| Excerpt versus full-track loudness | `plan_loudness` accepts any reading of at least 30 s and can report `on_target` for that excerpt | **Correctness work needed:** distinguish measurement scope and compare like with like; update runtime prompts that still recommend the loudest 30 s. Never imply verified whole-song coverage from elapsed time alone |
+| True peak | The meter reports sample peaks; the Limiter has a configurable true-peak ceiling | **Measurement work needed** to verify dBTP: use a validated true-peak meter or implement and validate oversampling. Until then, do not claim ceiling compliance from the meter |
+| Limiting safeguards | Gain changes are capped at 6 dB per round and +12 dB total; the heavy-limiting warning is based on input gain | Input gain is not measured gain reduction. Do not treat those caps as guarantees of safe dynamics; signal-based assessment and listening remain needed |
+| Master filtering and compression | The recipe always enables both with fixed starting settings | **Design choice, not an algorithmic necessity:** optional/bypassed stages and delivery-specific ceilings would provide more control; defaults remain unchanged pending that decision |
+| Sidechain | Optional ghost-trigger pumping continues even when the audible kick stops | **Optional musical enhancement:** distinguish continuous pumping from ducking that follows the actual kick before changing behavior |
+| Counter melodies and harmony | Conservative register/consonance constraints and named chromatic progressions are intentional | No correction to notes is required by this review; less restrictive counterpoint would be an optional mode, not a silent replacement |
+| Swing, pitch labels and pulse descriptions | The current timing and MIDI numbers are consistent with the corrected explanations | Documentation corrections only; extending swing beyond a triplet feel would be a separate feature |
+| Reference analysis | Section, key and kick-presence labels are estimates, not source separation or musical ground truth | Validate against manually annotated tracks and let producers verify the result before using it as structure |
+| Professional-quality claims | Functional tests and a few listening/measurement examples do not establish release quality | Use level-matched references, producer listening evaluations across substyles and the EBU meter test material before stronger claims |
+
+## Review sources
+
+Public sources checked for the assessment (October 2026); these support the distinctions above, not every older genre-specific recipe:
+
+- [Ableton Live manual: Using Grooves](https://www.ableton.com/en/live-manual/12/using-grooves/) — Timing and Global Amount scale the selected groove, rather than defining a universal swing ratio.
+- [Open Music Theory: First-species counterpoint](https://openmusictheory.github.io/firstSpecies.html) — independent lines can share rhythm; these classical exercise rules are not mandatory for electronic music.
+- [Eerola et al. (2013): Emotional expression in music](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2013.00487/full) — emotion depends on multiple musical cues, not a progression alone.
+- [Sound On Sound: How steep should I make a high-pass filter?](https://www.soundonsound.com/sound-advice/q-how-steep-should-make-high-pass-filter) — filtering affects phase, transients and note balance as well as spectrum.
+- [Sound On Sound: What mastering can and can't do](https://www.soundonsound.com/techniques/what-mastering-can-cant-do) — intervention should serve the material, not a mandatory processing chain.
+- [iZotope: What is a true peak limiter?](https://www.izotope.com/community/blog/true-peak-limiter) — true-peak behavior and delivery tradeoffs.
+- [ITU-R BS.1770](https://www.itu.int/rec/R-REC-BS.1770/en), [EBU Tech 3341](https://tech.ebu.ch/publications/tech3341) and the [EBU loudness test set](https://tech.ebu.ch/publications/ebu_loudness_test_set) — loudness algorithms, meter behavior and validation material.
+- [Spotify loudness normalization](https://support.spotify.com/us/artists/article/loudness-normalization/) and [TrackSensei corpus/methodology](https://tracksensei.com/blog/we-analyzed-563-techno-house-tracks) — official playback guidance versus descriptive vendor measurements.
