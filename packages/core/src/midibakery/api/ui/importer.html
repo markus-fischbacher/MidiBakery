@@ -89,6 +89,7 @@ const LANES = ["kick", "drums", "bass", "chords", "lead", "fx"];
 const GENRES = ["", "house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap", "other"];
 
 const sets = new Map();   // file -> {file, name, folder, id, imported, info, error, selected, genre}
+let shownItem = null;     // the Library entry whose detail is open
 let shown = null;         // file of the detail view
 let view = "sets";
 let queue = Promise.resolve();
@@ -226,8 +227,11 @@ function counts() {
 function detail(set) {
   const pane = el("div", { className: "detail" });
   if (set.error) { pane.append(el("h3", {}, set.name), el("div", { className: "err" }, set.error)); return pane; }
-  const info = set.info;
-  if (!info) { pane.append(el("div", { className: "dim" }, "Reading...")); return pane; }
+  if (!set.info) { pane.append(el("div", { className: "dim" }, "Reading...")); return pane; }
+  return detailBody(pane, set.info);
+}
+
+function detailBody(pane, info) {
   const facts = el("div", { className: "facts" });
   for (const t of [info.live, `${info.bars} bars`, `${info.tracks} tracks`]) facts.append(el("span", { className: "chip" }, t));
   pane.append(facts);
@@ -235,9 +239,9 @@ function detail(set) {
   const table = el("table", {}, el("tr", {}, el("th", {}, "Section"), el("th", {}, "Bar"), el("th", {}, "Bars"), el("th", {}, "Plays")));
   for (const s of info.sections) table.append(el("tr", {}, el("td", {}, s.name), el("td", {}, String(s.start_bar)), el("td", {}, String(s.bars)), el("td", { className: "dim" }, s.elements.join(", "))));
   pane.append(table);
-  const roles = Object.entries(info.roles).filter(([r]) => !["group", "return"].includes(r)).map(([r, n]) => `${r} ${n}`).join(" · ");
+  const roles = Object.entries(info.roles || {}).filter(([r]) => !["group", "return"].includes(r)).map(([r, n]) => `${r} ${n}`).join(" · ");
   pane.append(el("p", { className: "dim" }, "Tracks: " + roles));
-  if (info.unknown.length) pane.append(el("p", { className: "dim" }, "Not placed: " + info.unknown.join(", ")));
+  if ((info.unknown || []).length) pane.append(el("p", { className: "dim" }, "Not placed: " + info.unknown.join(", ")));
   return pane;
 }
 
@@ -257,7 +261,7 @@ function timeline(info) {
   }
   LANES.forEach((role, i) => {
     const y = top + i * (lane + 1);
-    const on = info.lanes[role] || [];
+    const on = (info.lanes || {})[role] || [];
     g.fillStyle = "#6b6b6b";
     for (let b = 0; b < on.length; b++) if (on[b]) g.fillRect(b * per, y, Math.max(per - 0.5, 0.5), lane);
   });
@@ -272,16 +276,20 @@ async function renderLibrary() {
     if (!library.length) list.append(el("div", { className: "empty" }, "Nothing imported yet."));
     for (const item of library) {
       const del = el("button", {}, "Delete");
-      del.onclick = async () => {
+      del.onclick = async (e) => {
+        e.stopPropagation();
         if (del.textContent !== "Sure?") { del.textContent = "Sure?"; return; }
         await api("/import/" + item.id, null, "DELETE");
         for (const s of sets.values()) if (s.id === item.id) s.imported = false;
         renderLibrary();
       };
       const chips = el("div", { className: "meta" }, el("span", { className: "chip" }, `${Math.round(item.tempo)} BPM`),
-        el("span", { className: "chip" }, item.key || "?"), el("span", { className: "chip" }, `${item.sections} sections`));
+        el("span", { className: "chip" }, item.key || "?"), el("span", { className: "chip" }, `${item.sections.length} sections`));
       if (item.genre) chips.append(el("span", { className: "chip genre set" }, item.genre));
-      list.append(el("div", { className: "row" }, el("div", { className: "body" }, el("span", { className: "name", title: item.file }, item.name), chips), del));
+      const row = el("div", { className: "row" + (item.id === shownItem ? " sel" : "") }, el("div", { className: "body" }, el("span", { className: "name", title: item.file }, item.name), chips), del);
+      row.onclick = () => { shownItem = shownItem === item.id ? null : item.id; renderLibrary(); };
+      list.append(row);
+      if (item.id === shownItem) list.append(detailBody(el("div", { className: "detail" }), item));
     }
     setStatus(`${library.length} imported - use them with plan_song reference=...`);
   } catch (exc) { setStatus(String(exc.message || exc)); }

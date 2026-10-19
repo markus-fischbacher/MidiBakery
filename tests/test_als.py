@@ -201,6 +201,7 @@ def test_import_scan_preview_run_library_delete(api, tmp_path):
     assert [s["imported"] for s in rescanned] == [False, True, True]
     listing = api.get("/import/library", headers=AUTH).json()["library"]
     assert [i["name"] for i in listing] == sorted(i["name"] for i in listing) and len(listing) == 2
+    assert all(len(i["sections"]) == 5 and set(i["lanes"]) >= {"kick", "bass"} for i in listing)  # what the page draws
 
     assert api.delete(f"/import/{listing[0]['id']}", headers=AUTH).json() == {"deleted": True}
     assert api.delete(f"/import/{listing[0]['id']}", headers=AUTH).json() == {"deleted": False}

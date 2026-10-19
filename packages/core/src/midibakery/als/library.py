@@ -103,8 +103,8 @@ def library() -> list[dict[str, Any]]:
             data = json.loads(file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        out.append({k: data.get(k) for k in ("id", "name", "file", "live", "tempo", "key", "bars", "genre")}
-                   | {"sections": len(data.get("sections", []))})
+        out.append({k: data.get(k) for k in ("id", "name", "file", "live", "tempo", "key", "bars", "genre", "tracks", "roles",
+                                             "unknown", "lanes", "sections")})
     return sorted(out, key=lambda item: (str(item["name"]).lower(), str(item["id"])))
 
 
