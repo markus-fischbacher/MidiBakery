@@ -35,6 +35,8 @@ Nothing changes in Live until ``apply_song``.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import math
 import random
 import secrets
@@ -605,6 +607,75 @@ def _from(harmony: Harmony, start: float, length: float) -> Harmony:
     return Harmony(tuple(segments), harmony.source, harmony.explicit)
 
 
+SOURCE_TIMING = ("length", "looping", "loop_start", "loop_end", "start_marker", "end_marker")
+NOTE_KEYS = ("pitch", "start_time", "duration", "velocity", "probability", "velocity_deviation", "mute")
+
+
+@dataclass(frozen=True)
+class ClipSource:
+    """A reused Session clip as the song reads it: its playing window and the notes inside it."""
+    track: int
+    slot: int
+    length: float
+    timing: dict[str, Any]
+    window: float  # where the playing window starts inside the clip's own time
+    notes: tuple[dict[str, Any], ...]  # shifted so the window starts at 0
+    has_envelopes: bool | None  # None: the Remote Script cannot say
+    start_offset: bool  # it begins playing away from the loop start: copies are not the window's notes
+
+    @property
+    def fingerprint(self) -> str:
+        payload = json.dumps([self.timing, [[n.get(k) for k in NOTE_KEYS] for n in self.notes]], sort_keys=True, default=str)
+        return hashlib.sha1(payload.encode()).hexdigest()[:16]
+
+
+async def _read_source(call: Call, track: int, slot: int) -> ClipSource:
+    clip = await call("clip.get", {"track": track, "slot": slot})
+    notes = (await call("notes.get", {"track": track, "slot": slot}))["notes"]
+    looping = bool(clip.get("looping", True))
+    window = float(clip["loop_start"] if looping else clip["start_marker"])
+    # The playing window: the loop for a looping clip, else start to end marker (equal to `length` in Live)
+    length = float(clip["loop_end"] - clip["loop_start"] if looping else clip["end_marker"] - clip["start_marker"])
+    if length <= EPSILON:
+        length = float(clip["length"])
+    inside = []
+    for n in sorted(notes, key=lambda n: (n["start_time"], n["pitch"])):
+        if window - EPSILON <= n["start_time"] < window + length - EPSILON:
+            inside.append({k: n[k] for k in NOTE_KEYS if k in n} | {"start_time": round(n["start_time"] - window, 6)})
+    start_offset = looping and abs(float(clip["start_marker"]) - float(clip["loop_start"])) > EPSILON
+    return ClipSource(track, slot, length, {k: clip.get(k) for k in SOURCE_TIMING}, window, tuple(inside), clip.get("has_envelopes"), start_offset)
+
+
+def _fragment(source: ClipSource, length: float) -> list[dict[str, Any]]:
+    """The first `length` beats of the source's window as notes (cut at the end, never changing the source)."""
+    kept = []
+    for n in source.notes:
+        if n["start_time"] < length - EPSILON:
+            kept.append(n | {"duration": round(min(n["duration"], length - n["start_time"]), 6)})
+    return kept
+
+
+def _shift(harmony: Harmony, by: float) -> list[harmony_mod.Segment]:
+    return [harmony_mod.Segment(s.start + by, s.length, s.chord) for s in harmony.segments]
+
+
+def _follow_clip(clip_harmony: Harmony, playing: list[tuple[str, int, int]], meter: Meter, bars: int) -> Harmony:
+    """A section's harmony from a copied chord clip: each copied part restarts the clip's chords at its own
+    first beat; where no chord clip plays, the clip's chords run on from the section start."""
+    bpb = meter.beats_per_bar
+    base = clip_harmony.for_length(meter, bars)
+    segments: list[harmony_mod.Segment] = []
+    cursor = 0
+    for _, offset, count in sorted(playing, key=lambda p: p[1]):
+        if offset > cursor:
+            segments += _shift(_from(base, cursor * bpb, (offset - cursor) * bpb), cursor * bpb)
+        segments += _shift(clip_harmony.for_length(meter, count), offset * bpb)
+        cursor = offset + count
+    if cursor < bars:
+        segments += _shift(_from(base, cursor * bpb, (bars - cursor) * bpb), cursor * bpb)
+    return Harmony(tuple(segments), clip_harmony.source, clip_harmony.explicit)
+
+
 def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Random) -> tuple[Harmony, Harmony]:
     """Main loop and break loop: the request's progression, or two different genre loops."""
     pool = list(style.progressions["minor" if _is_minor(scale) else "major"]) if len(scale) == 7 else []
@@ -712,10 +783,6 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     kick_pitch = drum_map.note("kick")
 
     use = {c.role: c for c in request.clips}
-    if "chords" in use:  # product choice pending: whether a copied chord clip should set the song's harmony
-        warnings.append("clips.chords is copied as is: the song's bass and lead follow "
-                        + ("the given progression" if request.progression else "the genre's progression")
-                        + ", not the chords in that clip. Pass progression to match them")
     sidechain_source = None
     trigger_needed = request.sidechain and request.sidechain_mode == "follow_kick" and "sidechain" in roles
     if trigger_needed:
@@ -761,6 +828,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 if found is not None:
                     warnings.append(f"Track index {target.index} '{target.name}': its Compressor is keyed from the sidechain track for the song")
     loops: dict[str, float] = {}
+    sources: dict[str, ClipSource] = {}
     for role, clip in use.items():
         found = next((c for c in session.track(clip.track).get("clips", []) if c["slot"] == clip.slot), None)
         if found is None:
@@ -769,8 +837,34 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             raise BridgeError("INVALID_PARAMS", f"clips: the clip in slot index {clip.slot} of track index {clip.track} is not a MIDI clip")
         if float(found["length"]) <= EPSILON:
             raise BridgeError("INVALID_PARAMS", f"clips: the clip in slot index {clip.slot} of track index {clip.track} has no length")
-        loops[role] = float(found["length"])
-    reuse: dict[str, dict[str, Any]] = {r: {"track": c.track, "slot": c.slot, "clip_beats": loops[r], "copies": 0, "uncovered_beats": 0.0} for r, c in use.items()}
+        sources[role] = await _read_source(call, clip.track, clip.slot)
+        loops[role] = sources[role].length
+    reuse: dict[str, dict[str, Any]] = {
+        r: {"track": c.track, "slot": c.slot, "clip_beats": loops[r], "copies": 0, "fragments": 0, "uncovered_beats": 0.0,
+            "fingerprint": sources[r].fingerprint} for r, c in use.items()}
+
+    clip_harmony: Harmony | None = None
+    if "chords" in use:
+        source = sources["chords"]
+        clip_bars = max(1, math.ceil(source.length / bpb - EPSILON))
+        detected, unresolved = harmony_mod.detect_clip(list(source.notes), scale, meter, clip_bars, style.chords_per_bar)
+        if len(unresolved) == len(detected.segments):
+            warnings.append("clips.chords: no confident chord could be read from the clip (silent or not chordal), "
+                            + ("so the given progression drives the bass and lead" if request.progression
+                               else "so the bass and lead keep the genre's progression"))
+        elif request.progression:
+            clash = [i for i, (a, b) in enumerate(zip(detected.segments, main.for_length(meter, clip_bars).segments))
+                     if i not in unresolved and a.chord.pitch_classes != b.chord.pitch_classes]
+            if clash:
+                warnings.append(f"clips.chords plays {', '.join(detected.describe()[i] for i in clash[:4])} where the given progression has "
+                                f"{', '.join(main.for_length(meter, clip_bars).describe()[i] for i in clash[:4])}; the progression wins "
+                                "for the bass and lead (leave progression out to follow the clip)")
+        else:
+            clip_harmony = detected
+            main = alt = detected
+            if unresolved:
+                warnings.append(f"clips.chords: no confident chord in segment(s) {', '.join(str(i + 1) for i in unresolved)} of the clip; "
+                                "they repeat the previous chord for the bass and lead")
 
     cache: dict[tuple, list[Note]] = {}
     actions: list[dict[str, Any]] = []
@@ -815,8 +909,13 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             notes = generate_hook(hook, harmony, scale, meter, bars, swing, low, high, tease=tease, velocity=88 + 12 * section.energy, flip=flip)
         return notes if tease else _answer_space(notes, meter, bars, offset_bars)
 
+    section_harmonies: list[Harmony] = []
     for section, at in zip(sections, starts):
         harmony: Harmony = (alt if section.kind == "break" else main).for_length(meter, section.bars)
+        if clip_harmony is not None:
+            chord_parts = [seg for seg in parse_segments(section.parts.get("chords", ""), section.bars) if seg[0] != "-"] if "chords" in roles else []
+            harmony = _follow_clip(clip_harmony, chord_parts, meter, section.bars)
+        section_harmonies.append(harmony)
         for role in ROLES:
             spec = section.parts.get(role)
             if spec is None or role not in roles:
@@ -830,20 +929,35 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             until = playing[-1][1] + playing[-1][2]  # a part may stop before the section ends
             clip_length = (until - first) * bpb
             if role in use:
-                loop = loops[role]
+                loop, source = loops[role], sources[role]
                 for part, offset, bars in playing:
                     span = bars * bpb
+                    if section.rest_beats and offset + bars == section.bars:
+                        span -= section.rest_beats
+                    begin = at + offset * bpb
                     copies = int((span + EPSILON) // loop)
                     for k in range(copies):
-                        actions.append({"action": "copy_session_clip", "track": target.index, "slot": use[role].slot, "start": at + offset * bpb + k * loop})
+                        actions.append({"action": "copy_session_clip", "track": target.index, "slot": use[role].slot, "start": begin + k * loop})
                     reuse[role]["copies"] += copies
-                    gap = span - copies * loop
-                    if gap > EPSILON:
-                        reuse[role]["uncovered_beats"] += gap
-                        what = f"repeats {copies}x and leaves its last {gap:g} beats empty" if copies else "is longer than the span, so it is left out"
-                        message = f"clips.{role}: the {loop:g}-beat clip {what} in the {span:g}-beat '{section.name}' part (copies are never trimmed)"
-                        if message not in warnings:
-                            warnings.append(message)
+                    rest = span - copies * loop
+                    if rest <= EPSILON:
+                        continue
+                    where = f"clips.{role}: the {loop:g}-beat clip would be cut to {rest:g} beats for the end of the {span:g}-beat '{section.name}' part"
+                    if source.start_offset:
+                        raise BridgeError("UNSUPPORTED", f"{where}, but it starts playing away from its loop start, so the cut's content cannot be "
+                                          "determined reliably; set its start marker to its loop start, or pick a clip that divides the span")
+                    if source.has_envelopes is not False:
+                        raise BridgeError("UNSUPPORTED", f"{where}, but " + ("it has envelopes/automation a cut cannot carry"
+                                          if source.has_envelopes else "the Remote Script cannot tell whether it has envelopes (update it)")
+                                          + "; use a clip without automation or one whose length divides the span")
+                    fragment = _fragment(source, rest)
+                    reuse[role]["fragments"] += 1
+                    if fragment:
+                        actions.append({"action": "add_clip", "track": target.index, "start": begin + copies * loop, "length": rest,
+                                        "name": f"{section.name} {role.title()} (cut)", "notes": fragment})
+                    message = (f"clips.{role}: the {loop:g}-beat clip is cut to {rest:g} beats for the end of the {span:g}-beat '{section.name}' part")
+                    if message not in warnings:
+                        warnings.append(message)
                 continue
             cache_key = (section.kind, section.variation, section.bars, role, spec, section.pause_every)
             if cache_key not in cache:
@@ -881,7 +995,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                     {"parameter": send, "unit": "display", "points": _throw_points(section.bars, first, until, bpb, base)})
             actions.append(action)
     if "counter" in roles and "lead" in roles:
-        actions += _counter_clips(actions, roles, sections, starts, main, alt, scale, meter, counts, rng)
+        actions += _counter_clips(actions, roles, sections, starts, section_harmonies, scale, meter, counts, rng)
     riser = roles.get("riser")
     preset = style.sounds.get("riser")
     riser_macro = riser is not None and preset is not None and (
@@ -921,7 +1035,7 @@ RISER_BARS = 8
 
 
 def _counter_clips(actions: list[dict[str, Any]], roles: dict[str, RoleTrack], sections: tuple[Section, ...], starts: list[float],
-                   main: Harmony, alt: Harmony, scale: Scale, meter: Meter, counts: dict[str, int],
+                   harmonies: list[Harmony], scale: Scale, meter: Meter, counts: dict[str, int],
                    rng: Callable[..., random.Random]) -> list[dict[str, Any]]:
     """A counter melody clip for every lead clip, at its beat and length over the same chords: it answers in the
     lead's rests (the 4th bar of a phrase it would play through, the empty bars of a tease)."""
@@ -933,7 +1047,7 @@ def _counter_clips(actions: list[dict[str, Any]], roles: dict[str, RoleTrack], s
         section, at = sections[i], starts[i]
         length = action["length"]
         bars = max(1, math.ceil(length / bpb - EPSILON))
-        harmony = _from((alt if section.kind == "break" else main).for_length(meter, section.bars), action["start"] - at, length)
+        harmony = _from(harmonies[i], action["start"] - at, length)
         lead_notes = [Note(n["pitch"], n["start_time"], n["duration"], n.get("velocity", 100)) for n in action["notes"]]
         notes = fit_to_length(generate_counter(lead_notes, harmony.for_length(meter, bars), scale, meter, bars,
                                                rng("counter", section.name, action["start"]), source_length=length), length)
@@ -1032,8 +1146,10 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
             raise BridgeError("CONFLICT", "The copied drum clip changed since the kick-following plan; plan again")
     for role, source in plan.reuse.items():
         current = await call("clip.get", {"track": source["track"], "slot": source["slot"]})
-        if not current.get("is_midi", True) or abs(float(current["length"]) - source["clip_beats"]) > EPSILON:
+        if not current.get("is_midi", True):
             raise BridgeError("CONFLICT", f"The copied {role} clip changed since the song plan was made; plan again")
+        if (await _read_source(call, source["track"], source["slot"])).fingerprint != source["fingerprint"]:
+            raise BridgeError("CONFLICT", f"The copied {role} clip's notes or loop/marker settings changed since the song plan was made; plan again")
     _trigger_first(plan)
     undo_steps = 0
     warnings: list[str] = []

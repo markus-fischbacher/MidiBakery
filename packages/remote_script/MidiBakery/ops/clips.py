@@ -25,6 +25,8 @@ def describe_clip(clip):
         "signature_numerator": clip.signature_numerator,
         "signature_denominator": clip.signature_denominator,
     }
+    if not getattr(clip, "is_arrangement_clip", False):  # Live hides arrangement clip envelopes (12.4.6)
+        data["has_envelopes"] = bool(getattr(clip, "has_envelopes", False))
     if getattr(clip, "is_arrangement_clip", False):
         data["start_time"] = clip.start_time
         data["end_time"] = clip.end_time

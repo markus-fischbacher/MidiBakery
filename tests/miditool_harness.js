@@ -19,9 +19,27 @@ function Task(fn) {
 }
 let detailId = 7; // the clip in Live's detail view; scenarios change it to simulate a selection switch
 let removeFails = false;
+let rangeNotes = []; // what the clip holds in the selection (get_notes_extended)
+let readFails = false;
+let detailPath = "live_set tracks 0 clip_slots 0 clip"; // where the detail clip lives
+const nodes = {}; // LOM objects by path ("live_set tracks 0") or "id N": scalars, or {list: [ids]} for child lists
 function LiveAPI(path) {
   this.id = detailId;
+  this.path = '"' + path + '"';
+  this.unquotedpath = path === "live_set view detail_clip" ? detailPath : path;
+  const node = nodes[path] || {};
+  this.get = (prop) => {
+    const v = node[prop];
+    if (v === undefined) return [];
+    if (v && v.list) return v.list.flatMap((id) => ["id", id]);
+    return [v];
+  };
   this.call = (...args) => {
+    if (args[0] === "get_notes_extended") {
+      if (readFails) throw new Error("read failed");
+      log.push(["read", this.id]);
+      return JSON.stringify({ notes: rangeNotes });
+    }
     if (removeFails) throw new Error("remove failed");
     log.push(["liveapi", path, this.id, ...args]);
   };
@@ -111,6 +129,53 @@ if (scenario === "switch") {
   detailId = 8;
   release();
   console.log(JSON.stringify({ log, after: log.slice(marker), applied: applied().slice(0), statuses: statuses() }));
+} else if (scenario === "pads" || scenario === "pads-nested" || scenario === "pads-legacy" || scenario === "no-rack") {
+  const rack = (extra) => ({ can_have_drum_pads: 1, can_have_chains: 1, ...extra });
+  const chain = (note, name) => ({ in_note: note, name });
+  if (scenario === "no-rack") {
+    nodes["live_set tracks 0"] = { devices: { list: [20] } };
+    nodes["id 20"] = { can_have_drum_pads: 0, can_have_chains: 0 };
+  } else if (scenario === "pads-legacy") {
+    nodes["live_set tracks 0"] = { devices: { list: [20] } };
+    nodes["id 20"] = rack({ chains: { list: [30] }, drum_pads: { list: [40, 41, 42] } });
+    nodes["id 30"] = { name: "x" }; // no in_note: the older Live API
+    nodes["id 40"] = { note: 41, name: "Floor Tom", chains: { list: [30] } };
+    nodes["id 41"] = { note: 36, name: "Kick", chains: { list: [30] } };
+    nodes["id 42"] = { note: 37, name: "Empty", chains: { list: [] } };
+  } else {
+    const inner = rack({ chains: { list: [30, 31, 32] } });
+    nodes["id 30"] = chain(48, "Kick Heavy");
+    nodes["id 31"] = chain(49, "Snare Tight");
+    nodes["id 32"] = chain(200, "Out of range");
+    if (scenario === "pads") {
+      nodes["live_set tracks 0"] = { devices: { list: [20] } };
+      nodes["id 20"] = inner;
+    } else {
+      nodes["live_set tracks 0"] = { devices: { list: [10] } };
+      nodes["id 10"] = { can_have_drum_pads: 0, can_have_chains: 1, chains: { list: [11] } };
+      nodes["id 11"] = { devices: { list: [20] } };
+      nodes["id 20"] = inner;
+    }
+  }
+  call(0, "msg_dictionary", input);
+  const first = requestOf();
+  const context = dicts[first[5]].context;
+  call(1, "response", first[3], result);
+  call(0, "msg_dictionary", input); // cached
+  const requests = () => log.filter((e) => e[0] === "outlet" && e[1] === 1 && e[2] === "request").length;
+  const before = requests();
+  if (scenario === "pads") nodes["id 30"] = chain(40, "Kick Heavy"); // the kit changes
+  call(0, "msg_dictionary", input);
+  console.log(JSON.stringify({ pads: context.pads || null, before, after: requests(), statuses: statuses() }));
+} else if (scenario === "edited" || scenario === "unreadable" || scenario === "edited-a-b-a") {
+  // Replace removes only what the clip held when the cycle began, and only if it can tell
+  call(0, "msg_dictionary", input);
+  const req = requestOf();
+  if (scenario === "edited") rangeNotes = [{ pitch: 40, start_time: 5, duration: 1, velocity: 100 }];
+  if (scenario === "edited-a-b-a") { detailId = 8; rangeNotes = [{ pitch: 41, start_time: 5, duration: 1, velocity: 100 }]; detailId = 7; }
+  if (scenario === "unreadable") readFails = true;
+  call(1, "response", req[3], result);
+  console.log(JSON.stringify({ log, removed: log.filter((e) => e[0] === "liveapi" && e[3] === "remove_notes_extended").length, applied: applied(), statuses: statuses() }));
 } else if (scenario === "meter") {
   const bodies = [];
   const withMeter = (n, d) => ({ ...input, clip: { ...input.clip, signature_numerator: n, signature_denominator: d } });

@@ -131,6 +131,8 @@ Three intentions: **generate** a new idea, **follow** existing clips (`chords_fr
 | `bass` | reads `swing`; ignores `style`, `octave`, `density`, `kick_relation`, `follow_kick` | `offbeat`, `walking` and `sustained` sit on fixed pulses and ignore `swing`; the other styles read it |
 | `chords` | ignores `rhythm`, `low`, `high`, `voices` | all read |
 
-A mood `pattern` supplies its own progression and, unless `chords_per_bar` is given explicitly, its own chord rate, in standalone `generate` as in `compose`. The Max MIDI Tool has no pattern menus. `plan_song` uses genre recipes, not these named patterns; a copied `clips.chords` clip is not read for harmony (see its warning).
+A mood `pattern` supplies its own progression and, unless `chords_per_bar` is given explicitly, its own chord rate, in standalone `generate` as in `compose`. The Max MIDI Tool has no pattern menus. `plan_song` uses genre recipes, not these named patterns; a copied `clips.chords` clip sets its bass and lead harmony unless `progression` is given (see docs/GENRES.md).
 
-The Max MIDI Tool sends the meter when Live's tool context provides one (unverified in real Live; otherwise 4/4) and no Drum Rack pad context (drums use General MIDI pitches). Without a clip scale it uses C major.
+The Max MIDI Tool sends the meter when Live's tool context provides one (unverified in real Live; otherwise 4/4) and, for drums, the named populated pads of the clip's track's first Drum Rack (one level into Instrument Racks), read through Live's object model (unverified in real Live). If they cannot be read the status says why and drums use General MIDI pitches (`drum_map: "gm"`). A changed kit makes a new request. Without a clip scale it uses C major.
+
+Replace removes notes only when the clip is still the one the cycle started on and the selection holds exactly the notes it held then; otherwise (or when that cannot be read) it writes nothing and says so. Live gives MIDI Tools no observer for a changed time selection, so this content check is the guard.

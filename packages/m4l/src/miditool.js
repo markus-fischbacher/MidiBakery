@@ -78,6 +78,27 @@ function isFresh(clip, key) {
   return Boolean(lastInput) && clip !== 0 && detailClipId() === clip && JSON.stringify(buildBody(lastInput)) === key;
 }
 
+// What Replace is about to remove, as read when its apply cycle began: any edit in between (a changed
+// selection's notes, a different clip content after A -> B -> A) is then detected before the removal.
+// Live exposes no observer for the time selection, so this content check is the freshness guard.
+// UNVERIFIED in real Live: that get_notes_extended can be called from a MIDI Tool this way.
+var rangeSnapshot = null;
+
+function readRange(clipId, context) {
+  try {
+    var clip = new LiveAPI("live_set view detail_clip");
+    if (!clip || clipId === 0 || Number(clip.id) !== clipId) return null;
+    var raw = clip.call("get_notes_extended", 0, 128, context.start, context.length);
+    var parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!parsed || !Array.isArray(parsed.notes)) return null;
+    return parsed.notes.map(function (n) {
+      return [n.pitch, n.start_time, n.duration, n.velocity, n.mute ? 1 : 0].join(":");
+    }).sort().join("|");
+  } catch (e) {
+    return null;
+  }
+}
+
 function replacing() {
   return MODE === "generate" && params.replace;
 }
@@ -91,6 +112,10 @@ function msg_dictionary(d) {
   var clipId = detailClipId();
   // With Replace, a new apply cycle (new Live seed) must clear the range again before
   // the cached notes go back in; within one cycle Live itself replaces the previous output.
+  if (replacing() && !reapplied) {
+    var snapContext = buildContext(d);
+    rangeSnapshot = { clip: clipId, start: snapContext.start, length: snapContext.length, notes: readRange(clipId, snapContext) };
+  }
   var sameCycle = reapplied || !replacing() || cache.cycle === cycle;
   if (cache.key === key && cache.clip === clipId && sameCycle) {
     dbg("apply cached", cache.notes.length, "notes");
@@ -150,29 +175,37 @@ function applyResult() {
     status("Selection or settings changed - nothing applied");
     return;
   }
-  if (replacing() && lastInput && !clearRange(cache.clip, buildContext(lastInput))) {
-    status("Error: could not clear the selection - nothing applied");
-    return;
+  if (replacing() && lastInput) {
+    var refusal = clearRange(cache.clip, buildContext(lastInput));
+    if (refusal) {
+      status("Error: " + refusal + " - nothing applied");
+      return;
+    }
   }
   reapplied = true;
   outlet(2, "bang");
   waitForApply.schedule(1500);
 }
 
-// Removes the notes in the range from the clip the result was made for; false if it did not happen.
+// Removes the notes in the range from the clip the result was made for. Returns null when it happened,
+// else why not; the removal only runs if the clip is the same and its range still holds exactly what it
+// held when the apply cycle began.
 function clearRange(clipId, context) {
+  var snap = rangeSnapshot;
+  if (!snap || snap.notes === null) return "could not read the clip's notes to verify Replace";
+  if (snap.clip !== clipId || snap.start !== context.start || snap.length !== context.length) return "Replace context changed";
+  var now = readRange(clipId, context);
+  if (now === null) return "the clip changed or its notes could not be read";
+  if (now !== snap.notes) return "the clip was edited since Generate";
   try {
     var clip = new LiveAPI("live_set view detail_clip");
-    if (!clip || clipId === 0 || Number(clip.id) !== clipId) {
-      dbg("replace: detail clip changed");
-      return false;
-    }
+    if (!clip || Number(clip.id) !== clipId) return "the detail clip changed";
     clip.call("remove_notes_extended", 0, 128, context.start, context.length);
     dbg("replace: cleared", context.start, context.length);
-    return true;
+    return null;
   } catch (e) {
     dbg("replace failed", String(e));
-    return false;
+    return "could not clear the selection";
   }
 }
 
@@ -212,6 +245,74 @@ function showStyleMenu() {
   outlet(4, "script", "sendbox", "chance_dial", "hidden", kind === "drums" ? 0 : 1);
 }
 
+// Drum Rack pads of the detail clip's track, read through the Live Object Model the same way the
+// Remote Script does (drum_rack.pads): clip path -> track -> first Drum Rack, one level into Instrument
+// Racks; pads are the chains with their trigger note. UNVERIFIED in real Live: that the clip path
+// and these properties are readable from a MIDI Tool. Anything missing means "not read" with a reason.
+var padsReason = "";
+
+function listIds(api, prop) {
+  var raw = api.get(prop) || [];
+  var out = [];
+  for (var i = 0; i + 1 < raw.length; i++) if (raw[i] === "id") out.push(raw[i + 1]);
+  return out;
+}
+
+function firstValue(api, prop) {
+  var v = api.get(prop);
+  return Array.isArray(v) ? v[0] : v;
+}
+
+function findRack(deviceIds, depth) {
+  for (var i = 0; i < deviceIds.length; i++) {
+    var device = new LiveAPI("id " + deviceIds[i]);
+    if (Number(firstValue(device, "can_have_drum_pads")) === 1) return device;
+    if (depth < 1 && Number(firstValue(device, "can_have_chains")) === 1) {
+      var chains = listIds(device, "chains");
+      for (var c = 0; c < chains.length; c++) {
+        var inner = findRack(listIds(new LiveAPI("id " + chains[c]), "devices"), depth + 1);
+        if (inner) return inner;
+      }
+    }
+  }
+  return null;
+}
+
+function rackPads(rack) {
+  var pads = [];
+  var chains = listIds(rack, "chains");
+  var probe = chains.length ? Number(firstValue(new LiveAPI("id " + chains[0]), "in_note")) : NaN;
+  if (!isNaN(probe)) {
+    // Live 12.3+: a drum chain's in_note is the note that triggers it.
+    chains.forEach(function (id) {
+      var chain = new LiveAPI("id " + id);
+      var note = Number(firstValue(chain, "in_note"));
+      if (note >= 0 && note <= 127) pads.push({ note: note, name: String(firstValue(chain, "name")) });
+    });
+  } else {
+    listIds(rack, "drum_pads").forEach(function (id) {
+      var pad = new LiveAPI("id " + id);
+      if (listIds(pad, "chains").length) pads.push({ note: Number(firstValue(pad, "note")), name: String(firstValue(pad, "name")) });
+    });
+  }
+  return pads;
+}
+
+function readPads() {
+  try {
+    var clip = new LiveAPI("live_set view detail_clip");
+    var match = String(clip.unquotedpath || clip.path || "").replace(/"/g, "").match(/^live_set tracks (\d+)/);
+    if (!match) return { pads: null, reason: "clip's track not readable" };
+    var rack = findRack(listIds(new LiveAPI("live_set tracks " + match[1]), "devices"), 0);
+    if (!rack) return { pads: null, reason: "no Drum Rack on the track" };
+    var pads = rackPads(rack);
+    pads.sort(function (a, b) { return a.note - b.note; });
+    return pads.length ? { pads: pads, reason: "" } : { pads: null, reason: "Drum Rack has no populated pads" };
+  } catch (e) {
+    return { pads: null, reason: "Drum Rack not readable" };
+  }
+}
+
 function buildContext(d) {
   var clip = d.clip || {};
   var start = Number(clip.time_selection_start) || 0;
@@ -222,8 +323,8 @@ function buildContext(d) {
     seed: params.seed
   };
   // Meter: read from the tool context when Live provides it; otherwise omitted, so the server
-  // assumes 4/4. UNVERIFIED which of these fields real Live fills in. Drum Rack pad context is not
-  // sent (no verified interface), so drums use General MIDI pitches.
+  // assumes 4/4. UNVERIFIED which of these fields real Live fills in. Without readable Drum Rack
+  // pads (see readPads) drums use General MIDI pitches, and the status says so.
   var numerator = Number(clip.signature_numerator);
   var denominator = Number(clip.signature_denominator);
   if (numerator >= 1 && numerator <= 99 && [1, 2, 4, 8, 16].indexOf(denominator) >= 0) {
@@ -235,6 +336,12 @@ function buildContext(d) {
   // Live reports "Chromatic" when the clip has no scale; generators need a real one.
   if (scale.scale_mode && intervals.length && intervals.length < 12) {
     context.scale = { root: Number(scale.root_note) % 12, intervals: intervals, name: String(scale.scale_name || "") };
+  }
+  if (MODE === "generate" && KINDS[params.kind] === "drums") {
+    // The pads are part of the request, so a changed kit never reuses a cached result.
+    var kit = readPads();
+    padsReason = kit.reason;
+    if (kit.pads) context.pads = kit.pads;
   }
   return context;
 }
@@ -307,8 +414,8 @@ function describe(result) {
   if (result.chords) parts.push(Array.isArray(result.chords) ? result.chords.join(" - ") : String(result.chords));
   if (result.diff) parts.push("+" + result.diff.added + " ~" + result.diff.modified + " -" + result.diff.removed);
   if (result.notes) parts.push(result.notes.length + " notes");
-  // The generator is not told the kit's pads, so the server's own fallback is shown, not hidden.
-  if (result.drum_map === "gm") parts.push("pads unknown: General MIDI drum pitches");
+  if (result.drum_map === "gm") parts.push("pads unknown" + (padsReason ? " (" + padsReason + ")" : "") + ": General MIDI drum pitches");
+  if (result.drum_map === "drum_rack") parts.push("kit pads used");
   if (result.ignored && result.ignored.length) parts.push("ignored: " + result.ignored.join(", "));
   parts.push("seed " + result.seed);
   return parts.join("  ");

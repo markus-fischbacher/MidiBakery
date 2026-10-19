@@ -264,12 +264,57 @@ async def test_own_session_clip_for_a_role(client, live):
     assert {c["name"] for c in bass} == {"My Bass"} and len(bass) == 2 * 8 + 2  # 32-bar drops, the outro's first 8 bars, 4-bar loop
 
 
-async def test_copied_chord_clip_warns_that_it_does_not_set_the_harmony(client, live):
+def _chord_clip(length, chords):
+    """Notes for a clip: one (pitches) chord per 4 beats."""
+    return [{"pitch": p, "start_time": 4.0 * i, "duration": 4.0, "velocity": 90} for i, pitches in enumerate(chords) for p in pitches]
+
+
+async def _clip_with(client, length, notes, **fields):
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": length, "name": "Mine"})
+    if notes:
+        await client.call("notes.apply", {"track": 1, "slot": 0, "add": notes})
+
+
+async def _drop_clips(client, track, start=96.0, end=224.0):
+    return sorted(((c["start"], c["end"]) for c in (await client.call("arrangement.get", {"track": track}))["tracks"][0]["clips"]
+                   if c["start"] >= start and c["end"] <= end))
+
+
+async def test_copied_chord_clip_sets_the_harmony_in_every_section_including_breaks(client, live):
     _studio(live)
-    await client.call("clip.create", {"track": 1, "slot": 0, "length": 16, "name": "My Chords"})
+    # D major, Bb major, F major, A major: nothing like the genre's loops; D and A are outside C major
+    await _clip_with(client, 16, _chord_clip(16, [(50, 54, 57), (46, 50, 53), (53, 57, 60), (57, 61, 64)]))
     server = build_server(client)
     preview = await _plan(server, roles={"chords": 1}, clips=[{"role": "chords", "track": 1, "slot": 0}])
-    assert any("clips.chords is copied as is" in w for w in preview["warnings"])
+    assert preview["harmony"]["main"][:4] == ["D", "Bb", "F (IV)", "A"] or preview["harmony"]["main"][:4] == ["D", "A#", "F (IV)", "A"]
+    assert preview["harmony"]["break"] == preview["harmony"]["main"]  # the break follows the copied chords too
+    assert not any("progression wins" in w for w in preview["warnings"])
+
+
+async def test_given_progression_wins_over_a_copied_chord_clip_and_says_so(client, live):
+    _studio(live)
+    await _clip_with(client, 16, _chord_clip(16, [(50, 54, 57), (46, 50, 53), (53, 57, 60), (57, 61, 64)]))
+    server = build_server(client)
+    preview = await _plan(server, roles={"chords": 1}, progression="C G Am F", clips=[{"role": "chords", "track": 1, "slot": 0}])
+    assert preview["harmony"]["main"][:4] == ["C (I)", "G (V)", "Am (vi)", "F (IV)"]
+    assert any("progression wins" in w for w in preview["warnings"])
+
+
+async def test_silent_copied_chord_clip_is_reported_not_guessed(client, live):
+    _studio(live)
+    await _clip_with(client, 16, [])
+    server = build_server(client)
+    preview = await _plan(server, roles={"chords": 1}, clips=[{"role": "chords", "track": 1, "slot": 0}])
+    assert any("no confident chord" in w for w in preview["warnings"])
+
+
+async def test_silent_bar_in_a_copied_chord_clip_is_listed(client, live):
+    _studio(live)
+    await _clip_with(client, 16, _chord_clip(16, [(48, 52, 55), (), (53, 57, 60), (55, 59, 62)]))
+    server = build_server(client)
+    preview = await _plan(server, roles={"chords": 1}, clips=[{"role": "chords", "track": 1, "slot": 0}])
+    assert any("no confident chord in segment(s) 2" in w for w in preview["warnings"])
+    assert preview["harmony"]["main"][:2] == ["C (I)", "C (I)"]
 
 
 async def test_reused_clip_on_another_track_than_the_role_is_refused(client, live):
@@ -282,24 +327,90 @@ async def test_reused_clip_on_another_track_than_the_role_is_refused(client, liv
     assert not (await client.call("arrangement.get", {}))["tracks"][1]["clips"]  # nothing written
 
 
-async def test_reused_clip_reports_what_does_not_fit(client, live):
+async def test_reused_clip_is_cut_to_fill_the_last_span_without_changing_the_source(client, live):
     _studio(live)
-    await client.call("clip.create", {"track": 1, "slot": 0, "length": 20, "name": "Odd"})
+    notes = [{"pitch": 40 + i, "start_time": float(i), "duration": 1.0, "velocity": 100} for i in range(20)]
+    await _clip_with(client, 20, notes)
     server = build_server(client)
     preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
-    assert preview["reuse"]["bass"]["clip_beats"] == 20 and preview["reuse"]["bass"]["uncovered_beats"] > 0
-    assert any("clips.bass" in w and "never trimmed" in w for w in preview["warnings"])
+    assert preview["reuse"]["bass"]["clip_beats"] == 20 and preview["reuse"]["bass"]["uncovered_beats"] == 0
+    assert preview["reuse"]["bass"]["fragments"] > 0
+    assert any("clips.bass" in w and "is cut to" in w for w in preview["warnings"])
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
-    drop = [c for c in (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"] if c["start"] >= 4 * 4 * 8 and c["end"] <= 4 * 4 * 40]
-    assert drop and all(c["end"] - c["start"] == 20 for c in drop)  # whole copies only, never past the span
+    spans = await _drop_clips(client, 1)
+    assert spans[:6] == [(96.0 + 20 * k, 116.0 + 20 * k) for k in range(6)]  # six whole copies...
+    assert spans[6] == (216.0, 224.0)  # ...then a cut ending exactly where the drop ends
+    cut = next(c for c in (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"] if c["start"] == 216.0)
+    pitches = [n["pitch"] for n in (await client.call("notes.get", {"track": 1, "arrangement_clip": cut["id"]}))["notes"]] if "id" in cut else None
+    if pitches is not None:
+        assert sorted(pitches) == list(range(40, 48))
+    source = await client.call("clip.get", {"track": 1, "slot": 0})
+    assert source["length"] == 20 and len((await client.call("notes.get", {"track": 1, "slot": 0}))["notes"]) == 20
 
 
-async def test_reused_clip_longer_than_a_part_is_reported(client, live):
+async def test_reused_clip_longer_than_a_part_is_cut_to_it(client, live):
     _studio(live)
-    await client.call("clip.create", {"track": 1, "slot": 0, "length": 256})
+    notes = [{"pitch": 40, "start_time": float(i * 8), "duration": 2.0, "velocity": 100} for i in range(32)]
+    await _clip_with(client, 256, notes)
     server = build_server(client)
     preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
-    assert any("left out" in w and "clips.bass" in w for w in preview["warnings"])
+    assert preview["reuse"]["bass"]["copies"] >= 0 and preview["reuse"]["bass"]["uncovered_beats"] == 0
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    spans = await _drop_clips(client, 1)
+    assert spans == [(96.0, 224.0)]  # exactly as long as the drop
+
+
+async def test_reused_clip_loop_window_sets_the_cut_notes(client, live):
+    _studio(live)
+    notes = [{"pitch": 40 + i, "start_time": 4.0 + i, "duration": 1.0, "velocity": 100} for i in range(20)]
+    await _clip_with(client, 24, notes)
+    await client.call("clip.set", {"track": 1, "slot": 0, "loop_end": 24.0})
+    await client.call("clip.set", {"track": 1, "slot": 0, "loop_start": 4.0})  # a 20-beat window
+    live.on_main(lambda: setattr(live.song.tracks[1].clip_slots[0].clip, "start_marker", 4.0))
+    server = build_server(client)
+    preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
+    assert preview["reuse"]["bass"]["clip_beats"] == 20 and preview["reuse"]["bass"]["fragments"] > 0
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    spans = await _drop_clips(client, 1)
+    assert spans[-1] == (216.0, 224.0)
+
+
+async def test_reused_clip_playing_from_inside_its_loop_is_refused_when_it_needs_a_cut(client, live):
+    _studio(live)
+    await _clip_with(client, 20, [{"pitch": 40, "start_time": 0.0, "duration": 1.0, "velocity": 100}])
+    live.on_main(lambda: setattr(live.song.tracks[1].clip_slots[0].clip, "start_marker", 4.0))
+    server = build_server(client)
+    with pytest.raises(ToolError) as exc:
+        await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
+    assert "away from its loop start" in str(exc.value)
+    assert not (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"]
+
+
+async def test_reused_clip_with_envelopes_is_refused_when_it_needs_a_cut(client, live):
+    _studio(live)
+    await _clip_with(client, 20, [{"pitch": 40, "start_time": 0.0, "duration": 1.0, "velocity": 100}])
+    live.on_main(lambda: live.song.tracks[1].clip_slots[0].clip.envelopes.update({1: object()}))
+    server = build_server(client)
+    with pytest.raises(ToolError) as exc:
+        await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
+    assert "envelopes" in str(exc.value)
+    # a clip that divides every span needs no cut, so it is still copied
+    await client.call("clip.delete", {"track": 1, "slot": 0})
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 16})
+    live.on_main(lambda: live.song.tracks[1].clip_slots[0].clip.envelopes.update({1: object()}))
+    assert (await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}]))["reuse"]["bass"]["fragments"] == 0
+
+
+async def test_reused_clip_notes_changed_after_planning(client, live):
+    _studio(live)
+    await _clip_with(client, 16, [{"pitch": 40, "start_time": 0.0, "duration": 1.0, "velocity": 100}])
+    server = build_server(client)
+    preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
+    await client.call("notes.apply", {"track": 1, "slot": 0, "add": [{"pitch": 43, "start_time": 2.0, "duration": 1.0}]})
+    with pytest.raises(ToolError) as exc:
+        await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    assert "plan again" in str(exc.value)
+    assert not (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"]
 
 
 async def test_reused_clip_changed_after_planning(client, live):
