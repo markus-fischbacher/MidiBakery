@@ -6,7 +6,7 @@ import json
 import pytest
 from starlette.testclient import TestClient
 
-from als_fixtures import (audio_clip, drum_rack, edm_set, four_on_the_floor, keytrack, midi_clip, note, track,
+from als_fixtures import (audio_clip, drum_rack, edm_set, keytrack, midi_clip, note, track,
                           write_set)
 from midibakery.als import key as key_mod
 from midibakery.als import library, roles, sections
