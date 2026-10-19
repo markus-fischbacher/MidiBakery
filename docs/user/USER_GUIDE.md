@@ -375,7 +375,7 @@ You name the genre, MidiBakery plans the song, shows a **preview** (timeline of 
 
 **What MidiBakery does:**
 
-- **Tracks:** it looks for existing tracks for drums (a track with a Drum Rack), bass, chords and lead (by names like "Bass/Sub/808", "Chords/Pad/Keys", "Lead/Melody/Synth"). Missing tracks are created with a fitting kit and presets from the Core Library. **Name your tracks accordingly beforehand** if you want to keep your own sounds. "Use track 3 as the bass" assigns a role.
+- **Tracks:** it looks for existing tracks for drums (a track with a Drum Rack), bass, chords and lead (by names like "Bass/Sub/808", "Chords/Pad/Keys", "Lead/Melody/Synth"). Missing tracks are created with a fitting kit and presets from the Core Library, named by their role (Drums, Bass, Chords, Lead, Riser, Impact); the silent Sidechain track goes first in the Set. **Name your tracks accordingly beforehand** if you want to keep your own sounds. "Use track 3 as the bass" assigns a role.
 - **Notes:** structure and patterns follow recipes per genre (see [GENRES.md](../GENRES.md), German): drums with ghost notes and fills, a changing bass, a second harmony in the break, a hook that develops. Dynamics rise and fall with each section's energy.
 - **Markers:** it sets **locators** at the sections.
 - **Mix (on):** a reverb and a delay return (existing ones are reused), levels and sends for new tracks.

@@ -455,7 +455,7 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     for offset, role in enumerate(missing):
         sound = template.style.sounds.get(role) if request.sounds else None
-        roles[role] = RoleTrack(role, len(tracks) + offset, f"{template.label} {role.title()}", new=True, device=devices[role], sound=sound)
+        roles[role] = RoleTrack(role, len(tracks) + offset, role.title(), new=True, device=devices[role], sound=sound)
         if role == "drums" and sound is None:
             warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it")
     return roles, warnings
@@ -896,6 +896,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     for role_track in plan.roles.values():
         if not role_track.new and _overlap(arrangement, role_track.index, plan.start, plan.end) is not None:
             raise BridgeError("CONFLICT", f"Track index {role_track.index} '{role_track.name}' has new arrangement clips in the song's range; plan again")
+    _trigger_first(plan)
     undo_steps = 0
     warnings: list[str] = []
     loaded: list[RoleTrack] = []
@@ -903,7 +904,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     new = [t for t in plan.roles.values() if t.new]
     ops: list[dict[str, Any]] = []
     for t in sorted(new, key=lambda t: t.index):
-        ops.append({"op": "track.create", "params": {"kind": "midi", "name": t.name}})
+        ops.append({"op": "track.create", "params": {"kind": "midi", "name": t.name, **({"index": 0} if t.index == 0 else {})}})
         ops.append({"op": "device.insert", "params": {"track": t.index, "name": t.device}})
     for t in plan.roles.values():
         if t.filter is None:
@@ -973,6 +974,22 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         "undo": f"{undo_steps} undo step(s) for tracks/mix/sounds/tempo/clips; each locator is its own step",
         **({"warnings": warnings} if warnings else {}),
     }
+
+
+def _trigger_first(plan: SongPlan) -> None:
+    """A new sidechain track goes first in the Set, out of the way of the parts. It was planned last: it becomes
+    index 0 and every track before it moves down one, in the roles and in the clip actions."""
+    trigger = plan.roles.get("sidechain")
+    if trigger is None or not trigger.new or trigger.index == 0:
+        return
+    moved = trigger.index
+
+    def shift(index: int) -> int:
+        return 0 if index == moved else index + 1 if index < moved else index
+
+    for t in plan.roles.values():
+        t.index = shift(t.index)
+    plan.actions = [{**a, "track": shift(a["track"])} if "track" in a else a for a in plan.actions]
 
 
 def _sidechain_ops(plan: SongPlan) -> list[dict[str, Any]]:

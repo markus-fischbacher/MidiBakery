@@ -82,7 +82,7 @@ async def test_sidechain_ducks_bass_and_chords_under_a_trigger_track(client, liv
     server = build_server(client)
     preview = await _house(server)
     trigger = preview["tracks"]["sidechain"]
-    assert trigger["new"] and trigger["device"] == "Operator" and trigger["name"] == "House Sidechain" and "fader -inf" in trigger["plays"]
+    assert trigger["new"] and trigger["device"] == "Operator" and trigger["name"] == "Sidechain" and "fader -inf" in trigger["plays"]
     assert preview["tracks"]["bass"]["sidechain"] == "Compressor keyed from the sidechain track, threshold -24 dB (new device)"
     assert preview["tracks"]["chords"]["sidechain"] == "Compressor keyed from the sidechain track, threshold -18 dB"
     assert "sidechain" not in preview["tracks"]["lead"] and "sidechain" not in preview["tracks"]["drums"]
@@ -90,15 +90,21 @@ async def test_sidechain_ducks_bass_and_chords_under_a_trigger_track(client, liv
     assert not applied.get("warnings")
 
     compressors = _compressors(live)
-    assert compressors["Bass"] == (0, "House Sidechain", "Post FX", "-24.00 dB", "160.0 ms", "On", "Off")  # an empty track: first device
+    assert compressors["Bass"] == (0, "Sidechain", "Post FX", "-24.00 dB", "160.0 ms", "On", "Off")  # an empty track: first device
     chords = next(v for k, v in compressors.items() if k.endswith("Chords"))
-    assert chords[:3] == (2, "House Sidechain", "Post FX") and chords[3] == "-18.00 dB"  # after the instrument and the Auto Filter
+    assert chords[:3] == (2, "Sidechain", "Post FX") and chords[3] == "-18.00 dB"  # after the instrument and the Auto Filter
 
     def trigger_track():
-        track = next(t for t in live.song.tracks if t.name == "House Sidechain")
+        track = next(t for t in live.song.tracks if t.name == "Sidechain")
         clips = [(c.name, c.start_time, c.end_time, len(c.notes)) for c in track.arrangement_clips]
         notes = sorted(track.arrangement_clips[0].notes.values(), key=lambda n: n["start_time"])[:5]
         return track.mixer_device.volume.str_for_value(track.mixer_device.volume.value), clips, [(n["start_time"], n["duration"], n["velocity"]) for n in notes]
+
+    # the trigger track comes first; every other track moved down one, its clips with it
+    order = live.on_main(lambda: [(t.name, sorted({c.name.split()[-1] for c in t.arrangement_clips})) for t in live.song.tracks])
+    assert order[0] == ("Sidechain", ["Sidechain"]), order
+    assert all(clips in ([], [name]) for name, clips in order[1:] if name in ("Drums", "Bass", "Chords", "Lead")), order
+    assert next(t["track"] for t in applied["new_tracks"] if t["name"] == "Sidechain") == 0
 
     fader, clips, notes = live.on_main(trigger_track)
     assert fader == "-inf dB" and clips == [("Sidechain", 0.0, 512.0, 512)]  # 128 bars, a note per beat, through the breaks too
