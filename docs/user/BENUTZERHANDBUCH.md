@@ -387,7 +387,7 @@ Du sagst das Genre, MidiBakery plant den Song, zeigt dir eine **Vorschau** (Zeit
 - **FX (an):** ein Riser vor jedem Drop und ein Impact auf der Eins des Drops.
 - **Start:** hinter dem letzten Clip im Arrangement, oder an einem Takt, den du nennst („ab Takt 17“). **Es überschreibt nie vorhandene Arrangement-Clips**; es nennt dir stattdessen den ersten freien Takt.
 
-Du kannst Teile abschalten: „ohne Sidechain“, „ohne Riser“, „keine neuen Spuren anlegen“, „ohne Mix-Returns“, „mit leeren Instrumenten statt Preset-Klängen“.
+Du kannst Teile abschalten: „ohne Sidechain“, „ohne Riser“, „keine neuen Spuren anlegen“, „ohne Mix-Returns“, „mit leeren Instrumenten statt Preset-Klängen“. Und einen dazunehmen: „mit Gegenmelodie“ legt eine Counter-Spur in den Song (Basic Pluck Keys, etwas leiser als der Lead), mit einem Gegenclip zu jedem Lead-Clip, der in dessen Pausen antwortet.
 
 Weitere Wünsche: „mit der Akkordfolge i VI III VII“, „setze das Tempo auf das des Genres“, „benutze meinen Drum-Clip aus Slot 1 für die Drums“ (ein Session-Clip wird in jeden passenden Abschnitt kopiert).
 

@@ -386,7 +386,7 @@ You name the genre, MidiBakery plans the song, shows a **preview** (timeline of 
 - **FX (on):** a riser before each drop and an impact on the drop's downbeat.
 - **Start:** after the last clip in the Arrangement, or at a bar you name ("from bar 17"). **It never overwrites existing Arrangement clips**; it tells you the first free bar instead.
 
-You can switch parts off: "without sidechain", "without risers", "don't create new tracks", "without mix returns", "with empty instruments instead of preset sounds".
+You can switch parts off: "without sidechain", "without risers", "don't create new tracks", "without mix returns", "with empty instruments instead of preset sounds". And add one: "with a counter melody" puts a Counter track (Basic Pluck Keys, a little under the lead) into the song, with a counter clip to every lead clip that answers in its rests.
 
 More wishes: "with the progression i VI III VII", "set the genre's tempo", "use my drum clip from slot 1 for the drums" (a session clip is copied into every fitting section).
 

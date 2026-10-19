@@ -702,3 +702,30 @@ async def test_a_reference_song_starts_under_the_reference_clip(client, live, re
     assert preview["from_bar"] == 161  # after the reference clip
     assert any("Not under the reference at bar 9" in w for w in preview["warnings"])
     assert (await _plan(server, genre="peak_time_techno", reference="katoff", start_bar=200))["from_bar"] == 200
+
+
+async def test_a_song_with_a_counter_melody(client, live):
+    # "Create a melodic techno track ... apply a counter melody track as well": one plan_song call
+    _studio(live)
+    _minor(live)
+    preview, clips = await _song_notes(client, build_server(client), "melodic_techno", counter=True)
+    counter = preview["tracks"]["counter"]
+    assert counter["name"] == "Counter" and counter["new"] and counter["device"] == "Basic Pluck Keys"
+    assert preview["mix"]["levels"]["counter"].startswith("fader ")
+    leads = {name.removesuffix(" Lead"): clip for name, (clip, notes) in clips.items() if name.endswith(" Lead") and notes}
+    counters = {name.removesuffix(" Counter"): (clip, notes) for name, (clip, notes) in clips.items() if name.endswith(" Counter")}
+    assert set(counters) == set(leads)  # a counter clip for every lead clip, at its place
+    for section, (clip, notes) in counters.items():
+        assert (clip["start"], clip["end"]) == (leads[section]["start"], leads[section]["end"]) and notes
+        assert max(n["pitch"] for n in notes) <= 96
+    drop = counters["Drop"][1]
+    assert drop and len(drop) < len(clips["Drop Lead"][1]) / 2  # sparser than the arp it answers
+
+
+async def test_a_track_of_an_unapplied_song_plan_says_apply_first(client, live):
+    _studio(live)
+    server = build_server(client)
+    preview = await _plan(server, genre="melodic_techno")
+    lead = preview["tracks"]["lead"]["track"]
+    with pytest.raises(ToolError, match=rf"comes from song plan {preview['plan_id']}, which is not applied yet: apply_plan"):
+        await server.call_tool("compose", {"kind": "melody", "track": 1, "counter_to": {"track": lead}})

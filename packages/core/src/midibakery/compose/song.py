@@ -45,7 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
-from midibakery.compose.counter import phrase_rests
+from midibakery.compose.counter import generate_counter, phrase_rests
 from midibakery.compose.drums import DrumMap, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
@@ -57,7 +57,7 @@ from midibakery.compose.references import find_reference, reference_scale
 from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, from_reference, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
-NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator"}
+NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "counter": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator"}
 ROLE_WORDS = {
     "bass": ("bass", "sub", "808"),
     "chords": ("chord", "pad", "keys", "piano", "stab"),
@@ -65,7 +65,10 @@ ROLE_WORDS = {
     "riser": ("riser", "uplift"),
     "impact": ("impact", "boom"),
     "sidechain": ("sidechain", "trigger"),
+    "counter": ("counter",),
 }
+COUNTER_SOUND = ("sounds", "Synth Keys", "Basic Pluck Keys.adg")  # a pluck apart from every genre's lead
+COUNTER_DB = 4.0  # the counter melody's fader under the lead's
 TRIGGER_PITCH = 48  # the sidechain track's notes: a short Operator sine nobody hears
 PHRASE = 8  # bars
 FILTER_TYPES = {"Low-pass": 0, "High-pass": 1}  # Auto Filter (Live 12) "Filter Type" values
@@ -85,7 +88,7 @@ class SongRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     genre: Literal["house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"]
-    length: Literal["radio", "standard", "extended"] = "standard"
+    length: Literal["radio", "standard", "extended"] = Field("standard", description="Or minutes for a duration ('3 minutes' -> minutes 3)")
     minutes: Annotated[float, Field(ge=0.5, le=20, description="Target duration; overrides length")] | None = None
     start_bar: Annotated[int, Field(ge=1, description="Arrangement bar to start at (default: after the last clip, or under the reference)")] | None = None
     roles: dict[Literal["drums", "bass", "chords", "lead", "riser", "impact", "sidechain"], Annotated[int, Field(ge=0)]] = Field(
@@ -98,6 +101,7 @@ class SongRequest(BaseModel):
     fx: bool = Field(True, description="A riser before each drop and an impact on its first beat (needs sounds)")
     sidechain: bool = Field(True, description="Bass and pads duck under the kick: Compressors keyed from a silent trigger track")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
+    counter: bool = Field(False, description="Also a counter melody: a Counter track answering every lead clip in its rests")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174); with a reference its tempo and key")
     reference: str | None = Field(None, description="Follow the sections of a song from get_reference (part of its name); overrides length")
     seed: Annotated[int, Field(ge=0)] | None = None
@@ -167,20 +171,31 @@ class SongPlan:
             returns[kind] = f"return index {r.index} '{r.name}'" + (f" (new, {setting})" if r.new else " (the Set's)")
         levels = {}
         for role, t in self.roles.items():
-            parts = [f"fader {mix.volume[role]:g} dB"] if t.new and role in mix.volume else []
+            volume = self._volume(role)
+            parts = [f"fader {volume:g} dB"] if t.new and volume is not None else []
             parts += [f"{kind} {db:g} dB" for kind, db in self._sends(role, t)]
             if parts:
                 levels[role] = ", ".join(parts)
         return {"mix": {"returns": returns, "levels": levels}}
 
+    def _volume(self, role: str) -> float | None:
+        """A new track's fader: the genre's level for its role; the counter melody a little under the lead."""
+        assert self.mix is not None
+        if role == "counter":
+            lead = self.mix.volume.get("lead")
+            return None if lead is None else lead - COUNTER_DB
+        return self.mix.volume.get(role)
+
     def _sends(self, role: str, t: RoleTrack) -> list[tuple[str, float]]:
-        """(return kind, dB) a role's track sends: a new track to both returns, an existing one only to new returns."""
+        """(return kind, dB) a role's track sends: a new track to both returns, an existing one only to new returns.
+        The counter melody sends like the lead."""
         assert self.mix is not None
         sends = []
         for kind, levels in (("reverb", self.mix.reverb), ("delay", self.mix.delay)):
             r = self.returns.get(kind)
-            if r is not None and role in levels and (t.new or r.new):
-                sends.append((kind, levels[role]))
+            key = "lead" if role == "counter" else role
+            if r is not None and key in levels and (t.new or r.new):
+                sends.append((kind, levels[key]))
         return sends
 
     def mix_ops(self) -> list[dict[str, Any]]:
@@ -196,8 +211,8 @@ class SongPlan:
                 ops.append({"op": "device.set_param", "params": {"return_track": r.index, "device": 0, "parameter": parameter, "value": value}})
         for role, t in self.roles.items():
             params: dict[str, Any] = {}
-            if t.new and role in self.mix.volume:
-                params["volume_db"] = self.mix.volume[role]
+            if t.new and self._volume(role) is not None:
+                params["volume_db"] = self._volume(role)
             sends = [{"return_track": self.returns[kind].index, "db": db} for kind, db in self._sends(role, t)]
             if sends:
                 params["sends"] = sends
@@ -435,6 +450,8 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
             wanted += FX_ROLES
         else:
             warnings.append("No riser or impact: they need the genre's presets (sounds=false)")
+    if request.counter:
+        wanted += ("counter",)
     if request.sidechain and template.style.mix.duck:
         wanted += ("sidechain",)
     for role in wanted:
@@ -455,7 +472,7 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
         return roles, warnings
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     for offset, role in enumerate(missing):
-        sound = template.style.sounds.get(role) if request.sounds else None
+        sound = (COUNTER_SOUND if role == "counter" else template.style.sounds.get(role)) if request.sounds else None
         roles[role] = RoleTrack(role, len(tracks) + offset, role.title(), new=True, device=devices[role], sound=sound)
         if role == "drums" and sound is None:
             warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it")
@@ -788,6 +805,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 action.setdefault("envelopes", []).append(
                     {"parameter": send, "unit": "display", "points": _throw_points(section.bars, first, until, bpb, base)})
             actions.append(action)
+    if "counter" in roles and "lead" in roles:
+        actions += _counter_clips(actions, roles, sections, starts, main, alt, scale, meter, counts, rng)
     riser = roles.get("riser")
     preset = style.sounds.get("riser")
     riser_macro = riser is not None and preset is not None and (
@@ -816,6 +835,30 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
 
 
 RISER_BARS = 8
+
+
+def _counter_clips(actions: list[dict[str, Any]], roles: dict[str, RoleTrack], sections: tuple[Section, ...], starts: list[float],
+                   main: Harmony, alt: Harmony, scale: Scale, meter: Meter, counts: dict[str, int],
+                   rng: Callable[..., random.Random]) -> list[dict[str, Any]]:
+    """A counter melody clip for every lead clip, at its beat and length over the same chords: it answers in the
+    lead's rests (the 4th bar of a phrase it would play through, the empty bars of a tease)."""
+    lead, counter = roles["lead"].index, roles["counter"].index
+    bpb = meter.beats_per_bar
+    clips = []
+    for action in [a for a in actions if a.get("action") == "add_clip" and a.get("track") == lead and a.get("notes")]:
+        i = max(k for k, at in enumerate(starts) if at <= action["start"] + EPSILON)
+        section, at = sections[i], starts[i]
+        length = action["length"]
+        bars = max(1, math.ceil(length / bpb - EPSILON))
+        harmony = _from((alt if section.kind == "break" else main).for_length(meter, section.bars), action["start"] - at, length)
+        lead_notes = [Note(n["pitch"], n["start_time"], n["duration"], n.get("velocity", 100)) for n in action["notes"]]
+        notes = fit_to_length(generate_counter(lead_notes, harmony.for_length(meter, bars), scale, meter, bars,
+                                               rng("counter", section.name, action["start"])), length)
+        if notes:
+            counts["counter"] += len(notes)
+            clips.append({"action": "add_clip", "track": counter, "start": action["start"], "length": length,
+                          "name": f"{section.name} Counter", "notes": [n.to_spec() for n in notes]})
+    return clips
 
 
 def _fx(actions: list[dict[str, Any]], counts: dict[str, int], roles: dict[str, RoleTrack], sections: tuple[Section, ...],
