@@ -169,7 +169,9 @@ async def test_full_song_sketch_via_plan_changes(client, live):
     undo_before = live.on_main(lambda: live.song.undo_steps)
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": plan["plan_id"]}))
     assert len(applied["applied"]) == 4
-    assert live.on_main(lambda: live.song.undo_steps) == undo_before + 1
+    assert applied["instruments"] == {"1": "Wavetable"}  # track 1 had none: its first part, the chords, picks (no pad preset here)
+    steps = 1 + len(applied["instruments"])  # the notes in one step, the instrument in another
+    assert live.on_main(lambda: live.song.undo_steps) == undo_before + steps
 
     scale = Scale(9, (0, 2, 3, 5, 7, 8, 10))
     for slot in (0, 1, 2):
@@ -180,7 +182,7 @@ async def test_full_song_sketch_via_plan_changes(client, live):
     assert {n["start_time"] for n in _clip_notes(live, 1, 1)} <= kicks | {0.0, 4.0, 8.0, 12.0}
 
     again = _payload(await server.call_tool("apply_plan", {"plan_id": plan["plan_id"]}))  # applied once only
-    assert again["already_applied"] and live.on_main(lambda: live.song.undo_steps) == undo_before + 1
+    assert again["already_applied"] and live.on_main(lambda: live.song.undo_steps) == undo_before + steps
     with pytest.raises(ToolError, match="NOT_FOUND"):
         await server.call_tool("apply_plan", {"plan_id": "unknown"})
 

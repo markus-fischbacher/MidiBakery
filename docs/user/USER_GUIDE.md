@@ -320,7 +320,7 @@ You can mix English and German. Name tracks and clips ("Bass", "Intro Kick") or 
 
 ### Single parts
 
-A part is written as a **new clip into the first free slot** of a track. Existing clips aren't overwritten unless you ask (MidiBakery then asks back).
+A part is written as a **new clip into the first free slot** of a track. Existing clips aren't overwritten unless you ask (MidiBakery then asks back). A MIDI track without an instrument gets one after the notes: a 909 kit, Analogue Bass, Analog Soft Pad or Basic Pluck Keys from the Core Library (else Live's own Drum Rack, Drift, Wavetable or Operator).
 
 | Part | Main knobs (all can be requested in plain words) |
 |---|---|
