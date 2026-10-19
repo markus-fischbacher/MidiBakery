@@ -480,13 +480,14 @@ class Track(LiveObject):
         return clip
 
     def duplicate_clip_to_arrangement(self, clip, destination_time):
-        copy_ = Clip(clip.length, clip.is_midi_clip)
+        length = clip.loop_end - clip.loop_start if clip.looping else clip.length  # a looping clip plays its loop
+        copy_ = Clip(length, clip.is_midi_clip)
         copy_.name = clip.name
         copy_.notes = copy.deepcopy(clip.notes)
         copy_.color_index = clip.color_index
         copy_.envelopes = dict(clip.envelopes)
         copy_.is_arrangement_clip = True
-        copy_.start_time, copy_.end_time = destination_time, destination_time + clip.length
+        copy_.start_time, copy_.end_time = destination_time, destination_time + length
         self.arrangement_clips.append(copy_)
         if self.song is not None:  # like Live: the play position jumps to the end of the copy
             self.song.current_song_time = copy_.end_time
