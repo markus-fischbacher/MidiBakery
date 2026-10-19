@@ -34,8 +34,9 @@ var params = {
 };
 var lastInput = null;
 // cycle: Live's per-apply-cycle seed when the cached notes were last applied.
-var cache = { key: null, notes: null, info: "", cycle: null };
-var pending = { id: 0, key: null };
+// clip: id of the detail clip a request/result was made for (checked again before every write).
+var cache = { key: null, clip: 0, notes: null, info: "", cycle: null };
+var pending = { id: 0, key: null, clip: 0 };
 var requestCounter = 0;
 var reapplied = false;
 var REQUEST_TIMEOUT_MS = 20000;
@@ -61,6 +62,22 @@ function status(text) {
   outlet(3, "set", text);
 }
 
+// Id of the clip in the detail view (the clip the tool writes to); 0 when there is none.
+// The id is Live's LiveAPI object id; its stability across selection changes is unverified in real Live.
+function detailClipId() {
+  try {
+    var clip = new LiveAPI("live_set view detail_clip");
+    return clip ? Number(clip.id) || 0 : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+// A delayed result may only be used while the clip, selection and settings it was made for are still current.
+function isFresh(clip, key) {
+  return Boolean(lastInput) && clip !== 0 && detailClipId() === clip && JSON.stringify(buildBody(lastInput)) === key;
+}
+
 function replacing() {
   return MODE === "generate" && params.replace;
 }
@@ -71,10 +88,11 @@ function msg_dictionary(d) {
   var body = buildBody(d);
   var key = JSON.stringify(body);
   var cycle = d.seed;
+  var clipId = detailClipId();
   // With Replace, a new apply cycle (new Live seed) must clear the range again before
   // the cached notes go back in; within one cycle Live itself replaces the previous output.
   var sameCycle = reapplied || !replacing() || cache.cycle === cycle;
-  if (cache.key === key && sameCycle) {
+  if (cache.key === key && cache.clip === clipId && sameCycle) {
     dbg("apply cached", cache.notes.length, "notes");
     waitForApply.cancel();
     outlet_dictionary(0, { notes: cache.notes });
@@ -85,15 +103,15 @@ function msg_dictionary(d) {
   }
   // Synchronous no-op answer keeps Live in sync while the API computes.
   outlet_dictionary(0, { notes: MODE === "generate" ? [] : toLive(d.notes || []) });
-  if (cache.key === key) {
+  if (cache.key === key && cache.clip === clipId) {
     // Same settings, new cycle: no new request, just clear and re-apply. Deferred: re-triggering
     // the tool from inside Live's apply call nests cycles ("Did not receive a note dictionary in time").
     deferredApply.schedule(5);
     return;
   }
-  if (pending.key === key && Date.now() - requestedAt < REQUEST_TIMEOUT_MS) return; // already asked
+  if (pending.key === key && pending.clip === clipId && Date.now() - requestedAt < REQUEST_TIMEOUT_MS) return; // already asked
   requestCounter += 1;
-  pending = { id: requestCounter, key: key };
+  pending = { id: requestCounter, key: key, clip: clipId };
   requestedAt = Date.now();
   reapplied = false;
   showWorking.schedule(300);
@@ -110,9 +128,15 @@ function response(id, dictName) {
     dbg("stale response", id);
     return; // superseded by a newer request
   }
+  var token = pending;
+  pending = { id: 0, key: null, clip: 0 };
+  if (!isFresh(token.clip, token.key)) {
+    dbg("discarded response", id, "clip or settings changed");
+    status("Selection or settings changed - result discarded");
+    return;
+  }
   var result = JSON.parse(new Dict(dictName).stringify());
-  cache = { key: pending.key, notes: toLive(result.notes || []), info: describe(result) };
-  pending = { id: 0, key: null };
+  cache = { key: token.key, clip: token.clip, notes: toLive(result.notes || []), info: describe(result), cycle: null };
   dbg("response", id, cache.notes.length, "notes out");
   if (!reapplied) applyResult();
 }
@@ -121,30 +145,41 @@ var deferredApply = new Task(function () { applyResult(); });
 
 // Clear the time selection (Replace), then re-trigger the tool so Live applies the cache.
 function applyResult() {
-  if (replacing() && lastInput) clearRange(buildContext(lastInput));
+  if (cache.key === null || !isFresh(cache.clip, cache.key)) {
+    dbg("apply skipped: clip or settings changed");
+    status("Selection or settings changed - nothing applied");
+    return;
+  }
+  if (replacing() && lastInput && !clearRange(cache.clip, buildContext(lastInput))) {
+    status("Error: could not clear the selection - nothing applied");
+    return;
+  }
   reapplied = true;
   outlet(2, "bang");
   waitForApply.schedule(1500);
 }
 
-function clearRange(context) {
+// Removes the notes in the range from the clip the result was made for; false if it did not happen.
+function clearRange(clipId, context) {
   try {
     var clip = new LiveAPI("live_set view detail_clip");
-    if (!clip || Number(clip.id) === 0) {
-      dbg("replace: no detail clip");
-      return;
+    if (!clip || clipId === 0 || Number(clip.id) !== clipId) {
+      dbg("replace: detail clip changed");
+      return false;
     }
     clip.call("remove_notes_extended", 0, 128, context.start, context.length);
     dbg("replace: cleared", context.start, context.length);
+    return true;
   } catch (e) {
     dbg("replace failed", String(e));
+    return false;
   }
 }
 
 function failed(id, message) {
   dbg("failed", id, message);
   if (id !== pending.id) return;
-  pending = { id: 0, key: null };
+  pending = { id: 0, key: null, clip: 0 };
   status("Error: " + message);
 }
 

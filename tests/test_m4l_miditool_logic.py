@@ -53,7 +53,7 @@ def test_replace_clears_the_range_once_per_apply_cycle(tmp_path):
     assert ["nested-retrigger"] not in data["log"]  # Live answers "Did not receive a note dictionary in time"
     clears = [e for e in data["log"] if e[0] == "liveapi"]
     # once after the first response, once for the new cycle; never on in-cycle re-applies
-    assert clears == [["liveapi", "live_set view detail_clip", "remove_notes_extended", 0, 128, 4, 16]] * 2
+    assert clears == [["liveapi", "live_set view detail_clip", 7, "remove_notes_extended", 0, 128, 4, 16]] * 2
     after = data["after"]
     assert not [e for e in after if e[0] == "outlet" and e[1] == 1 and e[2] == "request"]  # no new API call
     kinds = [e[0] if e[0] != "outlet" else f"outlet{e[1]}" for e in after if e[0] in ("dict", "liveapi") or (e[0] == "outlet" and e[1] == 2)]
@@ -66,3 +66,52 @@ def test_replace_clears_the_range_once_per_apply_cycle(tmp_path):
 def test_without_replace_nothing_is_cleared(tmp_path):
     data = _run(tmp_path, "replace-off")
     assert not [e for e in data["log"] if e[0] == "liveapi"]
+
+
+def _writes(data):
+    return [e for e in data["log"] if e[0] == "liveapi" or (e[0] == "outlet" and e[1] == 2) or (e[0] == "dict" and e[2]["notes"])]
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+@pytest.mark.parametrize("scenario", ["switch", "params-changed"])
+def test_stale_response_never_writes(tmp_path, scenario):
+    data = _run(tmp_path, scenario)
+    assert _writes(data) == []  # no removal, no re-trigger, no notes
+    assert data["statuses"][-1].startswith("Selection or settings changed")
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_switch_away_and_back_still_targets_the_original_clip(tmp_path):
+    data = _run(tmp_path, "switch-back")
+    removals = [e for e in data["log"] if e[0] == "liveapi"]
+    assert [e[2] for e in removals] == [7]
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_response_for_a_superseded_request_after_a_b_a_is_ignored(tmp_path):
+    data = _run(tmp_path, "switch-apply-back")
+    # request A (id 1) was replaced by the request made for B (id 2); B's own result no longer matches
+    # the clip in the detail view (A again), so nothing is written to either clip
+    assert _writes(data) == []
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_delayed_reapply_rechecks_the_clip(tmp_path):
+    data = _run(tmp_path, "delayed-reapply")
+    assert not [e for e in data["after"] if e[0] == "liveapi"]
+    assert not [e for e in data["after"] if e[0] == "outlet" and e[1] == 2]
+    assert data["statuses"][-1].startswith("Selection or settings changed")
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_failed_removal_does_not_apply_notes(tmp_path):
+    data = _run(tmp_path, "remove-fails")
+    assert not [e for e in data["log"] if e[0] == "outlet" and e[1] == 2]
+    assert data["statuses"][-1].startswith("Error: could not clear")
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_failed_request_reports_error_and_writes_nothing(tmp_path):
+    data = _run(tmp_path, "failure")
+    assert _writes(data) == []
+    assert data["statuses"][-1] == "Error: boom"

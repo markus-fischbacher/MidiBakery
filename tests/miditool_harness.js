@@ -17,9 +17,14 @@ function Task(fn) {
   this.schedule = () => { log.push(["task", "schedule"]); queue.push(fn); };
   this.cancel = () => {};
 }
+let detailId = 7; // the clip in Live's detail view; scenarios change it to simulate a selection switch
+let removeFails = false;
 function LiveAPI(path) {
-  this.id = 7;
-  this.call = (...args) => log.push(["liveapi", path, ...args]);
+  this.id = detailId;
+  this.call = (...args) => {
+    if (removeFails) throw new Error("remove failed");
+    log.push(["liveapi", path, this.id, ...args]);
+  };
 }
 const sandbox = {
   LiveAPI, Dict, Task, Date, Array, String,
@@ -34,7 +39,9 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(process.argv[2], "utf8"), sandbox);
-const flush = () => { while (queue.length) queue.shift()(); };
+let holdQueue = false; // keep scheduled tasks pending until release() (a delayed deferred apply)
+const flush = () => { while (!holdQueue && queue.length) queue.shift()(); };
+const release = () => { holdQueue = false; flush(); };
 const call = (inletIndex, fn, ...args) => {
   sandbox.inlet = inletIndex;
   inApply = fn === "msg_dictionary";
@@ -57,7 +64,63 @@ const scenario = process.argv[3] || "basic";
 dicts.res = { seed: 1, notes: [{ pitch: 69, start_time: 4, duration: 1, velocity: 90, mute: false }], chords: "Am" };
 const result = "res";
 
-if (scenario === "basic") {
+const applied = () => log.filter((e) => e[0] === "liveapi" || (e[0] === "outlet" && e[1] === 2) || (e[0] === "dict" && e[2].notes.length));
+const statuses = () => log.filter((e) => e[0] === "outlet" && e[1] === 3).map((e) => e[3]);
+
+if (scenario === "switch") {
+  // request on clip A, user selects clip B, A's response arrives late
+  call(0, "msg_dictionary", input);
+  const req = requestOf();
+  detailId = 8;
+  call(1, "response", req[3], result);
+  console.log(JSON.stringify({ log, applied: applied(), statuses: statuses() }));
+} else if (scenario === "switch-back") {
+  // A -> B -> A without an apply on B: the response is still valid for A
+  call(0, "msg_dictionary", input);
+  const req = requestOf();
+  detailId = 8;
+  detailId = 7;
+  call(1, "response", req[3], result);
+  console.log(JSON.stringify({ log, applied: applied(), statuses: statuses() }));
+} else if (scenario === "switch-apply-back") {
+  // A requests, B applies its own request, back on A: A's older response is superseded
+  call(0, "msg_dictionary", input);
+  const first = requestOf();
+  detailId = 8;
+  call(0, "msg_dictionary", input);
+  const second = requestOf();
+  detailId = 7;
+  call(1, "response", first[3], result);
+  call(1, "response", second[3], result);
+  console.log(JSON.stringify({ log, applied: applied(), statuses: statuses(), ids: [first[3], second[3]] }));
+} else if (scenario === "params-changed") {
+  call(0, "msg_dictionary", input);
+  const req = requestOf();
+  sandbox.params_density = 1;
+  vm.runInContext("params.density = 90", sandbox);
+  call(1, "response", req[3], result);
+  console.log(JSON.stringify({ log, applied: applied(), statuses: statuses() }));
+} else if (scenario === "delayed-reapply") {
+  // cache hit in a new cycle schedules a deferred apply; the clip changes before it runs
+  call(0, "msg_dictionary", input);
+  call(1, "response", requestOf()[3], result);
+  call(0, "msg_dictionary", input);
+  const marker = log.length;
+  holdQueue = true;
+  call(0, "msg_dictionary", { ...input, seed: 456 });
+  detailId = 8;
+  release();
+  console.log(JSON.stringify({ log, after: log.slice(marker), applied: applied().slice(0), statuses: statuses() }));
+} else if (scenario === "remove-fails") {
+  call(0, "msg_dictionary", input);
+  removeFails = true;
+  call(1, "response", requestOf()[3], result);
+  console.log(JSON.stringify({ log, applied: applied(), statuses: statuses() }));
+} else if (scenario === "failure") {
+  call(0, "msg_dictionary", input);
+  call(1, "failed", requestOf()[3], "boom");
+  console.log(JSON.stringify({ log, applied: applied(), statuses: statuses() }));
+} else if (scenario === "basic") {
   call(0, "msg_dictionary", input);                 // pass 1: no-op answer + request
   const req = requestOf();
   call(1, "response", req[3], result);              // response -> re-bang
