@@ -54,7 +54,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from midibakery import credentials, license, updates
 from midibakery.als import library as als_library
-from midibakery.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost
+from midibakery.agent import LOCAL_HIDDEN, LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
 from midibakery.compose.standalone import GenerateRequest, TransformRequest, generate, transform
@@ -306,11 +306,11 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             await ws.close()
             return
         # Every model gets every tool; local models get them with lean schemas and short
-        # results. tools=small or tools=reduced opts into a subset.
+        # results, minus LOCAL_HIDDEN. tools=small or tools=reduced opts into a subset.
         small = options.get("tools") == "small"
         allowed = SMALL_TOOLS if small else REDUCED_TOOLS if options.get("tools") == "reduced" else None
         running: asyncio.Task[None] | None = None
-        async with ToolHost(server, confirm, allowed) as host:
+        async with ToolHost(server, confirm, allowed, LOCAL_HIDDEN if allowed is None and provider.name in LOCAL_PROVIDERS else frozenset()) as host:
             agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=provider.name in LOCAL_PROVIDERS)
             await emit({"type": "ready", "provider": provider.name, "model": provider.model, "tools": len(host.tools)})
             changed = live.watch()

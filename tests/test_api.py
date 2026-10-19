@@ -8,7 +8,7 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from midibakery import __version__, credentials
-from midibakery.agent import REDUCED_TOOLS
+from midibakery.agent import LOCAL_HIDDEN, REDUCED_TOOLS
 from midibakery.agent.providers.base import ToolCall, Turn
 from midibakery.api.server import api_info_path, build_app, write_api_info
 from midibakery.bridge import BridgeClient
@@ -214,14 +214,20 @@ def test_page_tools_are_limited_and_wait_for_the_model(app_factory, live):
     assert live.on_main(lambda: len(live.song.tracks)) == 2
 
 
-def test_local_models_get_every_tool(app_factory):
+def test_local_models_get_every_tool_but_the_hidden_ones(app_factory):
     provider = ScriptedProvider([Turn("end_turn", text="hi")])
     provider.name = "lmstudio"
     api, _ = app_factory(provider)
     with api.websocket_connect(f"/chat?token={TOKEN}") as ws:
         ready = ws.receive_json()
     assert ready["tools"] > len(REDUCED_TOOLS)
-    assert {"launch_clip", "fire_scene", "update_track"} <= {t.name for t in provider.tools}
+    names = {t.name for t in provider.tools}
+    assert {"update_track", "plan_song", "compose"} <= names and not LOCAL_HIDDEN & names
+    # tools=small keeps its own subset, launch_clip included
+    provider.tools = []
+    with api.websocket_connect(f"/chat?token={TOKEN}&tools=small") as ws:
+        ws.receive_json()
+    assert "launch_clip" in {t.name for t in provider.tools}
 
 
 def test_chat_confirmation_round_trip(app_factory, live):

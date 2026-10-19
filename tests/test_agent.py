@@ -5,7 +5,7 @@ import json
 import httpx2 as httpx
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
 
-from midibakery.agent import REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost
+from midibakery.agent import LOCAL_HIDDEN, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost
 from midibakery.agent.providers.anthropic import FALLBACK_BETA, AnthropicProvider
 from midibakery.agent.providers.base import Provider, ToolCall, Turn
 from midibakery.agent.providers import make_provider
@@ -545,11 +545,23 @@ async def test_full_tool_set_stays_within_the_local_budget(client):
     async def no(message):
         return False
 
-    async with ToolHost(build_server(client), no, None) as host:
+    async with ToolHost(build_server(client), no, None, LOCAL_HIDDEN) as host:
         Agent(provider, host, SYSTEM_PROMPT, compact=True)
     payload = json.dumps([{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in provider.tools])
-    assert {"get_mixer", "update_mixer", "create_return_track"} <= {t.name for t in provider.tools}
-    assert len(payload) + len(SYSTEM_PROMPT) < 36000
+    names = {t.name for t in provider.tools}
+    assert {"get_mixer", "update_mixer", "create_return_track", "plan_song", "compose"} <= names
+    assert not LOCAL_HIDDEN & names
+    assert len(payload) + len(SYSTEM_PROMPT) < 32000  # was 36000 with every tool; the room is for the importer's patterns
+
+
+async def test_local_models_lack_the_hidden_tools_and_claude_keeps_them(client):
+    async def no(message):
+        return False
+
+    async with ToolHost(build_server(client), no, None) as everything:
+        async with ToolHost(build_server(client), no, None, LOCAL_HIDDEN) as local:
+            assert LOCAL_HIDDEN <= everything.names() and not LOCAL_HIDDEN & local.names()
+            assert everything.names() - local.names() == set(LOCAL_HIDDEN)
 
 
 async def test_a_model_repeating_a_failing_call_is_stopped(client, live):
