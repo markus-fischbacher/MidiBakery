@@ -78,6 +78,27 @@ function isFresh(clip, key) {
   return Boolean(lastInput) && clip !== 0 && detailClipId() === clip && JSON.stringify(buildBody(lastInput)) === key;
 }
 
+// What Replace is about to remove, as read when its apply cycle began: any edit in between (a changed
+// selection's notes, a different clip content after A -> B -> A) is then detected before the removal.
+// Live exposes no observer for the time selection, so this content check is the freshness guard.
+// UNVERIFIED in real Live: that get_notes_extended can be called from a MIDI Tool this way.
+var rangeSnapshot = null;
+
+function readRange(clipId, context) {
+  try {
+    var clip = new LiveAPI("live_set view detail_clip");
+    if (!clip || clipId === 0 || Number(clip.id) !== clipId) return null;
+    var raw = clip.call("get_notes_extended", 0, 128, context.start, context.length);
+    var parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!parsed || !Array.isArray(parsed.notes)) return null;
+    return parsed.notes.map(function (n) {
+      return [n.pitch, n.start_time, n.duration, n.velocity, n.mute ? 1 : 0].join(":");
+    }).sort().join("|");
+  } catch (e) {
+    return null;
+  }
+}
+
 function replacing() {
   return MODE === "generate" && params.replace;
 }
@@ -91,6 +112,10 @@ function msg_dictionary(d) {
   var clipId = detailClipId();
   // With Replace, a new apply cycle (new Live seed) must clear the range again before
   // the cached notes go back in; within one cycle Live itself replaces the previous output.
+  if (replacing() && !reapplied) {
+    var snapContext = buildContext(d);
+    rangeSnapshot = { clip: clipId, start: snapContext.start, length: snapContext.length, notes: readRange(clipId, snapContext) };
+  }
   var sameCycle = reapplied || !replacing() || cache.cycle === cycle;
   if (cache.key === key && cache.clip === clipId && sameCycle) {
     dbg("apply cached", cache.notes.length, "notes");
@@ -150,29 +175,37 @@ function applyResult() {
     status("Selection or settings changed - nothing applied");
     return;
   }
-  if (replacing() && lastInput && !clearRange(cache.clip, buildContext(lastInput))) {
-    status("Error: could not clear the selection - nothing applied");
-    return;
+  if (replacing() && lastInput) {
+    var refusal = clearRange(cache.clip, buildContext(lastInput));
+    if (refusal) {
+      status("Error: " + refusal + " - nothing applied");
+      return;
+    }
   }
   reapplied = true;
   outlet(2, "bang");
   waitForApply.schedule(1500);
 }
 
-// Removes the notes in the range from the clip the result was made for; false if it did not happen.
+// Removes the notes in the range from the clip the result was made for. Returns null when it happened,
+// else why not; the removal only runs if the clip is the same and its range still holds exactly what it
+// held when the apply cycle began.
 function clearRange(clipId, context) {
+  var snap = rangeSnapshot;
+  if (!snap || snap.notes === null) return "could not read the clip's notes to verify Replace";
+  if (snap.clip !== clipId || snap.start !== context.start || snap.length !== context.length) return "Replace context changed";
+  var now = readRange(clipId, context);
+  if (now === null) return "the clip changed or its notes could not be read";
+  if (now !== snap.notes) return "the clip was edited since Generate";
   try {
     var clip = new LiveAPI("live_set view detail_clip");
-    if (!clip || clipId === 0 || Number(clip.id) !== clipId) {
-      dbg("replace: detail clip changed");
-      return false;
-    }
+    if (!clip || Number(clip.id) !== clipId) return "the detail clip changed";
     clip.call("remove_notes_extended", 0, 128, context.start, context.length);
     dbg("replace: cleared", context.start, context.length);
-    return true;
+    return null;
   } catch (e) {
     dbg("replace failed", String(e));
-    return false;
+    return "could not clear the selection";
   }
 }
 

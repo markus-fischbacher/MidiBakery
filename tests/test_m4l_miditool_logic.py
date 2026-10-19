@@ -160,3 +160,19 @@ def test_older_live_reads_populated_drum_pads(tmp_path):
 @pytest.mark.skipif(NODE is None, reason="no Node.js available")
 def test_no_drum_rack_sends_no_pads(tmp_path):
     assert _run(tmp_path, "no-rack")["pads"] is None
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+@pytest.mark.parametrize("scenario,reason", [("edited", "edited since Generate"), ("edited-a-b-a", "edited since Generate"), ("unreadable", "could not be read")])
+def test_replace_refuses_when_the_range_changed_or_cannot_be_verified(tmp_path, scenario, reason):
+    out = _run(tmp_path, scenario)
+    assert out["removed"] == 0
+    assert not any(e[0] == "dict" and e[2]["notes"] for e in out["log"])  # nothing written either
+    assert any(reason in s and "nothing applied" in s for s in out["statuses"])
+    assert not any(e[0] == "outlet" and e[1] == 2 for e in out["log"])  # no re-trigger
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_verified_replace_removes_exactly_once(tmp_path):
+    out = _run(tmp_path, "replace")
+    assert sum(1 for e in out["log"] if e[0] == "liveapi" and e[3] == "remove_notes_extended") >= 1

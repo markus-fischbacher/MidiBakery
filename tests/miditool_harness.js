@@ -19,6 +19,8 @@ function Task(fn) {
 }
 let detailId = 7; // the clip in Live's detail view; scenarios change it to simulate a selection switch
 let removeFails = false;
+let rangeNotes = []; // what the clip holds in the selection (get_notes_extended)
+let readFails = false;
 let detailPath = "live_set tracks 0 clip_slots 0 clip"; // where the detail clip lives
 const nodes = {}; // LOM objects by path ("live_set tracks 0") or "id N": scalars, or {list: [ids]} for child lists
 function LiveAPI(path) {
@@ -33,6 +35,11 @@ function LiveAPI(path) {
     return [v];
   };
   this.call = (...args) => {
+    if (args[0] === "get_notes_extended") {
+      if (readFails) throw new Error("read failed");
+      log.push(["read", this.id]);
+      return JSON.stringify({ notes: rangeNotes });
+    }
     if (removeFails) throw new Error("remove failed");
     log.push(["liveapi", path, this.id, ...args]);
   };
@@ -160,6 +167,15 @@ if (scenario === "switch") {
   if (scenario === "pads") nodes["id 30"] = chain(40, "Kick Heavy"); // the kit changes
   call(0, "msg_dictionary", input);
   console.log(JSON.stringify({ pads: context.pads || null, before, after: requests(), statuses: statuses() }));
+} else if (scenario === "edited" || scenario === "unreadable" || scenario === "edited-a-b-a") {
+  // Replace removes only what the clip held when the cycle began, and only if it can tell
+  call(0, "msg_dictionary", input);
+  const req = requestOf();
+  if (scenario === "edited") rangeNotes = [{ pitch: 40, start_time: 5, duration: 1, velocity: 100 }];
+  if (scenario === "edited-a-b-a") { detailId = 8; rangeNotes = [{ pitch: 41, start_time: 5, duration: 1, velocity: 100 }]; detailId = 7; }
+  if (scenario === "unreadable") readFails = true;
+  call(1, "response", req[3], result);
+  console.log(JSON.stringify({ log, removed: log.filter((e) => e[0] === "liveapi" && e[3] === "remove_notes_extended").length, applied: applied(), statuses: statuses() }));
 } else if (scenario === "meter") {
   const bodies = [];
   const withMeter = (n, d) => ({ ...input, clip: { ...input.clip, signature_numerator: n, signature_denominator: d } });
