@@ -34,6 +34,7 @@
   .row { display: flex; gap: 6px; align-items: center; padding: 4px 6px; cursor: pointer; border-bottom: 1px solid #262626; }
   .row:hover { background: #242424; }
   .row.sel { background: #2f2a24; }
+  button.x { padding: 0 6px; flex: none; color: var(--dim); }
   .row .body { flex: 1; min-width: 0; }
   .row .meta { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 2px; }
   .row .name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -169,6 +170,9 @@ function render() {
     if (set.error) meta.append(el("span", { className: "chip err", title: set.error }, "error"));
     else if (set.imported) meta.append(el("span", { className: "chip ok" }, "imported"));
     else if (!set.info) meta.append(el("span", { className: "chip" }, "..."));
+    const remove = el("button", { title: "Remove from this list", className: "x" }, "\u00d7");
+    remove.onclick = (e) => { e.stopPropagation(); sets.delete(set.file); if (shown === set.file) shown = null; render(); };
+    row.append(remove);
     row.onclick = () => { shown = set.file; render(); };
     list.append(row);
   }
