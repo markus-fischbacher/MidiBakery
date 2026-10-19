@@ -125,3 +125,16 @@ def test_meter_is_sent_only_when_the_tool_context_has_a_valid_one(tmp_path):
     assert (seven_eight["numerator"], seven_eight["denominator"]) == (7, 8)
     assert "numerator" not in invalid
     assert data["requests"] == 3  # a changed meter is a changed request, never a cache hit
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_moved_selection_at_the_next_apply_never_reuses_the_cached_result(tmp_path):
+    data = _run(tmp_path, "selection")
+    assert data["after"] == data["before"] + 1  # a new request, not a cache hit
+    assert data["last"] == {"notes": []}  # the old notes are not written for the new range
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_status_shows_the_pad_fallback_and_ignored_controls(tmp_path):
+    status = " ".join(_run(tmp_path, "describe")["statuses"])
+    assert "pads unknown: General MIDI drum pitches" in status and "ignored: octave" in status

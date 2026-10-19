@@ -307,6 +307,9 @@ function describe(result) {
   if (result.chords) parts.push(Array.isArray(result.chords) ? result.chords.join(" - ") : String(result.chords));
   if (result.diff) parts.push("+" + result.diff.added + " ~" + result.diff.modified + " -" + result.diff.removed);
   if (result.notes) parts.push(result.notes.length + " notes");
+  // The generator is not told the kit's pads, so the server's own fallback is shown, not hidden.
+  if (result.drum_map === "gm") parts.push("pads unknown: General MIDI drum pitches");
+  if (result.ignored && result.ignored.length) parts.push("ignored: " + result.ignored.join(", "));
   parts.push("seed " + result.seed);
   return parts.join("  ");
 }

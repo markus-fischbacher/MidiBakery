@@ -121,6 +121,21 @@ if (scenario === "switch") {
   call(0, "msg_dictionary", withMeter(0, 3));
   bodies.push(dicts[requestOf()[5]].context);
   console.log(JSON.stringify({ bodies, requests: log.filter((e) => e[0] === "outlet" && e[1] === 1 && e[2] === "request").length }));
+} else if (scenario === "selection") {
+  call(0, "msg_dictionary", input);
+  call(1, "response", requestOf()[3], result);
+  call(0, "msg_dictionary", input);
+  const before = log.filter((e) => e[0] === "outlet" && e[1] === 1 && e[2] === "request").length;
+  const moved = { ...input, clip: { time_selection_start: 8, time_selection_end: 24 } };
+  call(0, "msg_dictionary", moved);
+  const dictsOut = log.filter((e) => e[0] === "dict");
+  console.log(JSON.stringify({ before, after: log.filter((e) => e[0] === "outlet" && e[1] === 1 && e[2] === "request").length, last: dictsOut[dictsOut.length - 1][2] }));
+} else if (scenario === "describe") {
+  dicts.res = { seed: 1, notes: [], drum_map: "gm", ignored: ["octave"] };
+  call(0, "msg_dictionary", input);
+  call(1, "response", requestOf()[3], "res");
+  call(0, "msg_dictionary", input);
+  console.log(JSON.stringify({ statuses: statuses() }));
 } else if (scenario === "remove-fails") {
   call(0, "msg_dictionary", input);
   removeFails = true;
