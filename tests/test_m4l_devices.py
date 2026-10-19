@@ -188,14 +188,14 @@ def test_chat_page_script_parses(tmp_path):
 
 
 def test_importer_device_hands_paths_to_its_page(devices):
-    """A drop or a dialog sends "add_path <path>" to the jweb that shows the API's /importer page."""
+    """A file dialog sends "add_path <path>" to the jweb that shows the API's /importer page."""
     _, patcher = build.read_amxd(devices["MidiBakery Set Importer"])
     boxes = _boxes(patcher)
     by_text = {b.get("text"): i for i, b in boxes.items() if b.get("text")}
     web = next(i for i, b in boxes.items() if b["maxclass"] == "jweb")
     lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0]) for l in patcher["patcher"]["lines"]}
-    drop = next(i for i, b in boxes.items() if b["maxclass"] == "live.drop")
-    assert (drop, by_text["prepend add_path"]) in lines and (by_text["prepend add_path"], web) in lines
+    assert (by_text["prepend add_path"], web) in lines
+    assert not any(b["maxclass"] == "live.drop" for b in boxes.values())
     for dialog in ("opendialog fold", "opendialog"):
         assert (by_text[dialog], by_text["prepend add_path"]) in lines
     assert (by_text["midiin"], by_text["midiout"]) in lines  # MIDI passes through

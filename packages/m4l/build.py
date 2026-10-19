@@ -6,7 +6,7 @@
 Devices:
 - MidiBakery Chat (MIDI Effect): chat with the MidiBakery agent in Live's device
   view (jweb shows the API's /ui page). MIDI passes through unchanged.
-- MidiBakery Set Importer (MIDI Effect): reads Ableton Live Sets (.als) you drop on it or choose (one Set or a
+- MidiBakery Set Importer (MIDI Effect): reads Ableton Live Sets (.als) you choose (one Set or a
   folder) and stores their structure as references for plan_song. The page is the API's /importer.
 - MidiBakery Generator / MidiBakery Transform (MIDI Tools, Live 12.2+): the
   composition engine in the clip view's Generate / Transform panels.
@@ -337,8 +337,8 @@ def chat_device() -> dict[str, Any]:
 
 
 def importer_device() -> dict[str, Any]:
-    """MIDI Effect: the Set Importer page (jweb) beside a column to hand it Sets: a drop zone, Choose folder... and
-    Choose Set... (native Max dialogs, since jweb has no file access), Pop out (the page has room in a browser)."""
+    """MIDI Effect: the Set Importer page (jweb) beside a column to hand it Sets: Folder... and
+    Set... (native Max dialogs, since jweb has no file access), Pop out (the page has room in a browser)."""
     p = Patcher()
     width, height = 700.0, 169.0
     column_x, column_w = 506.0, 190.0
@@ -364,13 +364,9 @@ def importer_device() -> dict[str, Any]:
     p.connect(loaded, 1, other)
     p.connect(other, 0, node)
 
-    # live.drop draws its own 'Drop Something Here!'; a label of ours would overprint it.
-    # A path from a drop or a dialog goes to the page as "add_path <path>"; the page lists the Sets found there.
+    # A path from a dialog goes to the page as "add_path <path>"; the page lists the Sets found there.
     to_page = p.obj("prepend add_path", 700, 300, width=120)
     p.connect(to_page, 0, web)
-    drop = p.box("live.drop", (700, 100, 190, 40), inlets=1, outlets=[""], presentation=(column_x, 26, column_w, 44),
-                 varname="set_drop")
-    p.connect(drop, 0, to_page)
     for i, (label, dialog) in enumerate((("Folder...", "opendialog fold"), ("Set...", "opendialog"))):
         x = 700 + i * 200
         opener = p.obj(dialog, x, 200, outlets=["", "", ""], width=100)
@@ -381,14 +377,14 @@ def importer_device() -> dict[str, Any]:
         _on_press(p, button, "bang", opener, x, 220)
         p.connect(opener, 0, to_page)
 
-    popout = p.parameter("live.text", (440, 60, 70, 16), (column_x, 76, half, 18), name="Pop out", short="Pop out",
+    popout = p.parameter("live.text", (440, 60, 70, 16), (column_x, 28, half, 18), name="Pop out", short="Pop out",
                          ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
     _on_press(p, popout, "popout", node, 440, 100)
-    _about(p, (column_x + half + 4, 76, half, 18), node, 440, 160)
+    _about(p, (column_x + half + 4, 28, half, 18), node, 440, 160)
     set_status = p.obj("prepend set", 260, 100)
-    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 138, column_w, 30),
-                       linecount=2, fontsize=9.0, **THEMED_TEXT)
+    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 56, column_w, 100),
+                       linecount=4, fontsize=9.0, **THEMED_TEXT)
     p.connect(route, 1, set_status)
     p.connect(set_status, 0, status)
     return p.to_json(kind="midi_effect", title="MidiBakery Set Importer", width=width, height=height)
