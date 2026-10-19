@@ -341,10 +341,12 @@ A second melody that answers a lead you already have. Ask: *"Write a counter mel
 
 A lead in the Arrangement, as `plan_song` writes it: ask *"Write a counter melody to the Breakdown Lead clips on a new MIDI track"*. Every clip of that name gets a counter clip at the same bars and length on the other track (named *Breakdown Counter*), each over the chords of the chord or pad clip playing there. The lead track alone answers the whole song. Asking again gives those clips new notes instead of a second layer.
 
-Modes (say them in words, default is the first):
+Without a mode, the lead picks it. A lead with long rests (a bar of silence after each phrase) gets **call_and_response**; one with short rests or held notes gets **fill_the_gaps**; one that plays without a rest (an arp, an acid line) gets **passive_over_active**, a few long notes. A rest counts only when the lead is silent for a beat or more: the tiny pauses between the staccato hits of an arp are not room to answer in. The reply says which mode it chose and why.
 
-- **fill_the_gaps**: plays only where the lead holds a note or rests.
-- **call_and_response**: answers in the silent beats and bars of the lead.
+Modes (say them in words):
+
+- **fill_the_gaps**: plays only in the lead's rests (a beat or longer) and held notes.
+- **call_and_response**: answers in the lead's rests, from their first 16th.
 - **passive_over_active**: calm long notes over a busy lead (more notes over a sparse one).
 - **contrasting_rhythm**: sparse where the lead is dense and the other way round.
 - **harmonic_notes**: moves with the lead's rhythm on a fitting other note.
@@ -357,7 +359,7 @@ Four fixed figures (the lead only sets register and clashes; they ignore its rhy
 - **trance_dotted_eighth_staircase**: the Trance tutorial's 8-bar figure: the pulse on scale degrees 1, 2, 3 and 5, two bars each.
 - **echo_gap_answer**: in long notes of the lead (1.25 beats or more) three or four short notes moving by a step, then one longer note that keeps sounding when the lead comes back. Over a lead without long notes it writes nothing.
 
-Register (`counter_register`): **above** the lead (default), **below** it, or **same** (then it never starts together with the lead). On strong beats it plays thirds, fifths, sixths or octaves to the lead.  A figure note that would clash on a strong beat moves to the nearest fitting scale tone.
+Register (`counter_register`): **above** the lead (default, a third or more above its highest note, never above C7), **below** it (the default when above would pass C7), or **same** (then it never starts together with the lead). On strong beats it plays thirds, fifths, sixths or octaves to the lead.  A figure note that would clash on a strong beat moves to the nearest fitting scale tone.
 
 ### Whole songs by genre
 
@@ -376,7 +378,7 @@ You name the genre, MidiBakery plans the song, shows a **preview** (timeline of 
 **What MidiBakery does:**
 
 - **Tracks:** it looks for existing tracks for drums (a track with a Drum Rack), bass, chords and lead (by names like "Bass/Sub/808", "Chords/Pad/Keys", "Lead/Melody/Synth"). Missing tracks are created with a fitting kit and presets from the Core Library, named by their role (Drums, Bass, Chords, Lead, Riser, Impact); the silent Sidechain track goes first in the Set. **Name your tracks accordingly beforehand** if you want to keep your own sounds. "Use track 3 as the bass" assigns a role.
-- **Notes:** structure and patterns follow recipes per genre (see [GENRES.md](../GENRES.md), German): drums with ghost notes and fills, a changing bass, a second harmony in the break, a hook that develops. Dynamics rise and fall with each section's energy.
+- **Notes:** structure and patterns follow recipes per genre (see [GENRES.md](../GENRES.md), German): drums with ghost notes and fills, a changing bass, a second harmony in the break, a hook that develops. A lead that would play through a 4-bar phrase rests in its 4th bar, so a counter melody has room to answer. Dynamics rise and fall with each section's energy.
 - **Markers:** it sets **locators** at the sections.
 - **Mix (on):** a reverb and a delay return (existing ones are reused), levels and sends for new tracks.
 - **Automation (on):** filter sweeps, delay throws.

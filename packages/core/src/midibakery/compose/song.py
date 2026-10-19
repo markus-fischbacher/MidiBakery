@@ -45,6 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
+from midibakery.compose.counter import phrase_rests
 from midibakery.compose.drums import DrumMap, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
@@ -461,6 +462,26 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
     return roles, warnings
 
 
+ANSWER_BEATS = 2.0  # the shortest rest per 4-bar lead phrase a counter melody can answer in
+
+
+def _answer_space(notes: list[Note], meter: Meter, bars: int, offset_bars: int) -> list[Note]:
+    """A lead that plays through a 4-bar phrase (an arp, an acid line) rests in its last bar: room for a
+    counter melody to answer, and a call-and-response the ear follows. Phrases that already rest stay."""
+    bpb = meter.beats_per_bar
+    for last in range(3, bars):
+        if (offset_bars + last) % 4 != 3:
+            continue
+        start, end = (last - 3) * bpb, (last + 1) * bpb
+        phrase = [replace(n, start_time=n.start_time - start) for n in notes if start - EPSILON <= n.start_time < end - EPSILON]
+        if any(b - a >= ANSWER_BEATS - EPSILON for a, b in phrase_rests(phrase, end - start)):
+            continue
+        cut = last * bpb
+        notes = [replace(n, duration=cut - n.start_time) if n.start_time < cut - EPSILON < n.end_time - EPSILON else n
+                 for n in notes if not cut - EPSILON <= n.start_time < end - EPSILON]
+    return notes
+
+
 def _energize(notes: list[Note], energy: float, low: float = 0.85) -> list[Note]:
     """Velocity by section energy: `low` of it at energy 0, all of it at 1 (the grooves give the drums as much range)."""
     factor = low + (1 - low) * energy
@@ -703,11 +724,13 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         low, high = style.lead_range
         tease = part in ("tease", "sparse")
         if style.lead == "arp":
-            return generate_arp(arp, harmony, scale, meter, bars, swing, low, high, tease, velocity=82 + 12 * section.energy)
-        if style.lead == "acid":
-            return generate_acid(acid, harmony, meter, bars, low, high, tease, r, lift=section.kind == "drop" and section.variation > 0)
-        flip = section.variation % 2 == 1
-        return generate_hook(hook, harmony, scale, meter, bars, swing, low, high, tease=tease, velocity=88 + 12 * section.energy, flip=flip)
+            notes = generate_arp(arp, harmony, scale, meter, bars, swing, low, high, tease, velocity=82 + 12 * section.energy)
+        elif style.lead == "acid":
+            notes = generate_acid(acid, harmony, meter, bars, low, high, tease, r, lift=section.kind == "drop" and section.variation > 0)
+        else:
+            flip = section.variation % 2 == 1
+            notes = generate_hook(hook, harmony, scale, meter, bars, swing, low, high, tease=tease, velocity=88 + 12 * section.energy, flip=flip)
+        return notes if tease else _answer_space(notes, meter, bars, offset_bars)
 
     for section, at in zip(sections, starts):
         harmony: Harmony = (alt if section.kind == "break" else main).for_length(meter, section.bars)

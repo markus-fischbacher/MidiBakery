@@ -333,7 +333,7 @@ async def test_house_follows_the_recipe(client, live):
     bass = await notes("Drop Bass")
     assert all(28 <= n["pitch"] <= 39 for n in bass) and {round(n["start_time"] % 1, 2) for n in bass} == {0.5}  # offbeats, low
     lead = await notes("Drop Lead")
-    assert 3 <= len(lead) / 32 <= 6  # a hook, not a stream of 16ths
+    assert 2 <= len(lead) / 32 <= 6  # a hook, not a stream of 16ths (every 4th bar rests for an answer)
     chords = await notes("Drop Chords")
     assert max(n["pitch"] for n in chords) < min(n["pitch"] for n in lead) + 6
     drop = await notes("Drop Drums")
@@ -395,7 +395,7 @@ async def test_peak_time_techno_follows_the_recipe(client, live):
     roots = {min(ps) % 12 for ps in by_time.values()}
     assert len(roots) == 2  # home chord plus a two-chord shift
     acid = clips["Peak Lead"][1]
-    assert all(48 <= n["pitch"] <= 62 for n in acid) and 8 <= len(acid) / 32 <= 12
+    assert all(48 <= n["pitch"] <= 62 for n in acid) and 6 <= len(acid) / 32 <= 12
     block = lambda first: [(round(n["start_time"] - first, 2), n["pitch"], n["velocity"], round(n["duration"], 2)) for n in acid if first <= n["start_time"] < first + 32]  # noqa: E731
     assert block(32) != block(64)  # the acid line moves one thing every 8 bars
     assert len(block(0)) < len([n for n in acid if 16 <= n["start_time"] < 32]) * 2  # each 16 bars start thinned out
@@ -412,7 +412,9 @@ async def test_melodic_techno_has_an_arp_over_pads(client, live):
     pads = clips["Drop Chords"][1]
     assert min(n["duration"] for n in pads) >= 7.9  # one held chord per 2 bars
     arp = clips["Drop Lead"][1]
-    assert 6 <= len(arp) / 32 <= 8 and all(60 <= n["pitch"] <= 84 for n in arp)
+    assert 4 <= len(arp) / 32 <= 8 and all(60 <= n["pitch"] <= 84 for n in arp)
+    # the arp plays through 3 bars of each phrase and rests in the 4th: room for a counter melody
+    assert not [n for n in arp if n["start_time"] % 16 >= 12] and all(any(p * 16 <= n["start_time"] < p * 16 + 12 for n in arp) for p in range(8))
 
 
 async def test_drum_and_bass_two_step_and_long_drops(client, live):

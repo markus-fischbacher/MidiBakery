@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
+from midibakery.compose.counter import resolve as resolve_counter
 from midibakery.compose.drums import DrumMap, kick_times, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
@@ -724,8 +725,11 @@ async def _plan_melody(session: Session, spec: MelodySpec) -> ClipChange:
         raise BridgeError("INVALID_PARAMS", str(exc)) from None
     info = {"chords": harmony.describe(), "chords_source": harmony.source, **counter}
     if counter:
-        info["counter_mode"] = spec.counter_mode or "fill_the_gaps"
-        info["counter_register"] = spec.counter_register or "above"
+        assert main is not None
+        mode, register, why = resolve_counter(_main_notes(main), session.meter, spec.bars, spec.counter_mode, spec.counter_register)
+        info["counter_mode"], info["counter_register"] = mode, register
+        if why:
+            info["counter_choice"] = why
         if harmony.source == "clip" and main and spec.chords_from is None and not spec.progression and not had_chords and not arranged:
             info["chords_note"] = "No chords given: derived from the main melody's notes"
     if spec.pattern:

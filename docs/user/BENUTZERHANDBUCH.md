@@ -342,10 +342,12 @@ Eine zweite Melodie, die auf eine vorhandene Lead-Melodie antwortet. Frage: *„
 
 Ein Lead im Arrangement, wie `plan_song` ihn schreibt: Frage *„Schreib eine Gegenmelodie zu den Breakdown-Lead-Clips auf einer neuen MIDI-Spur“*. Jeder Clip dieses Namens bekommt an denselben Takten und in derselben Länge einen Gegenclip auf der anderen Spur (*Breakdown Counter*), jeweils über den Akkorden des Akkord- oder Pad-Clips, der dort spielt. Die Lead-Spur allein beantwortet den ganzen Song. Nochmal fragen gibt diesen Clips neue Noten statt einer zweiten Lage.
 
-Modi (in Worten sagen, Standard ist der erste):
+Ohne Modus wählt der Lead ihn. Ein Lead mit langen Pausen (ein stiller Takt nach jeder Phrase) bekommt **call_and_response**, einer mit kurzen Pausen oder gehaltenen Noten **fill_the_gaps**, einer ohne Pause (ein Arp, eine Acid-Linie) **passive_over_active**, wenige lange Noten. Als Pause zählt nur, wenn der Lead einen Schlag oder länger schweigt: die winzigen Lücken zwischen den Staccato-Tönen eines Arps sind kein Platz für eine Antwort. Die Antwort sagt, welchen Modus es gewählt hat und warum.
 
-- **fill_the_gaps**: spielt nur, wo der Lead eine Note hält oder pausiert.
-- **call_and_response**: antwortet in den stillen Schlägen und Takten des Leads.
+Modi (in Worten sagen):
+
+- **fill_the_gaps**: spielt nur in den Pausen des Leads (ab einem Schlag) und in gehaltenen Noten.
+- **call_and_response**: antwortet in den Pausen des Leads, ab ihrer ersten 16tel.
 - **passive_over_active**: ruhige lange Noten über einem lebhaften Lead (mehr Noten über einem sparsamen).
 - **contrasting_rhythm**: sparsam, wo der Lead dicht ist, und umgekehrt.
 - **harmonic_notes**: geht im Rhythmus des Leads mit, auf einer passenden anderen Note.
@@ -358,7 +360,7 @@ Vier feste Figuren (der Lead bestimmt nur Lage und Reibungen; sie folgen nicht s
 - **trance_dotted_eighth_staircase**: die 8-Takt-Figur aus dem Trance-Tutorial: der Puls auf den Stufen 1, 2, 3 und 5, je zwei Takte.
 - **echo_gap_answer**: in langen Noten des Leads (ab 1,25 Schlägen) drei bis vier kurze Noten in Schritten, dann eine längere Note, die beim Wiedereinsatz des Leads weiterklingt. Über einem Lead ohne lange Noten schreibt sie nichts.
 
-Lage (`counter_register`): **above** über dem Lead (Standard), **below** darunter oder **same** (dann beginnt sie nie gleichzeitig mit dem Lead). Auf betonten Zählzeiten spielt sie Terzen, Quinten, Sexten oder Oktaven zum Lead. Eine Figurennote, die auf einer betonten Zählzeit reiben würde, rückt auf den nächsten passenden Tonleiterton.
+Lage (`counter_register`): **above** über dem Lead (Standard, eine Terz oder mehr über seinem höchsten Ton, nie über C7), **below** darunter (Standard, wenn über dem Lead C7 überschritten würde) oder **same** (dann beginnt sie nie gleichzeitig mit dem Lead). Auf betonten Zählzeiten spielt sie Terzen, Quinten, Sexten oder Oktaven zum Lead. Eine Figurennote, die auf einer betonten Zählzeit reiben würde, rückt auf den nächsten passenden Tonleiterton.
 
 ### Ganze Songs nach Genre
 
@@ -377,7 +379,7 @@ Du sagst das Genre, MidiBakery plant den Song, zeigt dir eine **Vorschau** (Zeit
 **Was MidiBakery dabei macht:**
 
 - **Spuren:** Es sucht vorhandene Spuren für Drums (Spur mit Drum Rack), Bass, Akkorde und Lead (an Namen wie „Bass/Sub/808“, „Chords/Pad/Keys“, „Lead/Melody/Synth“). Fehlende Spuren legt es an, mit passendem Kit und Presets aus der Core Library, benannt nach ihrer Rolle (Drums, Bass, Chords, Lead, Riser, Impact); die stumme Sidechain-Spur kommt ganz nach vorne. **Benenne deine Spuren also vorher passend**, wenn du eigene Klänge behalten willst. Mit „nimm Spur 3 als Bass“ weist du eine Rolle zu.
-- **Noten:** Aufbau und Muster folgen Rezepten pro Genre (siehe [GENRES.md](../GENRES.md)): Drums mit Ghost-Notes und Fills, wechselnder Bass, zweite Harmonie im Break, eine Hook, die sich entwickelt. Dynamik steigt und fällt mit der Energie des Abschnitts.
+- **Noten:** Aufbau und Muster folgen Rezepten pro Genre (siehe [GENRES.md](../GENRES.md)): Drums mit Ghost-Notes und Fills, wechselnder Bass, zweite Harmonie im Break, eine Hook, die sich entwickelt. Ein Lead, der eine 4-Takt-Phrase durchspielen würde, pausiert in ihrem 4. Takt: Platz für die Antwort einer Gegenmelodie. Dynamik steigt und fällt mit der Energie des Abschnitts.
 - **Marker:** Es setzt **Locators** (Marker) an die Abschnitte.
 - **Mix (an):** je ein Hall- und ein Delay-Return (vorhandene werden verwendet), Pegel und Sends für neue Spuren.
 - **Automation (an):** Filterfahrten, Delay-Würfe.
