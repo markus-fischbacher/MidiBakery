@@ -621,7 +621,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         roles[role].throws = style.throws[role]
     existing = {t.index for t in roles.values() if not t.new}
     length = sum(s.bars for s in sections) * bpb
-    under = _under_reference(reference, bpb) if reference is not None and request.start_bar is None else None
+    under = _under_reference(reference, bpb) if reference is not None and reference.get("bar_grid") != "als" and request.start_bar is None else None
     if request.start_bar is not None:
         start = (request.start_bar - 1) * bpb
     elif under is not None and not any(

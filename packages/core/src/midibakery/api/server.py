@@ -16,6 +16,9 @@
 - ``GET /license``: trial or license state (``midibakery.license``); ``POST /license/trial``,
   ``POST /license/activate`` ``{"key"}``, ``POST /license/deactivate``. Without the trial or a license the
   MIDI Tools and the chat answer ``LICENSE_REQUIRED``; reading Live and undo keep working.
+- ``GET /importer``: the Set Importer page; ``POST /import/scan`` ``{"path"}`` (a Live Set or a folder: the Sets in it),
+  ``POST /import/preview`` ``{"file"}`` (one Set's roles, key and sections), ``POST /import/run`` ``{"files", "genres"?}``
+  (stores them as references), ``GET /import/library`` and ``DELETE /import/{id}``.
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
@@ -49,6 +52,7 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from midibakery import credentials, license, updates
+from midibakery.als import library as als_library
 from midibakery.agent import LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
@@ -61,6 +65,7 @@ from midibakery.mcp import build_server
 VERSION = __version__
 UPDATE_RECHECK = 6 * 3600  # the API often runs for days; updates.check itself asks the service once a day
 UI_PAGE = Path(__file__).with_name("ui") / "chat.html"
+IMPORTER_PAGE = Path(__file__).with_name("ui") / "importer.html"
 ProviderFactory = Callable[[dict[str, str]], Provider]
 
 
@@ -179,6 +184,41 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
     async def ui(request: Request) -> HTMLResponse:
         # no-store: a reloaded device always gets the page matching this API version
         return HTMLResponse(UI_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+    async def importer_ui(request: Request) -> HTMLResponse:
+        return HTMLResponse(IMPORTER_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+    def importer(action):
+        """One import endpoint: the body's problems are the caller's (422), the work runs off the event loop."""
+        async def endpoint(request: Request) -> JSONResponse:
+            try:
+                body = await request.json() if request.method in ("POST", "PUT") else {}
+                if not isinstance(body, dict):
+                    raise ValueError("expected a JSON object")
+                return JSONResponse(await asyncio.to_thread(action, body, request))
+            except (ValueError, OSError) as exc:
+                return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
+
+        return endpoint
+
+    def import_scan(body: dict, _request: Request) -> dict:
+        return {"sets": als_library.listing(als_library.find_sets(str(body.get("path") or "")))}
+
+    def import_preview(body: dict, _request: Request) -> dict:
+        return als_library.preview(str(body.get("file") or ""))
+
+    def import_run(body: dict, _request: Request) -> dict:
+        files = body.get("files")
+        if not isinstance(files, list) or not all(isinstance(f, str) for f in files):
+            raise ValueError("files: expected a list of paths")
+        genres = body.get("genres") if isinstance(body.get("genres"), dict) else None
+        return als_library.run(files, genres)
+
+    def import_library(_body: dict, _request: Request) -> dict:
+        return {"library": als_library.library()}
+
+    def import_delete(_body: dict, request: Request) -> dict:
+        return {"deleted": als_library.delete(request.path_params["reference"])}
 
     async def health(request: Request) -> JSONResponse:
         try:
@@ -344,6 +384,12 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         routes=[
             Route("/health", guard(health), methods=["GET"]),
             Route("/ui", ui, methods=["GET"]),
+            Route("/importer", importer_ui, methods=["GET"]),
+            Route("/import/scan", guard(importer(import_scan)), methods=["POST"]),
+            Route("/import/preview", guard(importer(import_preview)), methods=["POST"]),
+            Route("/import/run", guard(importer(import_run)), methods=["POST"]),
+            Route("/import/library", guard(importer(import_library)), methods=["GET"]),
+            Route("/import/{reference}", guard(importer(import_delete)), methods=["DELETE"]),
             Route("/models", guard(models), methods=["GET"]),
             Route("/update", guard(update_status), methods=["GET"]),
             Route("/update/install", guard(update_install), methods=["POST"]),

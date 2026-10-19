@@ -23,7 +23,10 @@ const { execFile } = require("child_process");
 const Max = require("max-api");
 const { about } = require("./midibakery-about.js");
 
-const MODE = process.env.MIDIBAKERY_DEVICE === "chat" ? "chat" : "miditool";
+// Devices that show a page of the API in a jweb (the others are MIDI Tools): the page each shows.
+const PAGES = { chat: "/ui", importer: "/importer" };
+const MODE = process.env.MIDIBAKERY_DEVICE in PAGES ? process.env.MIDIBAKERY_DEVICE : "miditool";
+const PAGE = PAGES[MODE];
 const POLL_MS = 2000;
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -69,7 +72,7 @@ function chatUrl() {
   // A new token must be a new page: jweb does not reload when only the #fragment changes,
   // and the page reads its token once. The query is derived from the token, never the token.
   const key = crypto.createHash("sha256").update(api.token).digest("hex").slice(0, 8);
-  return `http://127.0.0.1:${api.port}/ui?key=${key}#token=${encodeURIComponent(api.token)}`;
+  return `http://127.0.0.1:${api.port}${PAGE}?key=${key}#token=${encodeURIComponent(api.token)}`;
 }
 
 async function refresh() {
@@ -82,7 +85,7 @@ async function refresh() {
     return;
   }
   await Max.outlet("status", `MidiBakery API on port ${api.port}`);
-  if (MODE === "chat") {
+  if (PAGE) {
     pageLoaded = false;
     loadAttempts = 0;
     await loadPage();
@@ -92,16 +95,16 @@ async function refresh() {
 const MAX_LOAD_ATTEMPTS = 5;
 
 async function loadPage() {
-  if (MODE !== "chat" || !api || pageLoaded) return;
+  if (!PAGE || !api || pageLoaded) return;
   if (loadAttempts >= MAX_LOAD_ATTEMPTS) {
     if (loadAttempts === MAX_LOAD_ATTEMPTS) {
       loadAttempts += 1;
-      await Max.outlet("status", "Chat page did not load in the device - use Pop out");
+      await Max.outlet("status", "The page did not load in the device - use Pop out");
     }
     return;
   }
   loadAttempts += 1;
-  if (loadAttempts > 1) await Max.outlet("status", `Loading chat page (attempt ${loadAttempts})...`);
+  if (loadAttempts > 1) await Max.outlet("status", `Loading page (attempt ${loadAttempts})...`);
   log("send url", chatUrl(), "attempt", loadAttempts);
   await Max.outlet("url", chatUrl());
 }
