@@ -111,6 +111,16 @@ if (scenario === "switch") {
   detailId = 8;
   release();
   console.log(JSON.stringify({ log, after: log.slice(marker), applied: applied().slice(0), statuses: statuses() }));
+} else if (scenario === "meter") {
+  const bodies = [];
+  const withMeter = (n, d) => ({ ...input, clip: { ...input.clip, signature_numerator: n, signature_denominator: d } });
+  call(0, "msg_dictionary", input);
+  bodies.push(dicts[requestOf()[5]].context);
+  call(0, "msg_dictionary", withMeter(7, 8));
+  bodies.push(dicts[requestOf()[5]].context);
+  call(0, "msg_dictionary", withMeter(0, 3));
+  bodies.push(dicts[requestOf()[5]].context);
+  console.log(JSON.stringify({ bodies, requests: log.filter((e) => e[0] === "outlet" && e[1] === 1 && e[2] === "request").length }));
 } else if (scenario === "remove-fails") {
   call(0, "msg_dictionary", input);
   removeFails = true;

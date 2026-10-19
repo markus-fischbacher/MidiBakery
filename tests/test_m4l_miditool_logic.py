@@ -115,3 +115,13 @@ def test_failed_request_reports_error_and_writes_nothing(tmp_path):
     data = _run(tmp_path, "failure")
     assert _writes(data) == []
     assert data["statuses"][-1] == "Error: boom"
+
+
+@pytest.mark.skipif(NODE is None, reason="no Node.js available")
+def test_meter_is_sent_only_when_the_tool_context_has_a_valid_one(tmp_path):
+    data = _run(tmp_path, "meter")
+    plain, seven_eight, invalid = data["bodies"]
+    assert "numerator" not in plain  # unknown: the server falls back to 4/4
+    assert (seven_eight["numerator"], seven_eight["denominator"]) == (7, 8)
+    assert "numerator" not in invalid
+    assert data["requests"] == 3  # a changed meter is a changed request, never a cache hit

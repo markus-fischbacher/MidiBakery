@@ -221,6 +221,15 @@ function buildContext(d) {
     length: end > start ? end - start : 16,
     seed: params.seed
   };
+  // Meter: read from the tool context when Live provides it; otherwise omitted, so the server
+  // assumes 4/4. UNVERIFIED which of these fields real Live fills in. Drum Rack pad context is not
+  // sent (no verified interface), so drums use General MIDI pitches.
+  var numerator = Number(clip.signature_numerator);
+  var denominator = Number(clip.signature_denominator);
+  if (numerator >= 1 && numerator <= 99 && [1, 2, 4, 8, 16].indexOf(denominator) >= 0) {
+    context.numerator = numerator;
+    context.denominator = denominator;
+  }
   var scale = d.scale || {};
   var intervals = scale.scale_intervals || [];
   // Live reports "Chromatic" when the clip has no scale; generators need a real one.
