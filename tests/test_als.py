@@ -213,3 +213,22 @@ def test_import_rejects_bad_input(api):
     assert api.post("/import/scan", json={}, headers=AUTH).status_code == 422
     assert api.post("/import/run", json={"files": "x"}, headers=AUTH).status_code == 422
     assert api.post("/import/scan", content=b"[1]", headers=AUTH).status_code == 422
+
+
+def test_pick_asks_the_system_dialog_and_a_cancel_is_empty(api, monkeypatch):
+    import subprocess
+
+    ran = []
+
+    def fake(cmd, **kwargs):
+        ran.append(cmd[-1])
+        return subprocess.CompletedProcess(cmd, 0 if len(ran) == 1 else 1, "/Users/me/Sets\n", "")
+
+    monkeypatch.setattr(library.subprocess, "run", fake)
+    monkeypatch.setattr(library.sys, "platform", "darwin")
+    assert api.post("/import/pick", json={"kind": "folder"}, headers=AUTH).json() == {"path": "/Users/me/Sets"}
+    assert "choose folder" in ran[0]
+    assert api.post("/import/pick", json={"kind": "file"}, headers=AUTH).json() == {"path": ""}  # cancelled
+    assert "{\"als\"}" in ran[1]
+    assert api.post("/import/pick", json={"kind": "x"}, headers=AUTH).status_code == 422
+    assert api.post("/import/pick", json={"kind": "file"}).status_code == 401

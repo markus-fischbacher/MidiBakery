@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -114,3 +116,19 @@ def delete(reference: str) -> bool:
         return False
     path.unlink()
     return True
+
+
+def pick(kind: str) -> str:
+    """Ask the user for a Live Set ("file") or a folder ("folder") in the system's file dialog; "" when cancelled.
+    For the importer page in a browser, which cannot read a path from its own file dialog. macOS only."""
+    if kind not in ("file", "folder"):
+        raise ValueError("kind: expected file or folder")
+    if sys.platform != "darwin":
+        raise ValueError("The file dialog is only available on macOS; type the path instead")
+    choose = ('choose file with prompt "Choose a Live Set" of type {"als"}' if kind == "file"
+              else 'choose folder with prompt "Choose a folder with Live Sets"')
+    try:
+        done = subprocess.run(["osascript", "-e", f"POSIX path of ({choose})"], capture_output=True, text=True, timeout=600)
+    except subprocess.TimeoutExpired:
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""  # a cancelled dialog exits with an error

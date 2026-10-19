@@ -62,6 +62,8 @@
 </header>
 <header id="typed">
   <input type="text" id="path" placeholder="/path/to/Set.als or a folder">
+  <button id="pick-folder" title="Choose a folder with Live Sets">Folder...</button>
+  <button id="pick-file" title="Choose a Live Set">Set...</button>
   <button id="scan">Add</button>
 </header>
 <main>
@@ -283,6 +285,12 @@ $("all").onclick = () => { for (const s of sets.values()) if (!s.error) s.select
 $("none").onclick = () => { for (const s of sets.values()) s.selected = false; render(); };
 $("import").onclick = importSelected;
 $("scan").onclick = () => { addPath($("path").value); $("path").value = ""; };
+for (const kind of ["folder", "file"]) {
+  $("pick-" + kind).onclick = async () => {
+    setStatus("Waiting for the file dialog...", true);
+    try { addPath((await api("/import/pick", { kind })).path); } catch (exc) { setStatus(String(exc.message || exc)); }
+  };
+}
 $("path").onkeydown = (e) => { if (e.key === "Enter") $("scan").click(); };
 
 if (inDevice) window.max.bindInlet("add_path", (...words) => addPath(words.join(" ")));
