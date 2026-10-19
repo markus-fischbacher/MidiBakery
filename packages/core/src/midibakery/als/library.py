@@ -132,3 +132,26 @@ def pick(kind: str) -> str:
     except subprocess.TimeoutExpired:
         return ""
     return done.stdout.strip() if done.returncode == 0 else ""  # a cancelled dialog exits with an error
+
+
+# The importer's list of Sets, shared by every page that shows it (the device and a popped-out browser tab).
+# In memory: it is a work list, not data; the API restarting empties it.
+QUEUE_FIELDS = {"file": str, "name": str, "folder": str, "id": str, "imported": bool, "selected": bool, "genre": str}
+_queue: dict[str, Any] = {"rev": 0, "sets": []}
+
+
+def queue() -> dict[str, Any]:
+    return _queue
+
+
+def set_queue(sets: Any) -> dict[str, Any]:
+    if not isinstance(sets, list) or len(sets) > MAX_FILES:
+        raise ValueError("sets: expected a list")
+    kept = []
+    for item in sets:
+        if not isinstance(item, dict) or not isinstance(item.get("file"), str):
+            raise ValueError("sets: every entry needs a file")
+        kept.append({k: item[k] for k, kind in QUEUE_FIELDS.items() if isinstance(item.get(k), kind)})
+    _queue["sets"] = kept
+    _queue["rev"] += 1
+    return _queue

@@ -232,3 +232,14 @@ def test_pick_asks_the_system_dialog_and_a_cancel_is_empty(api, monkeypatch):
     assert "{\"als\"}" in ran[1]
     assert api.post("/import/pick", json={"kind": "x"}, headers=AUTH).status_code == 422
     assert api.post("/import/pick", json={"kind": "file"}).status_code == 401
+
+
+def test_the_import_list_is_shared_between_pages(api):
+    first = api.post("/import/queue", json={"sets": [{"file": "/a/One.als", "name": "One", "selected": True, "genre": "house",
+                                                       "junk": 1, "imported": "yes"}]}, headers=AUTH).json()
+    shown = api.get("/import/queue", headers=AUTH).json()
+    assert shown["sets"] == [{"file": "/a/One.als", "name": "One", "selected": True, "genre": "house"}]  # only known, well-typed fields
+    assert api.post("/import/queue", json={"sets": []}, headers=AUTH).json()["rev"] == first["rev"] + 1
+    assert api.post("/import/queue", json={"sets": "x"}, headers=AUTH).status_code == 422
+    assert api.post("/import/queue", json={"sets": [{"name": "no file"}]}, headers=AUTH).status_code == 422
+    assert api.get("/import/queue").status_code == 401

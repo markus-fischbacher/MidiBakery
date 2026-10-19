@@ -93,6 +93,40 @@ let shown = null;         // file of the detail view
 let view = "sets";
 let queue = Promise.resolve();
 
+// The list lives in the API too, so the device and a popped-out page show the same Sets: every change is
+// sent (persist) and the other page picks it up (pull, polled).
+let rev = -1, saving = 0, timer = null;
+function persist() {  // batched: reading 40 Sets would otherwise send 40 updates
+  if (timer) return;
+  saving++;
+  timer = setTimeout(async () => {
+    timer = null;
+    try {
+      const keep = ["file", "name", "folder", "id", "imported", "selected", "genre"];
+      const list = [...sets.values()].map((s) => Object.fromEntries(keep.filter((k) => s[k] !== undefined && s[k] !== null).map((k) => [k, s[k]])));
+      rev = (await api("/import/queue", { sets: list })).rev;
+    } catch (_) {} finally { saving--; }
+  }, 300);
+}
+async function pull() {
+  if (saving || !token) return;
+  try {
+    const shared = await api("/import/queue");
+    if (shared.rev === rev || saving) return;
+    rev = shared.rev;
+    const wanted = new Set(shared.sets.map((s) => s.file));
+    for (const file of [...sets.keys()]) if (!wanted.has(file)) sets.delete(file);
+    const fresh = [];
+    for (const entry of shared.sets) {
+      const have = sets.get(entry.file);
+      if (have) Object.assign(have, entry);
+      else { sets.set(entry.file, { info: null, error: null, genre: "", selected: false, ...entry }); fresh.push(entry.file); }
+    }
+    render();
+    for (const file of fresh) queue = queue.then(() => read(sets.get(file)));
+  } catch (_) {}
+}
+
 function setStatus(text, busy) {
   $("status").textContent = text;
   $("dot").className = "dot " + (busy ? "busy" : "on");
@@ -129,7 +163,8 @@ async function addPath(path) {
   try {
     const { sets: found } = await api("/import/scan", { path });
     if (!found.length) { setStatus("No Live Sets in " + path); return; }
-    for (const s of found) if (!sets.has(s.file)) sets.set(s.file, { ...s, info: null, error: null, selected: false, genre: "" });
+    for (const s of found) if (!sets.has(s.file)) sets.set(s.file, { ...s, info: null, error: null, selected: false, genre: "", auto: true });
+    persist();
     setStatus(`${found.length} Set${found.length === 1 ? "" : "s"} found - reading...`, true);
     render();
     for (const s of found) queue = queue.then(() => read(sets.get(s.file)));
@@ -144,7 +179,8 @@ async function read(set) {
   if (!set || set.info || set.error) return;  // a Set removed from the list while it waited to be read
   try {
     set.info = await api("/import/preview", { file: set.file });
-    set.selected = !set.imported;  // a Set that reads fine is ready to import; untick the ones you do not want
+    if (set.auto) { set.selected = !set.imported; persist(); }  // a Set that reads fine is ready to import; untick the ones you do not want
+    delete set.auto;
   } catch (exc) {
     set.error = String(exc.message || exc);
   }
@@ -160,19 +196,19 @@ function render() {
   }
   for (const set of sets.values()) {
     const box = el("input", { type: "checkbox", checked: set.selected, disabled: Boolean(set.error) });
-    box.onclick = (e) => { e.stopPropagation(); set.selected = box.checked; counts(); };
+    box.onclick = (e) => { e.stopPropagation(); set.selected = box.checked; counts(); persist(); };
     const meta = el("div", { className: "meta" });
     const row = el("div", { className: "row" + (set.file === shown ? " sel" : "") }, box,
       el("div", { className: "body" }, el("span", { className: "name", title: set.file }, set.name), meta));
     if (set.info) meta.append(el("span", { className: "chip" }, `${Math.round(set.info.tempo)} BPM`), el("span", { className: "chip" }, set.info.key));
     const genre = el("span", { className: "chip genre" + (set.genre ? " set" : ""), title: "Click to choose the genre" }, set.genre || "genre");
-    genre.onclick = (e) => { e.stopPropagation(); set.genre = GENRES[(GENRES.indexOf(set.genre) + 1) % GENRES.length]; render(); };
+    genre.onclick = (e) => { e.stopPropagation(); set.genre = GENRES[(GENRES.indexOf(set.genre) + 1) % GENRES.length]; render(); persist(); };
     meta.append(genre);
     if (set.error) meta.append(el("span", { className: "chip err", title: set.error }, "error"));
     else if (set.imported) meta.append(el("span", { className: "chip ok" }, "imported"));
     else if (!set.info) meta.append(el("span", { className: "chip" }, "..."));
     const remove = el("button", { title: "Remove from this list", className: "x" }, "\u00d7");
-    remove.onclick = (e) => { e.stopPropagation(); sets.delete(set.file); if (shown === set.file) shown = null; render(); };
+    remove.onclick = (e) => { e.stopPropagation(); sets.delete(set.file); if (shown === set.file) shown = null; render(); persist(); };
     row.append(remove);
     row.onclick = () => { shown = shown === set.file ? null : set.file; render(); };  // click again to fold it
     list.append(row);
@@ -262,6 +298,7 @@ async function importSelected() {
     const result = await api("/import/run", { files: chosen.map((s) => s.file), genres });
     for (const done of result.imported) { const s = sets.get(done.file); if (s) { s.imported = true; s.selected = false; } }
     for (const bad of result.failed) { const s = sets.get(bad.file); if (s) s.error = bad.error; }
+    persist();
     setStatus(`Imported ${result.imported.length}` + (result.failed.length ? `, ${result.failed.length} failed` : "") + " - ready for plan_song");
   } catch (exc) { setStatus(String(exc.message || exc)); }
   render();
@@ -276,8 +313,8 @@ function show(which) {
 
 $("tab-sets").onclick = () => show("sets");
 $("tab-library").onclick = () => show("library");
-$("all").onclick = () => { for (const s of sets.values()) if (!s.error) s.selected = true; render(); };
-$("none").onclick = () => { for (const s of sets.values()) s.selected = false; render(); };
+$("all").onclick = () => { for (const s of sets.values()) if (!s.error) s.selected = true; render(); persist(); };
+$("none").onclick = () => { for (const s of sets.values()) s.selected = false; render(); persist(); };
 $("import").onclick = importSelected;
 $("scan").onclick = () => { addPath($("path").value); $("path").value = ""; };
 for (const kind of ["folder", "file"]) {
@@ -293,7 +330,7 @@ try {
   if (window.max && window.max.outlet) window.max.outlet("loaded");
 } catch (_) {}
 if (!token) setStatus("No access token. Open this page from the MidiBakery device.");
-else { $("dot").className = "dot on"; render(); }
+else { $("dot").className = "dot on"; render(); pull(); setInterval(pull, 2000); }
 </script>
 </body>
 </html>

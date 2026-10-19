@@ -18,7 +18,7 @@
   MIDI Tools and the chat answer ``LICENSE_REQUIRED``; reading Live and undo keep working.
 - ``GET /importer``: the Set Importer page; ``POST /import/scan`` ``{"path"}`` (a Live Set or a folder: the Sets in it),
   ``POST /import/preview`` ``{"file"}`` (one Set's roles, key and sections), ``POST /import/run`` ``{"files", "genres"?}``
-  (stores them as references), ``POST /import/pick`` ``{"kind": "file"|"folder"}`` (the system file dialog, for the page in a browser),
+  (stores them as references), ``GET``/``POST /import/queue`` (the list of Sets shared by the device and a popped-out page), ``POST /import/pick`` ``{"kind": "file"|"folder"}`` (the system file dialog, for the page in a browser),
   ``GET /import/library`` and ``DELETE /import/{id}``.
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
@@ -215,6 +215,9 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         genres = body.get("genres") if isinstance(body.get("genres"), dict) else None
         return als_library.run(files, genres)
 
+    def import_queue(body: dict, request: Request) -> dict:
+        return als_library.set_queue(body.get("sets")) if request.method == "POST" else als_library.queue()
+
     def import_pick(body: dict, _request: Request) -> dict:
         return {"path": als_library.pick(str(body.get("kind") or ""))}
 
@@ -393,6 +396,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/import/scan", guard(importer(import_scan)), methods=["POST"]),
             Route("/import/preview", guard(importer(import_preview)), methods=["POST"]),
             Route("/import/run", guard(importer(import_run)), methods=["POST"]),
+            Route("/import/queue", guard(importer(import_queue)), methods=["GET", "POST"]),
             Route("/import/pick", guard(importer(import_pick)), methods=["POST"]),
             Route("/import/library", guard(importer(import_library)), methods=["GET"]),
             Route("/import/{reference}", guard(importer(import_delete)), methods=["DELETE"]),
