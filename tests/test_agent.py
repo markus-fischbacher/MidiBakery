@@ -825,3 +825,12 @@ async def test_a_plan_waits_for_apply_without_a_nudge(client, live):
     await _compact_send(client, provider, "Leg eine Master-Kette für House an.")
     assert not provider.turns and not any(u.startswith("[No tool ran") for u in provider.users)
     assert live.on_main(lambda: len(live.song.master_track.devices)) == 0
+
+
+def test_the_prompt_for_local_models_does_not_name_tools_they_lack():
+    from midibakery.agent import without_tools
+
+    local = without_tools(SYSTEM_PROMPT, LOCAL_HIDDEN)
+    assert "compose_takes" in SYSTEM_PROMPT and "compose_takes" not in local
+    assert all(name not in local for name in LOCAL_HIDDEN)
+    assert "plan_song" in local and without_tools(SYSTEM_PROMPT, frozenset()) == SYSTEM_PROMPT

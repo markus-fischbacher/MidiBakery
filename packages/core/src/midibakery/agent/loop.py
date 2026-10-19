@@ -28,6 +28,14 @@ SYSTEM_PROMPT = (
     "Tool guide:\n" + INSTRUCTIONS
 )
 
+def without_tools(prompt: str, hidden: frozenset[str]) -> str:
+    """The prompt without the lines that talk about tools the model does not get."""
+    if not hidden:
+        return prompt
+    names = re.compile(r"\b(" + "|".join(sorted(hidden)) + r")\b")
+    return "\n".join(line for line in prompt.split("\n") if not names.search(line))
+
+
 # For local models with a small context (e.g. 8k): the essentials of SYSTEM_PROMPT and INSTRUCTIONS.
 SMALL_SYSTEM_PROMPT = (
     "You are MidiBakery, a music assistant controlling the open Ableton Live 12 set through tools. "

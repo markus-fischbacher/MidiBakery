@@ -203,7 +203,7 @@ def cmd_api(args: argparse.Namespace) -> int:
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
-    from midibakery.agent import LOCAL_HIDDEN, LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost
+    from midibakery.agent import LOCAL_HIDDEN, LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost, without_tools
     from midibakery.agent.loop import describe_input
     from midibakery.bridge import BridgeClient
     from midibakery.mcp import build_server
@@ -239,8 +239,9 @@ def cmd_chat(args: argparse.Namespace) -> int:
         small = args.small
         allowed = SMALL_TOOLS if small else REDUCED_TOOLS if args.reduced else None
         try:
-            async with ToolHost(build_server(bridge), confirm, allowed, LOCAL_HIDDEN if allowed is None and provider.name in LOCAL_PROVIDERS else frozenset()) as host:
-                agent = Agent(provider, host, SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, compact=provider.name in LOCAL_PROVIDERS)
+            hidden = LOCAL_HIDDEN if allowed is None and provider.name in LOCAL_PROVIDERS else frozenset()
+            async with ToolHost(build_server(bridge), confirm, allowed, hidden) as host:
+                agent = Agent(provider, host, without_tools(SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, hidden), compact=provider.name in LOCAL_PROVIDERS)
                 print(f"MidiBakery chat ({provider.name}, {provider.model}, {len(host.tools)} tools). Empty line or Ctrl-D quits, /reset forgets.")
                 while True:
                     try:
