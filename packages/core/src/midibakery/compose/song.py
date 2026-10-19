@@ -712,6 +712,10 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     kick_pitch = drum_map.note("kick")
 
     use = {c.role: c for c in request.clips}
+    if "chords" in use:  # product choice pending: whether a copied chord clip should set the song's harmony
+        warnings.append("clips.chords is copied as is: the song's bass and lead follow "
+                        + ("the given progression" if request.progression else "the genre's progression")
+                        + ", not the chords in that clip. Pass progression to match them")
     sidechain_source = None
     trigger_needed = request.sidechain and request.sidechain_mode == "follow_kick" and "sidechain" in roles
     if trigger_needed:

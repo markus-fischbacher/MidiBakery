@@ -46,3 +46,15 @@ def test_default_rate_is_not_an_explicit_choice():
     assert "chords_per_bar" not in spec.model_fields_set
     result = mood_harmony("dreamy_indie", Scale(0), Meter(4, 4), 4, None)
     assert len(result.segments) == 8  # the template's 2 chords per bar
+
+
+def test_ignored_controls_are_reported_only_when_explicitly_supplied():
+    from midibakery.compose.standalone import GenerateRequest, generate
+
+    def run(kind, params):
+        return generate(GenerateRequest.model_validate({"context": {"seed": 1}, "kind": kind, "params": params})).get("ignored")
+
+    assert run("bass", {"pattern": next(iter(__import__("midibakery.compose.patterns", fromlist=["x"]).BASS_TEMPLATES)), "octave": 2}) == ["octave"]
+    assert run("bass", {"style": "offbeat", "swing": 0.4}) == ["swing"]
+    assert run("bass", {"style": "offbeat"}) is None
+    assert run("bass", {"style": "syncopated", "swing": 0.4}) is None

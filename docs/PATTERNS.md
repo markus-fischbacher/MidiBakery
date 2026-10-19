@@ -121,3 +121,16 @@ Names describe the intended preset character, not a reliable emotion classifier.
 | `melancholic` | Melancholic. 1, 3 and 5 of a minor scale; melancholic progressions love pedal tones, notes that stay through the whole progression and carry a dreaminess; re-voice the chords up high. Progression: `i III v` (minor). |
 | `resolute_major` | Descending roots from a major tonic with borrowed **bVII**, not a purely diatonic major progression. In C: C, **Bb**, Am, G. "Resolute" is the intended preset character, not a guaranteed perception. Progression: `I bVII vi V` (major with borrowed bVII). |
 | `euphoric_neutral` | Degrees 5, 6, 1 and 7 in minor, with triads, raised thirds and a double pedal tone. Its intended euphoric character depends on voicing, sound and performance. Progression: `v VI i VII` (minor). |
+
+## Which controls take effect
+
+Three intentions: **generate** a new idea, **follow** existing clips (`chords_from`, `follow_kick`, `counter_to`), **vary** existing material (transforms). A named `pattern` is a fixed figure: it reads the harmony, meter, bars and `swing`, and ignores the generic style fields. `generate` reports explicitly set fields that were not read as `ignored`; defaults are never listed.
+
+| Kind | With `pattern` | Without `pattern` |
+|---|---|---|
+| `bass` | reads `swing`; ignores `style`, `octave`, `density`, `kick_relation`, `follow_kick` | `offbeat`, `walking` and `sustained` sit on fixed pulses and ignore `swing`; the other styles read it |
+| `chords` | ignores `rhythm`, `low`, `high`, `voices` | all read |
+
+A mood `pattern` supplies its own progression and, unless `chords_per_bar` is given explicitly, its own chord rate, in standalone `generate` as in `compose`. The Max MIDI Tool has no pattern menus. `plan_song` uses genre recipes, not these named patterns; a copied `clips.chords` clip is not read for harmony (see its warning).
+
+The Max MIDI Tool sends the meter when Live's tool context provides one (unverified in real Live; otherwise 4/4) and no Drum Rack pad context (drums use General MIDI pitches). Without a clip scale it uses C major.

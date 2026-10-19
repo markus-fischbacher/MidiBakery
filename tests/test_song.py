@@ -264,6 +264,14 @@ async def test_own_session_clip_for_a_role(client, live):
     assert {c["name"] for c in bass} == {"My Bass"} and len(bass) == 2 * 8 + 2  # 32-bar drops, the outro's first 8 bars, 4-bar loop
 
 
+async def test_copied_chord_clip_warns_that_it_does_not_set_the_harmony(client, live):
+    _studio(live)
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 16, "name": "My Chords"})
+    server = build_server(client)
+    preview = await _plan(server, roles={"chords": 1}, clips=[{"role": "chords", "track": 1, "slot": 0}])
+    assert any("clips.chords is copied as is" in w for w in preview["warnings"])
+
+
 async def test_reused_clip_on_another_track_than_the_role_is_refused(client, live):
     _studio(live)
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 16})
