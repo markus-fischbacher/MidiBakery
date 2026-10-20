@@ -23,6 +23,7 @@ An .amxd file is a small chunk header followed by the patcher JSON.
 from __future__ import annotations
 
 import argparse
+import base64
 import itertools
 import json
 import re
@@ -42,6 +43,15 @@ METER_FILES = ("midibakery-meter.js", "loudness.js")  # the Loudness Meter's nod
 ABOUT_SCRIPT = "midibakery-about.js"  # the About button's version line, for every node.script
 NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES, *METER_FILES, ABOUT_SCRIPT)
 # MidiBakery's one version (midibakery.__version__), read as text: building needs no installed package.
+# What a jweb shows until its node.script sends the real page (the API may still be starting): without a url
+# jweb is white and says "jweb". One symbol, no spaces, so Max keeps it whole.
+LOADING_PAGE = (
+    "<!doctype html><meta charset=utf-8><style>html{height:100%;background:#1e1e1e;color:#8a8a8a;font:13px -apple-system,Helvetica,Arial,sans-serif}"
+    "body{margin:0;height:100%;display:flex;align-items:center;justify-content:center}"
+    "span{animation:p 1.4s ease-in-out infinite}@keyframes p{50%{opacity:.35}}</style><span>Starting MidiBakery...</span>"
+)
+LOADING_URL = "data:text/html;charset=utf-8;base64," + base64.b64encode(LOADING_PAGE.encode()).decode()
+
 VERSION = re.search(r'^__version__ = "([^"]+)"', (HERE.parent / "core/src/midibakery/__init__.py").read_text(encoding="utf-8"), re.M)[1]
 
 # Four-character device type codes, as found in Live's own device templates.
@@ -249,7 +259,7 @@ def chat_device() -> dict[str, Any]:
     route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
     # Same size in patching and presentation: jweb may render at its patching size.
     web_rect = (0, 0, 500, height)
-    web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url="")
+    web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url=LOADING_URL)
     # Live does not pass keystrokes to jweb, so typing happens in a native Max text field.
     # Enter sends "chat_input <words>" to the page (window.max.bindInlet), then clears the field.
     entry = p.box("textedit", (700, 200, 190, 96), inlets=1, outlets=["", "int", "", ""],
@@ -350,7 +360,7 @@ def importer_device() -> dict[str, Any]:
     node = p.obj("node.script midibakery-importer.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=320)
     route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
     web_rect = (0, 0, 500, height)
-    web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url="")
+    web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url=LOADING_URL)
     set_url = p.obj("prepend url", 120, 100)
     p.connect(node, 0, route)
     p.connect(route, 0, set_url)

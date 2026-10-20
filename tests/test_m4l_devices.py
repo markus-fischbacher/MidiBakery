@@ -378,3 +378,15 @@ def test_shown_texts_follow_lives_theme(devices):
                 assert "textcolor" not in box, (name, box["text"])
                 expression = box.get("saved_attribute_attributes", {}).get("textcolor", {}).get("expression")
                 assert expression in (None, "themecolor.live_control_fg"), (name, box["text"])
+
+
+def test_web_devices_show_a_loading_page_until_their_page_is_sent(devices):
+    import base64
+
+    head, data = build.LOADING_URL.split(",", 1)
+    assert head == "data:text/html;charset=utf-8;base64" and " " not in build.LOADING_URL
+    assert "Starting MidiBakery" in base64.b64decode(data).decode()
+    for name in ("MidiBakery Chat", "MidiBakery Set Importer"):
+        _, patcher = build.read_amxd(devices[name])
+        web = next(b for b in _boxes(patcher).values() if b["maxclass"] == "jweb")
+        assert web["url"] == build.LOADING_URL
