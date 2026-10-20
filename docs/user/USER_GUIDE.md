@@ -486,6 +486,7 @@ The **MidiBakery Set Importer** reads Ableton Live Sets (`.als`) from your disk,
 **Songs from imported Sets**
 
 - "Build a song after the Set 'Phantom'": structure and line-up from the Set, and the Set's own loops where it has them.
+- You don't have to name a genre: without one MidiBakery uses the genre you set on the Set in the importer, or guesses one from its tempo and tells you.
 - `loops_from`: take the loops of another Set for a role: "Use Phantom's structure, but the bass loop of Sound as a Pound". Possible roles: drums, bass, lead.
 - `fill_missing`: roles the Set never plays are left out by default. "...and fill in what's missing" adds them from the genre.
 
