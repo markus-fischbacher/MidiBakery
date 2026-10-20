@@ -482,13 +482,13 @@ Der **MidiBakery Set Importer** liest Ableton-Live-Sets (`.als`) von deiner Fest
 **Was ein Import ergibt**
 
 - **Eine Referenz** mit den Abschnitten des Sets (Intro, Build, Drop, Break, Outro), Tempo, Tonart und den Rollen, die in jedem Abschnitt spielen. Sie wirkt wie eine analysierte Referenz: „Bau mir einen House-Song nach der Referenz ‚<Name>‘“ folgt Abschnittsfolge und -längen des Sets **und seiner Besetzung**: Ein Abschnitt ohne Drums bekommt keine Drums, Akkorde, die nie spielen, werden nicht ergänzt.
-- **Loops** (die *my*-Patterns): Bass-, Lead- und Drum-Figuren von 1, 2 oder 4 Takten, die das Set wiederholt. Sie heißen z. B. `my_<set>_bass_1` und funktionieren überall, wo ein eingebauter Patternname funktioniert: „Komponiere einen Bass mit dem Pattern my_soundasapound_bass_1“. Bass-Loops folgen deinen Akkorden und deiner Tonart, Leads sind als Stufen der Set-Tonart gespeichert, Drums als Schläge je Pad. Die Noten des Sets werden nie als Ganzes kopiert, nur Loops, die sich wiederholen.
+- **Loops** (die *my*-Patterns): Bass-, Lead- und Drum-Figuren von 1, 2 oder 4 Takten, die das Set wiederholt, dazu die Akkordfolge seiner Akkordspur (`my_<set>_chords_1`, als römische Stufen der Set-Tonart gespeichert, passt sich also deiner Tonart an; Voicing und Rhythmus bleiben nicht erhalten; als `pattern` der Akkorde verwendbar). Sie heißen z. B. `my_<set>_bass_1` und funktionieren überall, wo ein eingebauter Patternname funktioniert: „Komponiere einen Bass mit dem Pattern my_soundasapound_bass_1“. Bass-Loops folgen deinen Akkorden und deiner Tonart, Leads sind als Stufen der Set-Tonart gespeichert, Drums als Schläge je Pad. Die Noten des Sets werden nie als Ganzes kopiert, nur Loops, die sich wiederholen.
 
 **Songs aus importierten Sets**
 
 - „Bau einen Song nach dem Set ‚Phantom‘“: Aufbau und Besetzung vom Set, dazu die eigenen Loops des Sets, wo es welche hat.
 - Ein Genre musst du nicht nennen: Ohne Angabe nimmt MidiBakery das Genre, das du im Importer am Set gesetzt hast, oder schätzt eines aus dem Tempo und sagt es dir.
-- `loops_from`: Loops eines anderen Sets für eine Rolle nehmen: „Nimm den Aufbau von Phantom, aber den Bass-Loop von Sound as a Pound.“ Mögliche Rollen: drums, bass, lead.
+- `loops_from`: Loops eines anderen Sets für eine Rolle nehmen: „Nimm den Aufbau von Phantom, aber den Bass-Loop von Sound as a Pound.“ Mögliche Rollen: drums, bass, lead, chords. Ohne `loops_from` spielt ein Song nach einem Set dessen Akkordfolge.
 - `fill_missing`: Rollen, die das Set nie spielt, bleiben standardmäßig weg. „… und ergänze, was fehlt“ fügt sie aus dem Genre hinzu.
 
 **Grenzen:** nur 4/4-Sets. Viele Sets spielen Drums als Audio; dann gibt es keine Drum-Loops zu finden. Ein Set, dessen Tonart nicht erkannt wird, liefert Bass-Loops, aber keine Lead-Loops. Die Abschnitte sind eine gute Schätzung aus den Clips, keine gesicherte Tatsache: Prüfe sie in der Library-Ansicht. Loops sind Muster zum Weiterarbeiten, keine Kopie des Originalsongs.

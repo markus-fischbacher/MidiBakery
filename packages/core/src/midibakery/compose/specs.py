@@ -41,8 +41,8 @@ class Spec(BaseModel):
 def _check_mood(spec: Any) -> None:
     if spec.pattern is None:
         return
-    if spec.pattern not in mood_names():
-        raise ValueError(f"unknown chord pattern {spec.pattern!r}; use one of: {', '.join(mood_names())}")
+    if spec.pattern not in mood_names() and spec.pattern not in user_pattern_names("chords"):
+        raise ValueError(f"unknown chord pattern {spec.pattern!r}; use one of: {', '.join(mood_names())}, or a my_* pattern from an imported Set")
     if spec.progression or spec.chords_from is not None:
         raise ValueError("give either pattern or progression/chords_from, not both")
 

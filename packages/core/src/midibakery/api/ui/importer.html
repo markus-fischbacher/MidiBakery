@@ -297,7 +297,8 @@ function loops(item) {
   box.append(el("div", { className: "meta" }, el("b", {}, `${mine.length} loops`), el("span", { className: "dim" }, "for compose pattern=... and plan_song loops_from"), del));
   for (const p of mine) {
     const where = (p.bar_numbers || []).length ? `bar ${p.bar_numbers[0] + 1}` : "";
-    box.append(el("div", { className: "loop", title: p.description || "" }, loopPreview(p),
+    const shape = p.kind === "chords" ? el("div", { className: "name" }, p.progression) : loopPreview(p);
+    box.append(el("div", { className: "loop", title: p.description || "" }, shape,
       el("div", {}, el("div", { className: "name" }, p.name), el("div", { className: "dim" }, `${p.label || p.kind} ${where} x${p.repeats}`))));
   }
   return box;

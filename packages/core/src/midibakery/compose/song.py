@@ -121,7 +121,7 @@ class SongRequest(BaseModel):
     counter: bool = Field(False, description="Also a counter melody: a Counter track answering every lead clip in its rests")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174); with a reference its tempo and key")
     reference: str | None = Field(None, description="Follow the sections of a song from get_reference (part of its name); overrides length")
-    loops_from: dict[Literal["drums", "bass", "lead"], str] = Field(
+    loops_from: dict[Literal["drums", "bass", "lead", "chords"], str] = Field(
         default_factory=dict, description="Take a role's loops from another imported Set (part of its name), e.g. {\"bass\": \"Sound as a Pound\"}")
     fill_missing: bool = Field(False, description="With an imported Set: also play roles the Set lacks, from the genre")
     seed: Annotated[int, Field(ge=0)] | None = None
@@ -715,8 +715,25 @@ def _follow_clip(clip_harmony: Harmony, playing: list[tuple[str, int, int]], met
     return Harmony(tuple(segments), clip_harmony.source, clip_harmony.explicit)
 
 
-def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Random) -> tuple[Harmony, Harmony]:
-    """Main loop and break loop: the request's progression, or two different genre loops."""
+def _chord_loop(reference: dict[str, Any] | None, loops_from: dict[str, str]) -> dict[str, Any] | None:
+    """The chord loop of the Set that sets the structure (or that loops_from names for chords), if it has one."""
+    source = reference
+    if "chords" in loops_from:
+        source = find_reference(loops_from["chords"])
+        if source is None:
+            raise BridgeError("NOT_FOUND", f"loops_from.chords: no imported reference matches '{loops_from['chords']}'; get_reference lists them")
+    if source is None or source.get("bar_grid") != "als":
+        if "chords" in loops_from:
+            raise BridgeError("INVALID_PARAMS", f"loops_from.chords: '{source.get('name') if source else ''}' is not an imported Set")
+        return None
+    entries = [e for e in user_patterns.entries() if e["set"] == source.get("id") and e["kind"] == "chords"]
+    if not entries and "chords" in loops_from:
+        raise BridgeError("INVALID_PARAMS", f"loops_from.chords: '{source.get('name')}' has no chord loop (import it again, or pick another Set)")
+    return entries[0] if entries else None
+
+
+def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Random, chord_loop: dict[str, Any] | None = None) -> tuple[Harmony, Harmony]:
+    """Main loop and break loop: the request's progression, a Set's chord loop, or two different genre loops."""
     pool = list(style.progressions["minor" if _is_minor(scale) else "major"]) if len(scale) == 7 else []
     r.shuffle(pool)
     loops = [harmony_mod.timeline([diatonic_chord(scale, d) for d in degrees], meter, 8, style.chords_per_bar, "progression") for degrees in pool[:2]]
@@ -729,6 +746,10 @@ def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Rando
             loops[0] = replace(harmony_mod.from_progression(request.progression, scale, meter, 8, style.chords_per_bar), explicit=True)
         except ValueError as exc:
             raise BridgeError("INVALID_PARAMS", str(exc)) from None
+    elif chord_loop is not None:
+        mode = Scale(scale.root, (0, 2, 4, 5, 7, 9, 11) if chord_loop.get("scale") == "major" else (0, 2, 3, 5, 7, 8, 10), "")
+        loops[0] = replace(harmony_mod.from_progression(chord_loop["progression"], mode, meter, 8, float(chord_loop.get("chords_per_bar", 1.0))),
+                           explicit=True)
     return loops[0], loops[1]
 
 
@@ -879,7 +900,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     def rng(*key: object) -> random.Random:
         return random.Random(":".join(str(k) for k in (seed, *key)))
 
-    main, alt = _harmonies(request, style, scale, meter, rng("harmony"))
+    main, alt = _harmonies(request, style, scale, meter, rng("harmony"), _chord_loop(reference, request.loops_from))
 
     drum_map = map_pads(None)
     drums = roles.get("drums")

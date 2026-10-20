@@ -130,3 +130,27 @@ def test_api_lists_patterns_and_run_reports_them(home):
     assert client.delete(f"/import/patterns/{set_id}", headers=AUTH).json() == {"deleted": 4}
     assert client.get("/import/patterns", headers=AUTH).json()["patterns"] == []
     assert client.get("/import/library", headers=AUTH).json()["library"][0]["id"] == set_id  # the Set stays imported
+
+
+def _chord_set(path):
+    """Eight bars of Gm, Eb, Bb, F (i VI III VII in G minor), one chord a bar."""
+    chords = [(55, 58, 62), (51, 55, 58), (58, 62, 65), (53, 57, 60)]
+    keys = [keytrack(pitch, *(note(bar * 4, 4) for bar in range(8) if chords[bar % 4][i] == pitch)) for i in range(3) for pitch in {c[i] for c in chords}]
+    return write_set(path, [track("MidiTrack", "Chords", midi_clip(0, 32, keys))])
+
+
+def test_extracts_the_chord_progression_as_roman_numerals(tmp_path):
+    items = {i["name"]: i for i in _extract(_chord_set(tmp_path / "Chord Demo.als"))[1]}
+    chords = items["my_chord_demo_chords_1"]
+    assert chords["progression"] == "i bVI bIII bVII" and chords["chords_per_bar"] == 1.0 and chords["scale"] == "minor"
+    assert "4-bar chords loop" in chords["description"]
+
+
+def test_a_chord_loop_composes_on_any_tonic(home):
+    library.run([str(_chord_set(home / "Chord Demo.als"))])
+    from midibakery.compose import harmony as harmony_mod
+    from midibakery.compose.patterns import mood_harmony
+    harmony = mood_harmony("my_chord_demo_chords_1", Scale(2, (0, 2, 4, 5, 7, 9, 11), "Major"), Meter(4, 4), 4)
+    roots = [s.chord.root for s in harmony.segments]  # the Gm Eb Bb F of the Set, moved with its key onto D
+    assert [(b - a) % 12 for a, b in zip(roots, roots[1:])] == [8, 7, 7] and [s.chord.intervals[1] for s in harmony.segments] == [3, 4, 4, 4]
+    assert harmony_mod and user_pattern_names("chords") == ("my_chord_demo_chords_1",)
