@@ -854,7 +854,11 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         for role in ROLES:  # the Set's own line-up: a role it never plays gets no track
             if role in roles and role not in request.loops_from and not any(s.parts.get(role) not in (None, "-", "") for s in sections):
                 del roles[role]
-                warnings.append(f"The Set plays no {role}: left out (fill_missing=true plays it from the genre)")
+                sets = sorted({e["set_name"] for e in user_patterns.entries() if e["kind"] == role})
+                warnings.append(f"The Set plays no {role}: left out (fill_missing=true plays it from the genre"
+                                + (f"; loops_from={{\"{role}\": \"<Set>\"}} takes the {role} of an imported Set: {', '.join(sets)}" if sets else "") + ")")
+        for offset, track in enumerate(sorted((t for t in roles.values() if t.new), key=lambda t: t.index)):
+            track.index = len(session.tracks) + offset  # a left-out role leaves no gap among the new tracks
     loops = _loops(reference, request.loops_from)
     loop_choice = {(s.name, role): _choose_loop(entries, same, i, reference)
                    for role, (entries, same) in loops.items() for i, s in enumerate(sections)}
