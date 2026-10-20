@@ -125,3 +125,14 @@ def test_genre_is_still_required_without_a_reference():
         SongRequest()
     with pytest.raises(ValueError, match="No analyzed reference"):
         SongRequest(reference="Nothing Like This")
+
+
+def test_a_name_finds_the_song_before_a_folder_of_the_same_name(home):
+    """Live keeps several Sets in one project folder: its name must not pick another Set of it."""
+    folder = home / "Funx Project"
+    folder.mkdir()
+    library.run([str(edm_set(folder / "Funx.als")), str(edm_set(folder / "Other.als"))])
+    from midibakery.compose.references import find_reference
+    assert find_reference("Funx")["name"] == "Funx"  # not the newest Set, "Other", whose path holds "Funx Project"
+    assert find_reference("Other")["name"] == "Other"
+    assert find_reference("Project")["name"] in ("Funx", "Other")  # the folder name still finds a Set
