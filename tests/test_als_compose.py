@@ -169,3 +169,14 @@ async def test_loops_from_chords_takes_the_chords_of_another_set(client, live, h
     assert borrowed.harmony["main"] != plain.harmony["main"] and "chords" in borrowed.roles
     with pytest.raises(ToolError, match="has no chord loop.*Sets with one: Chord Demo"):
         await _plan(build_server(client), reference="Loops Demo", loops_from={"chords": "Loops Demo"})
+
+
+async def test_a_left_out_role_leaves_no_gap_among_the_new_tracks(client, live, home):
+    _studio(live)
+    _import(home)
+    _chord_set(home)
+    plan = await build_song(client.call, SongRequest(genre="house", reference="Loops Demo", seed=7, fx=False, sidechain=True))
+    new = sorted(t.index for t in plan.roles.values() if t.new)
+    assert new and new == list(range(new[0], new[0] + len(new)))
+    assert {a["track"] for a in plan.actions} <= {t.index for t in plan.roles.values()}
+    assert any("loops_from={\"chords\"" in w and "Chord Demo" in w for w in plan.warnings)
