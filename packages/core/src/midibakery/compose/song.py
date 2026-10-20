@@ -56,7 +56,11 @@ from midibakery.compose.rhythm import Meter
 from midibakery.compose.rollback import batch_steps, completed, restore_locators, undo, undo_batch
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
+from midibakery.compose import user_patterns
+from midibakery.compose.bass_templates import generate_bass_template
+from midibakery.compose.lead_templates import generate_lead_template
 from midibakery.compose.references import find_reference, reference_scale
+from midibakery.compose.techno_templates import generate_techno_drums
 from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, from_reference, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
@@ -108,6 +112,9 @@ class SongRequest(BaseModel):
     counter: bool = Field(False, description="Also a counter melody: a Counter track answering every lead clip in its rests")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174); with a reference its tempo and key")
     reference: str | None = Field(None, description="Follow the sections of a song from get_reference (part of its name); overrides length")
+    loops_from: dict[Literal["drums", "bass", "lead"], str] = Field(
+        default_factory=dict, description="Take a role's loops from another imported Set (part of its name), e.g. {\"bass\": \"Sound as a Pound\"}")
+    fill_missing: bool = Field(False, description="With an imported Set: also play roles the Set lacks, from the genre")
     seed: Annotated[int, Field(ge=0)] | None = None
 
 
@@ -697,6 +704,61 @@ def _is_minor(scale: Scale) -> bool:
     return len(scale.intervals) >= 3 and scale.intervals[2] == 3
 
 
+def _loops(reference: dict[str, Any] | None, loops_from: dict[str, str]) -> dict[str, tuple[list[dict[str, Any]], bool]]:
+    """role -> (the imported Set's loops for it, whether they come from the reference that sets the structure)."""
+    out: dict[str, tuple[list[dict[str, Any]], bool]] = {}
+    stored = user_patterns.entries()
+    for role in ("drums", "bass", "lead"):
+        source, same = reference, True
+        if role in loops_from:
+            source = find_reference(loops_from[role])
+            if source is None:
+                raise BridgeError("NOT_FOUND", f"loops_from.{role}: no imported reference matches '{loops_from[role]}'; get_reference lists them")
+            same = reference is not None and source.get("id") == reference.get("id")
+        if source is None or source.get("bar_grid") != "als":
+            if role in loops_from:
+                raise BridgeError("INVALID_PARAMS", f"loops_from.{role}: '{source.get('name') if source else ''}' is not an imported Set")
+            continue
+        entries = [e for e in stored if e["set"] == source.get("id") and e["kind"] == role]
+        if not entries and role in loops_from:
+            raise BridgeError("INVALID_PARAMS", f"loops_from.{role}: '{source.get('name')}' has no {role} loop (import it again, or pick another Set)")
+        if entries:
+            out[role] = (entries, same)
+    return out
+
+
+def _choose_loop(entries: list[dict[str, Any]], same: bool, index: int, whole: dict[str, Any] | None) -> str:
+    """The loop for a section: the one that plays most of the section's own bars in the Set, else the Set's main loop."""
+    if not same or whole is None or index >= len(whole.get("sections", [])):
+        return entries[0]["name"]
+    section = whole["sections"][index]
+    first = int(whole.get("set_first_bar") or 1) - 1 + int(section.get("start_bar") or 1) - 1  # the Set's own 0-based bar
+    covered = lambda e: sum(max(0, min(first + int(section.get("bars") or 0), o + len(e["bars"])) - max(first, o))  # noqa: E731
+                            for o in e.get("occurrences", ()))
+    best = max(entries, key=covered)
+    return (best if covered(best) > 0 else entries[0])["name"]
+
+
+def _loop_notes(role: str, name: str, part: str, section: Section, harmony: Harmony, scale: Scale, meter: Meter, bars: int,
+                drum_map: DrumMap, kick_pitch: int | None) -> list[Note]:
+    """One part of a section from an imported Set's loop: bass and lead follow the song's chords and key."""
+    if role == "drums":
+        notes = generate_techno_drums(user_patterns.load("drums", name), meter, bars, drum_map)  # type: ignore[arg-type]
+        if part == "no_kick":
+            notes = [n for n in notes if n.pitch != kick_pitch]
+        elif part == "kick_only":
+            notes = [n for n in notes if n.pitch == kick_pitch]
+        return _energize(notes, section.energy, 0.9)
+    if role == "bass":
+        parts = generate_bass_template(user_patterns.load("bass", name), harmony, meter, bars)  # type: ignore[arg-type]
+        return _energize([n for notes in parts.values() for n in notes], section.energy)
+    parts = generate_lead_template(user_patterns.load("lead", name), harmony, scale, meter, bars)  # type: ignore[arg-type]
+    notes = [n for notes in parts.values() for n in notes]
+    if part in ("tease", "sparse"):
+        notes = [replace(n, velocity=max(1.0, n.velocity - 28)) for n in notes]
+    return notes
+
+
 async def build_song(call: Call, request: SongRequest) -> SongPlan:
     session, arrangement, mixer = await asyncio.gather(Session(call).load(), call("arrangement.get", {}), call("mixer.get", {}))
     template = TEMPLATES[request.genre]
@@ -724,12 +786,21 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         tempo = new_tempo
     if reference is not None:
         _check_unwarped(reference, tempo)
-        sections = from_reference(template, reference["sections"])
+        sections = from_reference(template, reference["sections"], reference.get("bar_grid") == "als", request.fill_missing,
+                                  frozenset(GROOVES[request.genre].parts))
     else:
         sections = sized(template, request.length, request.minutes, bpb, tempo)
     seed = request.seed if request.seed is not None else new_seed()
 
     roles, warnings = _assign_roles(session, request)
+    if reference is not None and reference.get("bar_grid") == "als" and not request.fill_missing:
+        for role in ROLES:  # the Set's own line-up: a role it never plays gets no track
+            if role in roles and not any(s.parts.get(role) not in (None, "-", "") for s in sections):
+                del roles[role]
+                warnings.append(f"The Set plays no {role}: left out (fill_missing=true plays it from the genre)")
+    loops = _loops(reference, request.loops_from)
+    loop_choice = {(s.name, role): _choose_loop(entries, same, i, reference)
+                   for role, (entries, same) in loops.items() for i, s in enumerate(sections)}
     if reference is not None and request.minutes is not None:
         warnings.append("minutes ignored: the reference sets the song's length")
     if reference is not None and reference.get("bar_grid") == "song":
@@ -877,6 +948,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
 
     def part_notes(role: str, part: str, section: Section, harmony: Harmony, bars: int, offset_bars: int) -> list[Note]:
         r = rng(section.kind, section.variation, role, part, bars, offset_bars)
+        loop = loop_choice.get((section.name, role))
+        if loop is not None and part != "rumble":
+            return _loop_notes(role, loop, part, section, harmony, scale, meter, bars, drum_map, kick_pitch)
         if role == "drums":
             return generate_groove(
                 groove, part, meter, bars, r, drum_map, section.energy,
@@ -959,7 +1033,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                     if message not in warnings:
                         warnings.append(message)
                 continue
-            cache_key = (section.kind, section.variation, section.bars, role, spec, section.pause_every)
+            cache_key = (section.kind, section.variation, section.bars, role, spec, section.pause_every, loop_choice.get((section.name, role)))
             if cache_key not in cache:
                 notes: list[Note] = []
                 for part, offset, bars in playing:

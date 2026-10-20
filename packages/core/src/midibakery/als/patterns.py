@@ -46,18 +46,18 @@ def _signature(bar: list[RawNote] | None, with_pitch: bool) -> tuple:
     return tuple((s, p) if with_pitch else (s,) for s, _, p, _ in (bar or ()))
 
 
-def figures(by_bar: dict[int, list[RawNote]], with_pitch: bool = True) -> list[tuple[int, list[int], int]]:
-    """(window size, the bars of its first sounding occurrence, how often it repeats), best first.
+def figures(by_bar: dict[int, list[RawNote]], with_pitch: bool = True) -> list[tuple[int, list[int], int, list[int]]]:
+    """(window size, the bars of its first occurrence, how often it repeats, the first bar of each occurrence), best first.
 
     Windows are aligned to the first sounding bar. A window that is a shorter figure played twice is not also listed as the longer one.
     """
     if not by_bar:
         return []
     first, last = min(by_bar), max(by_bar)
-    found: dict[tuple, tuple[int, list[int], int]] = {}
+    found: dict[tuple, tuple[int, list[int], int, list[int]]] = {}
     for size in SIZES:
         counts: Counter = Counter()
-        origin: dict[tuple, int] = {}
+        origin: dict[tuple, list[int]] = {}
         for start in range(first, last + 1, size):
             window = [_signature(by_bar.get(b), with_pitch) for b in range(start, start + size)]
             if sum(1 for w in window if w) * 2 < size or not any(window):
@@ -66,25 +66,25 @@ def figures(by_bar: dict[int, list[RawNote]], with_pitch: bool = True) -> list[t
                 continue
             key = tuple(window)
             counts[key] += 1
-            origin.setdefault(key, start)
+            origin.setdefault(key, []).append(start)
         for key, count in counts.items():
             if count >= 2:
-                found[key] = (size, list(range(origin[key], origin[key] + size)), count)
+                found[key] = (size, list(range(origin[key][0], origin[key][0] + size)), count, origin[key])
     return sorted(found.values(), key=lambda f: (-f[0] * f[2], f[0]))
 
 
-def _pick(by_bar: dict[int, list[RawNote]], with_pitch: bool = True) -> list[tuple[list[int], int]]:
-    """The best figures (their bars and repeat count), without two that are the same notes."""
-    chosen: list[tuple[list[int], int]] = []
+def _pick(by_bar: dict[int, list[RawNote]], with_pitch: bool = True) -> list[tuple[list[int], int, list[int]]]:
+    """The best figures (their bars, repeat count and occurrences), without two that are the same notes."""
+    chosen: list[tuple[list[int], int, list[int]]] = []
     seen: set[tuple] = set()
     seen_bars: set[tuple] = set()
-    for size, bars, count in figures(by_bar, with_pitch):
+    for size, bars, count, starts in figures(by_bar, with_pitch):
         key = tuple(_signature(by_bar.get(b), True) for b in bars)
         if key in seen or all(bar in seen_bars for bar in key) and chosen:  # the same, or a piece of a longer one
             continue
         seen.add(key)
         seen_bars.update(key)
-        chosen.append((bars, count))
+        chosen.append((bars, count, starts))
     return chosen
 
 
@@ -112,10 +112,10 @@ def drums(song: Song, roles: dict[int, str]) -> list[dict[str, Any]]:
     for bar, notes in _bars([(t, d, roles_seen[r], v) for t, d, r, v in hits], song.beats_per_bar).items():
         by_bar[bar] = notes  # the "pitch" slot carries the role index
     out = []
-    for bars, count in _pick(by_bar)[:PER_FAMILY]:
+    for bars, count, starts in _pick(by_bar)[:PER_FAMILY]:
         out.append({"kind": "drums", "bars": [[{"role": names[p], "step": s, "velocity": v, "length": min(l, 0.5)}
                                                for s, l, p, v in by_bar.get(b, [])] for b in bars],
-                    "bar_numbers": bars, "repeats": count, "track": "drums"})
+                    "bar_numbers": bars, "repeats": count, "occurrences": starts, "track": "drums"})
     return out
 
 
@@ -133,14 +133,14 @@ def bass(song: Song, roles: dict[int, str]) -> list[dict[str, Any]]:
         if roles.get(track.index) != "bass":
             continue
         by_bar = _bars(_track_notes(track), song.beats_per_bar)
-        for bars, count in _pick(by_bar):
+        for bars, count, starts in _pick(by_bar):
             window = [n for b in bars for n in by_bar.get(b, [])]
             root = _root(window)
             low = min(p for _, _, p, _ in window)
             base = low - (low - root) % 12
             found.append({"kind": "bass", "bars": [[{"step": s, "length": l, "interval": p - base, "velocity": v}
                                                     for s, l, p, v in by_bar.get(b, [])] for b in bars],
-                          "low": base, "bar_numbers": bars, "repeats": count, "track": track.name, "_score": len(bars) * count})
+                          "low": base, "bar_numbers": bars, "repeats": count, "occurrences": starts, "track": track.name, "_score": len(bars) * count})
     return _top(found)
 
 
@@ -154,7 +154,7 @@ def lead(song: Song, roles: dict[int, str], key: str) -> list[dict[str, Any]]:
         if roles.get(track.index) != "lead":
             continue
         by_bar = _bars(_track_notes(track), song.beats_per_bar)
-        for bars, count in _pick(by_bar):
+        for bars, count, starts in _pick(by_bar):
             window = [n for b in bars for n in by_bar.get(b, [])]
             degrees = {}
             for _, _, p, _ in window:
@@ -162,7 +162,7 @@ def lead(song: Song, roles: dict[int, str], key: str) -> list[dict[str, Any]]:
                 degrees[p] = octaves * 7 + intervals.index(pc) if pc in intervals else None
             if sum(1 for _, _, p, _ in window if degrees[p] is None) > OFF_SCALE * len(window):
                 continue
-            found.append({"kind": "lead", "scale": parts[1], "bar_numbers": bars, "repeats": count, "track": track.name,
+            found.append({"kind": "lead", "scale": parts[1], "bar_numbers": bars, "repeats": count, "occurrences": starts, "track": track.name,
                           "bars": [[{"step": s, "length": l, "degree": degrees[p], "velocity": v}
                                     for s, l, p, v in by_bar.get(b, []) if degrees[p] is not None] for b in bars],
                           "_score": len(bars) * count})
