@@ -400,3 +400,33 @@ def test_song_plan_reaches_the_page_and_its_apply_button_writes_it(app_factory, 
         assert not next(e for e in events if e["type"] == "tool_result")["is_error"]
     page = api.get("/ui").text
     assert 'if (ev.name === "plan_song"' in page and "function showSong(song)" in page
+
+
+def test_api_info_appears_only_once_the_server_answers(tmp_path):
+    """The devices open their page as soon as api.json exists: it must not name a server that is still starting."""
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+    import urllib.request
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    env = {**os.environ, "MIDIBAKERY_HOME": str(tmp_path), "MIDIBAKERY_PORT": "0", "MIDIBAKERY_NO_UPDATE_CHECK": "1"}
+    server = subprocess.Popen([sys.executable, "-m", "midibakery.cli", "api", "--provider", "anthropic", "--port", str(port)],
+                              env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        info = tmp_path / "api.json"
+        deadline = time.time() + 30
+        while not info.exists() and time.time() < deadline and server.poll() is None:
+            time.sleep(0.02)
+        assert info.exists()
+        token = json.loads(info.read_text())["token"]
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/health", headers={"Authorization": f"Bearer {token}"})
+        with urllib.request.urlopen(request, timeout=3) as response:  # the first request after the file appeared
+            assert json.loads(response.read())["ok"] is True
+    finally:
+        server.terminate()
+        server.wait(timeout=10)

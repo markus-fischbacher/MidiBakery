@@ -57,6 +57,7 @@ let api = null; // {port, token}
 // the page reports back ("loaded", via window.max in jweb).
 let pageLoaded = false;
 let loadAttempts = 0;
+let waiting = false; // the API did not answer yet: "Starting..." is on the status line
 
 function readApi() {
   try {
@@ -84,8 +85,9 @@ async function refresh() {
     await Max.outlet("status", "MidiBakery API not running - start it with: midibakery api");
     return;
   }
-  await Max.outlet("status", `MidiBakery API on port ${api.port}`);
+  if (!PAGE) await Max.outlet("status", `MidiBakery API on port ${api.port}`);
   if (PAGE) {
+    waiting = false;
     pageLoaded = false;
     loadAttempts = 0;
     await loadPage();
@@ -93,6 +95,20 @@ async function refresh() {
 }
 
 const MAX_LOAD_ATTEMPTS = 5;
+
+// api.json can be left from an API that is gone, or name one that is still starting: jweb would show
+// "page can't be reached" for that moment. Only a page of an API that answers is sent.
+async function answers() {
+  try {
+    const response = await fetch(`http://127.0.0.1:${api.port}/health`, {
+      headers: { authorization: `Bearer ${api.token}` },
+      signal: AbortSignal.timeout(1500),
+    });
+    return response.ok;
+  } catch (_) {
+    return false;
+  }
+}
 
 async function loadPage() {
   if (!PAGE || !api || pageLoaded) return;
@@ -103,6 +119,12 @@ async function loadPage() {
     }
     return;
   }
+  if (!(await answers())) {
+    if (!waiting) await Max.outlet("status", "Starting MidiBakery API...");
+    waiting = true;
+    return;
+  }
+  waiting = false;
   loadAttempts += 1;
   if (loadAttempts > 1) await Max.outlet("status", `Loading page (attempt ${loadAttempts})...`);
   log("send url", chatUrl(), "attempt", loadAttempts);

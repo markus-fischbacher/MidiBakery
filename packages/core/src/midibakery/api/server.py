@@ -434,12 +434,19 @@ def serve(provider_factory: ProviderFactory, port: int = 8766) -> None:
     token = secrets.token_urlsafe(32)
     bridge = BridgeClient()
     app = build_app(bridge, provider_factory, token)
-    path = write_api_info(port, token)
+    path = api_info_path()
     # api.log is where a chat goes wrong is read afterwards: when, and which tool call
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", force=True)
-    print(f"MidiBakery API on http://127.0.0.1:{port} (token in {path})", flush=True)
+
+    class Announcing(uvicorn.Server):
+        async def startup(self, sockets: list[socket.socket] | None = None) -> None:
+            await super().startup(sockets)
+            if self.started:  # the devices find the API through this file: only once it answers, or their page cannot be reached
+                write_api_info(port, token)
+                print(f"MidiBakery API on http://127.0.0.1:{port} (token in {path})", flush=True)
+
     try:
-        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+        Announcing(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")).run()
     finally:
         try:
             if json.loads(path.read_text()).get("token") == token:
