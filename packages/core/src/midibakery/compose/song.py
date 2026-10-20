@@ -90,6 +90,14 @@ class UseClip(BaseModel):
     track: Annotated[int, Field(ge=0)]
     slot: Annotated[int, Field(ge=0)]
 
+    @model_validator(mode="before")
+    @classmethod
+    def _slot_is_an_index(cls, data):
+        if isinstance(data, dict) and isinstance(data.get("slot"), str) and not data["slot"].strip().isdigit():
+            raise ValueError(f"clips.slot must be a clip slot index of a Session track, not the name {data['slot']!r}. "
+                             "To use the loops of an imported Set, give loops_from (e.g. {\"bass\": \"<Set name>\"}) instead of clips")
+        return data
+
 
 class SongRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
