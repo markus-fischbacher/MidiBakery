@@ -167,5 +167,5 @@ async def test_loops_from_chords_takes_the_chords_of_another_set(client, live, h
     borrowed = await build_song(client.call, SongRequest(genre="house", reference="Loops Demo", loops_from={"chords": "Chord Demo"}, seed=7,
                                                          fx=False, sidechain=False))
     assert borrowed.harmony["main"] != plain.harmony["main"] and "chords" in borrowed.roles
-    with pytest.raises(ToolError, match="has no chord loop"):
+    with pytest.raises(ToolError, match="has no chord loop.*Sets with one: Chord Demo"):
         await _plan(build_server(client), reference="Loops Demo", loops_from={"chords": "Loops Demo"})

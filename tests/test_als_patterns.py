@@ -162,3 +162,11 @@ def test_api_lists_the_progression_of_a_chord_loop(home):
     client.post("/import/run", json={"files": [str(_chord_set(home / "Chord Demo.als"))]}, headers=AUTH)
     chords = [p for p in client.get("/import/patterns", headers=AUTH).json()["patterns"] if p["kind"] == "chords"]
     assert len(chords) == 1 and len(chords[0]["progression"].split()) == 4 and chords[0]["chords_per_bar"] == 1.0
+
+
+def test_a_chord_loop_keeps_its_own_key_when_the_sets_key_is_wrong(tmp_path):
+    path = _chord_set(tmp_path / "Chord Demo.als")
+    song = read(path)
+    items = patterns.extract(song, roles.assign(song), "C# major", "als-000000000001")  # the Gm Eb Bb F loop is nowhere near C# major
+    chords = [i for i in items if i["kind"] == "chords"]
+    assert chords and chords[0]["progression"] == "i bVI bIII bVII" and chords[0]["scale"] == "minor"

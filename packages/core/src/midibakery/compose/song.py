@@ -728,7 +728,9 @@ def _chord_loop(reference: dict[str, Any] | None, loops_from: dict[str, str]) ->
         return None
     entries = [e for e in user_patterns.entries() if e["set"] == source.get("id") and e["kind"] == "chords"]
     if not entries and "chords" in loops_from:
-        raise BridgeError("INVALID_PARAMS", f"loops_from.chords: '{source.get('name')}' has no chord loop (import it again, or pick another Set)")
+        others = sorted({e["set_name"] for e in user_patterns.entries() if e["kind"] == "chords"})
+        raise BridgeError("INVALID_PARAMS", f"loops_from.chords: '{source.get('name')}' has no chord loop (import it again"
+                          + (f"; Sets with one: {', '.join(others)}" if others else ", or pick another Set") + ")")
     return entries[0] if entries else None
 
 
