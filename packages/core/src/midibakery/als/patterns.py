@@ -199,13 +199,34 @@ def _bar_chords(notes: list[RawNote], scale: Scale) -> list[Any]:
     return out
 
 
+def _own_key(codes: list[int], preferred: tuple[int, str] | None) -> tuple[int, str] | None:
+    """The key a chord loop is written in: the Set's own key when the chords fit it, else the key they fit best.
+
+    The Set's detected key can be wrong for a chord part (extended pad chords), so the loop is not dropped for that:
+    among the 24 keys that hold at least 3/4 of the chord roots, the one with most chords on its tonic wins (then the one the loop starts on).
+    """
+    roots = [code // 16 for code in codes]
+    shapes = [CLIP_SHAPES[code % 16] for code in codes]
+
+    def fits(tonic: int, mode: str) -> bool:
+        scale = Scale(tonic, MAJOR if mode == "major" else MINOR, "")
+        return sum(1 for r in roots if scale.degree_of(r + 120) is None) < OFF_CHORDS * len(roots)
+
+    if preferred is not None and fits(*preferred):
+        return preferred
+    options = [(t, m) for t in range(12) for m in ("minor", "major") if fits(t, m)]
+    if not options:
+        return None
+    on_tonic = lambda o: sum(1 for r, sh in zip(roots, shapes) if r == o[0] and (sh[1] == 3) == (o[1] == "minor"))  # noqa: E731
+    first = lambda o: roots[0] == o[0] and (shapes[0][1] == 3) == (o[1] == "minor")  # noqa: E731
+    return max(options, key=lambda o: (on_tonic(o), first(o)))
+
+
 def chords(song: Song, roles: dict[int, str], key: str) -> list[dict[str, Any]]:
-    """The chord progression a chord track loops: roman numerals in the Set's key, one or two chords per bar."""
+    """The chord progression a chord track loops: roman numerals of its key, one or two chords per bar."""
     parts = key.rstrip("?").split()
-    if len(parts) != 2 or parts[0] not in NOTE_NAMES or parts[1] not in ("major", "minor"):
-        return []
-    tonic = NOTE_NAMES.index(parts[0])
-    scale = Scale(tonic, MAJOR if parts[1] == "major" else MINOR, parts[1].capitalize())
+    preferred = (NOTE_NAMES.index(parts[0]), parts[1]) if len(parts) == 2 and parts[0] in NOTE_NAMES and parts[1] in ("major", "minor") else None
+    scale = Scale(preferred[0] if preferred else 0, MAJOR if preferred and preferred[1] == "major" else MINOR, "")
     found = []
     for track in song.tracks:
         if roles.get(track.index) != "chords":
@@ -226,16 +247,15 @@ def chords(song: Song, roles: dict[int, str], key: str) -> list[dict[str, Any]]:
             filled = [b for b in bars if len(coded.get(b, ())) == (2 if twice else 1)]
             if len(filled) < CHORD_BARS_MIN * len(bars):
                 continue
-            symbols = []
-            for b in bars:
-                for _, _, code, _ in coded.get(b, []):
-                    symbols.append(roman(code // 16, CLIP_SHAPES[code % 16], tonic))
-            if len(set(symbols)) < 2:  # one chord held is no progression
+            codes = [code for b in bars for _, _, code, _ in coded.get(b, [])]
+            if len(set(codes)) < 2:  # one chord held is no progression
                 continue
-            roots = [code // 16 for b in bars for _, _, code, _ in coded.get(b, [])]
-            if sum(1 for r in roots if scale.degree_of(r + 120) is None) >= OFF_CHORDS * len(roots):  # a misread, not a progression
+            own = _own_key(codes, preferred)
+            if own is None:  # chords that fit no key: a misread, not a progression
                 continue
-            found.append({"kind": "chords", "progression": " ".join(symbols), "chords_per_bar": 2.0 if twice else 1.0, "scale": parts[1],
+            tonic, mode = own
+            symbols = [roman(code // 16, CLIP_SHAPES[code % 16], tonic) for code in codes]
+            found.append({"kind": "chords", "progression": " ".join(symbols), "chords_per_bar": 2.0 if twice else 1.0, "scale": mode,
                           "bars": [[] for _ in bars], "bar_numbers": bars, "repeats": count, "occurrences": starts, "track": track.name,
                           "_score": len(bars) * count})
     return _top(found)
