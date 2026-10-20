@@ -125,3 +125,8 @@ def test_api_lists_patterns_and_run_reports_them(home):
     listed = client.get("/import/patterns", headers=AUTH).json()["patterns"]
     assert {p["kind"] for p in listed} == {"bass", "lead", "drums"} and listed[0]["set_name"] == "Loops Demo"
     assert client.get("/import/patterns").status_code == 401
+    set_id = ran["imported"][0]["id"]
+    assert client.delete(f"/import/patterns/{set_id}").status_code == 401
+    assert client.delete(f"/import/patterns/{set_id}", headers=AUTH).json() == {"deleted": 4}
+    assert client.get("/import/patterns", headers=AUTH).json()["patterns"] == []
+    assert client.get("/import/library", headers=AUTH).json()["library"][0]["id"] == set_id  # the Set stays imported
