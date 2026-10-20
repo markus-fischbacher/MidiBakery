@@ -786,8 +786,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         tempo = new_tempo
     if reference is not None:
         _check_unwarped(reference, tempo)
-        sections = from_reference(template, reference["sections"], reference.get("bar_grid") == "als", request.fill_missing,
-                                  frozenset(GROOVES[request.genre].parts))
+        sections = from_reference(template, reference["sections"], reference.get("bar_grid") == "als",
+                                  True if request.fill_missing else frozenset(request.loops_from), frozenset(GROOVES[request.genre].parts))
     else:
         sections = sized(template, request.length, request.minutes, bpb, tempo)
     seed = request.seed if request.seed is not None else new_seed()
@@ -795,7 +795,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     roles, warnings = _assign_roles(session, request)
     if reference is not None and reference.get("bar_grid") == "als" and not request.fill_missing:
         for role in ROLES:  # the Set's own line-up: a role it never plays gets no track
-            if role in roles and not any(s.parts.get(role) not in (None, "-", "") for s in sections):
+            if role in roles and role not in request.loops_from and not any(s.parts.get(role) not in (None, "-", "") for s in sections):
                 del roles[role]
                 warnings.append(f"The Set plays no {role}: left out (fill_missing=true plays it from the genre)")
     loops = _loops(reference, request.loops_from)

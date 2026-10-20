@@ -96,3 +96,14 @@ def test_a_bare_kick_or_no_kick_follows_the_set():
     out = from_reference(template, refs, True, False, frozenset(GROOVES["house"].parts))
     assert out[0].parts["drums"] == "kick_hats" and "lead" not in out[0].parts and out[0].parts["bass"]
     assert out[1].parts["drums"] == "no_kick" and "bass" not in out[1].parts and out[1].parts["lead"]
+
+
+async def test_loops_from_plays_a_role_the_structure_set_lacks(client, live, home):
+    _studio(live)
+    _import(home)
+    chordless = write_set(home / "Kicks.als", [track("MidiTrack", "Kick", four_on_the_floor(16))])
+    library.run([str(chordless)])
+    plan = await build_song(client.call, SongRequest(genre="house", reference="Kicks", loops_from={"bass": "Loops Demo"}, seed=7,
+                                                     fx=False, sidechain=False))
+    assert "bass" in plan.roles and _clips(plan, "bass")
+    assert "lead" not in plan.roles  # still the Set's own line-up for the rest

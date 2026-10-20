@@ -320,18 +320,18 @@ def bar_grid(template: Template) -> int:
     return next(g for g in (16, 8, 4) if all(s.bars % g == 0 for s in template.sections)) if template.sections else 4
 
 
-def _follow_elements(section: Section, elements: list[str], never: set[str], fill_missing: bool, drum_parts: frozenset[str]) -> Section:
+def _follow_elements(section: Section, elements: list[str], never: set[str], fill: frozenset[str], drum_parts: frozenset[str]) -> Section:
     """The roles an imported Set plays in this section decide which of the genre's parts sound. A role the Set
-    plays nowhere is silent too, unless ``fill_missing`` keeps the genre's part."""
+    plays nowhere is silent too, unless it is in ``fill`` (``fill_missing``, or loops taken from another Set): the genre's part stays."""
     parts = dict(section.parts)
     for role in ("bass", "chords", "lead"):
         if role in elements:
             parts.setdefault(role, "on")
-        elif role not in never or not fill_missing:
+        elif role not in never or role not in fill:
             parts.pop(role, None)
     kick, drums = "kick" in elements, "drums" in elements
     if not kick and not drums:
-        if "drums" not in never or not fill_missing:
+        if "drums" not in never or "drums" not in fill:
             parts.pop("drums", None)
     elif "drums" not in parts or parts["drums"] in ("-", ""):
         parts["drums"] = "full" if kick and drums else ("kick_hats" if kick else "no_kick")
@@ -341,7 +341,7 @@ def _follow_elements(section: Section, elements: list[str], never: set[str], fil
     return replace(section, parts=parts)
 
 
-def from_reference(template: Template, sections: list[dict], follow_set: bool = False, fill_missing: bool = False,
+def from_reference(template: Template, sections: list[dict], follow_set: bool = False, fill_missing: bool | frozenset[str] = False,
                    drum_parts: frozenset[str] = frozenset()) -> tuple[Section, ...]:
     """A reference song's sections (name, kind, bars) with the template's parts: the n-th drop of the
     reference plays the template's n-th drop (its last one when it has fewer). Section borders
@@ -349,6 +349,7 @@ def from_reference(template: Template, sections: list[dict], follow_set: bool = 
     imported Set) the roles it plays in each section decide which of the template's parts sound."""
     grid = bar_grid(template)
     never = {"bass", "chords", "lead", "drums"}
+    fill = frozenset(never) if fill_missing is True else frozenset(fill_missing or ())
     for ref in sections:
         elements = ref.get("elements") or []
         never -= set(elements) | ({"drums"} if "kick" in elements else set())
@@ -372,6 +373,6 @@ def from_reference(template: Template, sections: list[dict], follow_set: bool = 
             name = f"{name} {i + 1}"
         resized = replace(_resize(source, bars), name=name)
         if follow_set and isinstance(ref.get("elements"), list):
-            resized = _follow_elements(resized, ref["elements"], never, fill_missing, drum_parts)
+            resized = _follow_elements(resized, ref["elements"], never, fill, drum_parts)
         out.append(resized)
     return tuple(out)
