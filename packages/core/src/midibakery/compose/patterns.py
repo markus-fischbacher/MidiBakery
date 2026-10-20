@@ -11,7 +11,7 @@ from __future__ import annotations
 from midibakery.compose import harmony as harmony_mod
 from midibakery.compose import user_patterns
 from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, describe_template
-from midibakery.compose.chord_templates import CHORD_TEMPLATES, ChordTemplate, describe_chords, template_scale
+from midibakery.compose.chord_templates import CHORD_TEMPLATES, MAJOR, MINOR, ChordTemplate, describe_chords, template_scale
 from midibakery.compose.lead_templates import LEADS, LeadTemplate, describe_lead
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.techno_templates import TECHNO, TECHNO_LEADS, TechnoPattern, describe_techno
@@ -61,8 +61,17 @@ def mood_template(name: str) -> ChordTemplate:
     return CHORD_TEMPLATES[name]
 
 
+def user_harmony(name: str, tonic: Scale, meter: Meter, bars: int, chords_per_bar: float | None = None) -> harmony_mod.Harmony:
+    """The chords of an imported Set's loop, in the mode it was played in, on the song's tonic."""
+    progression, rate, mode = user_patterns.chords(name)
+    scale = Scale(tonic.root, MAJOR if mode == "major" else MINOR, mode.capitalize())
+    return harmony_mod.from_progression(progression, scale, meter, bars, rate if chords_per_bar is None else chords_per_bar)
+
+
 def mood_harmony(name: str, tonic: Scale, meter: Meter, bars: int, chords_per_bar: float | None = None) -> harmony_mod.Harmony:
     """The progression of a named mood pattern in its own mode on the tonic; its own chord rate unless one is given."""
+    if name not in CHORD_TEMPLATES:
+        return user_harmony(name, tonic, meter, bars, chords_per_bar)
     template = mood_template(name)
     rate = template.chords_per_bar if chords_per_bar is None else chords_per_bar
     return harmony_mod.from_progression(template.progression, template_scale(template, tonic), meter, bars, rate)

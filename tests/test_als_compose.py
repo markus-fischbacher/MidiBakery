@@ -141,3 +141,31 @@ def test_a_name_finds_the_song_before_a_folder_of_the_same_name(home):
 def test_a_clip_slot_given_as_a_name_points_to_loops_from():
     with pytest.raises(ValueError, match="loops_from"):
         SongRequest(genre="house", clips=[{"role": "bass", "track": 1, "slot": "Sound as a Pound"}])
+
+
+def _chord_set(home):
+    """A kick and eight bars of Gm, Eb, Bb, F, one chord a bar."""
+    chords = [(55, 58, 62), (51, 55, 58), (58, 62, 65), (53, 57, 60)]
+    keys = [keytrack(pitch, *(note(bar * 4, 4) for bar in range(16) if pitch in chords[bar % 4])) for pitch in sorted({p for c in chords for p in c})]
+    path = write_set(home / "Chord Demo.als", [track("MidiTrack", "Kick", four_on_the_floor(16)), track("MidiTrack", "Chords", midi_clip(0, 64, keys), id_=2)])
+    library.run([str(path)])
+
+
+async def test_the_sets_chord_loop_sets_the_harmony(client, live, home):
+    _studio(live)
+    _chord_set(home)
+    plan = await build_song(client.call, SongRequest(genre="house", reference="Chord Demo", seed=7, fx=False, sidechain=False))
+    main = plan.harmony["main"][:4]
+    assert [s.split()[0] for s in main] == ["Am", "F", "C", "G"]  # the Set's Gm Eb Bb F, moved with its key (Bb major) onto the song's C
+
+
+async def test_loops_from_chords_takes_the_chords_of_another_set(client, live, home):
+    _studio(live)
+    _import(home)
+    _chord_set(home)
+    plain = await build_song(client.call, SongRequest(genre="house", reference="Loops Demo", seed=7, fx=False, sidechain=False))
+    borrowed = await build_song(client.call, SongRequest(genre="house", reference="Loops Demo", loops_from={"chords": "Chord Demo"}, seed=7,
+                                                         fx=False, sidechain=False))
+    assert borrowed.harmony["main"] != plain.harmony["main"] and "chords" in borrowed.roles
+    with pytest.raises(ToolError, match="has no chord loop"):
+        await _plan(build_server(client), reference="Loops Demo", loops_from={"chords": "Loops Demo"})

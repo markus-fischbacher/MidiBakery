@@ -15,7 +15,7 @@ from midibakery.compose.bass_templates import generate_bass_template
 from midibakery.compose.chord_templates import generate_chord_template
 from midibakery.compose.lead_templates import generate_lead_template
 from midibakery.compose.notes import Note, dedupe
-from midibakery.compose.patterns import bass_template, drum_pattern, lead_template, mood_template
+from midibakery.compose.patterns import bass_template, drum_pattern, lead_template, mood_names, mood_template
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.specs import SWING_UNITS, BassSpec, ChordsSpec, DrumsSpec, Generate, MelodySpec
 from midibakery.compose.techno_templates import generate_techno_drums
@@ -53,7 +53,7 @@ def generate_part(
             density=spec.density, swing=spec.swing, swing_unit=unit,
         )
     if isinstance(spec, ChordsSpec):
-        if spec.pattern:
+        if spec.pattern and spec.pattern in mood_names():
             parts = generate_chord_template(mood_template(spec.pattern), scale, harmony, meter, bars)
             return dedupe([n for notes in parts.values() for n in notes])
         return generate_chords(harmony, meter, bars, spec.rhythm, rng, spec.low, spec.high, spec.voices, swing=spec.swing, swing_unit=unit)

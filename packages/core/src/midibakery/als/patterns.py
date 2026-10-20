@@ -1,8 +1,9 @@
-"""Loops of a Set as MidiBakery patterns: the drum, bass and lead figures that repeat.
+"""Loops of a Set as MidiBakery patterns: the drum, bass, lead and chord figures that repeat.
 
 A track's notes are cut into bars on the 16th grid; the longest repeating 1, 2 or 4 bar figure that covers the most
 bars is a pattern. Bass is stored as intervals above its own root (so it follows the chords when composed), a lead as
-scale degrees of the Set's key, drums as hits per role (pad names decide the role). Only 4/4 Sets, and a figure must
+scale degrees of the Set's key, drums as hits per role (pad names decide the role), chords as a progression of
+roman numerals in the Set's key (the voicing and rhythm are not kept). Only 4/4 Sets, and a figure must
 repeat: a part that never repeats is not a loop. What it came from (Set, track, bars) goes in the description.
 """
 
@@ -14,7 +15,8 @@ from typing import Any
 from midibakery.als.reader import Song, Track
 from midibakery.compose import user_patterns
 from midibakery.compose.drums import classify_pad
-from midibakery.compose.theory import NOTE_NAMES
+from midibakery.compose.harmony import CLIP_SHAPES, _clip_chord
+from midibakery.compose.theory import NOTE_NAMES, Scale
 
 PER_FAMILY = 2
 SIZES = (1, 2, 4)
@@ -169,11 +171,81 @@ def lead(song: Song, roles: dict[int, str], key: str) -> list[dict[str, Any]]:
     return _top(found)
 
 
+# A chord's root as an offset above the key's tonic, written like parse_chord reads it (accidentals against the major scale).
+NUMERALS = ("I", "bII", "II", "bIII", "III", "IV", "bV", "V", "bVI", "VI", "bVII", "VII")
+SUFFIXES = {(0, 4, 7): "", (0, 3, 7): "", (0, 3, 6): "°", (0, 4, 8): "+", (0, 4, 7, 10): "7", (0, 3, 7, 10): "7", (0, 4, 7, 11): "maj7"}
+OFF_CHORDS = 0.25  # a progression with this share of chord roots outside its key is dropped
+CHORD_BARS_MIN = 0.75  # share of a figure's bars with a clear chord
+
+
+def roman(root: int, shape: tuple[int, ...], tonic: int) -> str:
+    numeral = NUMERALS[(root - tonic) % 12]
+    return (numeral.lower() if shape[1] == 3 else numeral) + SUFFIXES[shape]
+
+
+def _bar_chords(notes: list[RawNote], scale: Scale) -> list[Any]:
+    """The chord of the whole bar, then of each half of it (None where no clear chord sounds)."""
+    out = []
+    for first, last in ((0.0, 4.0), (0.0, 2.0), (2.0, 4.0)):
+        weights: dict[int, float] = {}
+        low = None
+        for step, length, pitch, _ in notes:
+            start, end = (step - 1) / 4, (step - 1) / 4 + length
+            overlap = min(end, last) - max(start, first)
+            if overlap > 0:
+                weights[pitch % 12] = weights.get(pitch % 12, 0.0) + overlap
+                low = pitch if low is None or pitch < low else low
+        out.append(_clip_chord(weights, scale, None if low is None else low % 12))
+    return out
+
+
+def chords(song: Song, roles: dict[int, str], key: str) -> list[dict[str, Any]]:
+    """The chord progression a chord track loops: roman numerals in the Set's key, one or two chords per bar."""
+    parts = key.rstrip("?").split()
+    if len(parts) != 2 or parts[0] not in NOTE_NAMES or parts[1] not in ("major", "minor"):
+        return []
+    tonic = NOTE_NAMES.index(parts[0])
+    scale = Scale(tonic, MAJOR if parts[1] == "major" else MINOR, parts[1].capitalize())
+    found = []
+    for track in song.tracks:
+        if roles.get(track.index) != "chords":
+            continue
+        by_bar = _bars(_track_notes(track), song.beats_per_bar)
+        halves = {bar: _bar_chords(notes, scale) for bar, notes in by_bar.items()}
+        both = [h for h in halves.values() if h[1] is not None and h[2] is not None]
+        twice = sum(1 for h in both if (h[1].root, h[1].intervals) != (h[2].root, h[2].intervals)) * 2 > len(halves)  # most bars change mid-bar
+        halves = {bar: ([h[1], h[2]] if twice else [h[0]]) for bar, h in halves.items()}
+        # a chord is a (root, shape) number so the figure finder can compare bars
+        coded: dict[int, list[RawNote]] = {}
+        for bar, pair in halves.items():
+            seen = [(i, c) for i, c in enumerate(pair) if c is not None]
+            if seen:
+                coded[bar] = [(1 + 8 * i, 1.0, c.root * 16 + CLIP_SHAPES.index(tuple(c.intervals)), 100) for i, c in seen
+                              if tuple(c.intervals) in CLIP_SHAPES]
+        for bars, count, starts in _pick(coded):
+            filled = [b for b in bars if len(coded.get(b, ())) == (2 if twice else 1)]
+            if len(filled) < CHORD_BARS_MIN * len(bars):
+                continue
+            symbols = []
+            for b in bars:
+                for _, _, code, _ in coded.get(b, []):
+                    symbols.append(roman(code // 16, CLIP_SHAPES[code % 16], tonic))
+            if len(set(symbols)) < 2:  # one chord held is no progression
+                continue
+            roots = [code // 16 for b in bars for _, _, code, _ in coded.get(b, [])]
+            if sum(1 for r in roots if scale.degree_of(r + 120) is None) >= OFF_CHORDS * len(roots):  # a misread, not a progression
+                continue
+            found.append({"kind": "chords", "progression": " ".join(symbols), "chords_per_bar": 2.0 if twice else 1.0, "scale": parts[1],
+                          "bars": [[] for _ in bars], "bar_numbers": bars, "repeats": count, "occurrences": starts, "track": track.name,
+                          "_score": len(bars) * count})
+    return _top(found)
+
+
 def _top(found: list[dict[str, Any]]) -> list[dict[str, Any]]:
     found.sort(key=lambda f: -f["_score"])
     out, seen = [], set()
     for item in found:
-        key = repr(item["bars"])
+        key = repr((item["bars"], item.get("progression")))
         if key in seen:
             continue
         seen.add(key)
@@ -188,7 +260,7 @@ def extract(song: Song, roles: dict[int, str], key: str, set_id: str) -> list[di
     base = user_patterns.PREFIX + user_patterns.slug(song.name)
     out = []
     bpm = [max(60, round(song.tempo) - 8), round(song.tempo) + 8]
-    for family, items in (("bass", bass(song, roles)), ("lead", lead(song, roles, key)), ("drums", drums(song, roles))):
+    for family, items in (("bass", bass(song, roles)), ("lead", lead(song, roles, key)), ("drums", drums(song, roles)), ("chords", chords(song, roles, key))):
         for number, item in enumerate(items, 1):
             span = f"bars {item['bar_numbers'][0] + 1}-{item['bar_numbers'][-1] + 1}"
             out.append({**item, "name": f"{base}_{family}_{number}",

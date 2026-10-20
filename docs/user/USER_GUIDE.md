@@ -481,13 +481,13 @@ The **MidiBakery Set Importer** reads Ableton Live Sets (`.als`) from your disk,
 **What you get from an import**
 
 - **A reference** with the Set's sections (intro, build, drop, break, outro), tempo, key and which roles play in each section. It works like an analyzed reference: "Build me a house song after the reference '<name>'" follows the Set's section order and lengths **and its line-up**: a section without drums gets no drums, chords that never play are not added.
-- **Loops** (the *my* patterns): bass, lead and drum figures of 1, 2 or 4 bars that the Set repeats. They are named like `my_<set>_bass_1` and work wherever a built-in pattern name works: "Compose a bass with pattern my_soundasapound_bass_1". Bass loops follow your chords and key, leads are stored as scale degrees of the Set's key, drums as hits per pad. The Set's own notes are never copied as a whole, only loops that repeat.
+- **Loops** (the *my* patterns): bass, lead and drum figures of 1, 2 or 4 bars that the Set repeats, and the chord progression of its chord track (`my_<set>_chords_1`, stored as roman numerals of the Set's key, so it moves to your song's key; the voicing and rhythm are not kept; use it as the chords `pattern`). They are named like `my_<set>_bass_1` and work wherever a built-in pattern name works: "Compose a bass with pattern my_soundasapound_bass_1". Bass loops follow your chords and key, leads are stored as scale degrees of the Set's key, drums as hits per pad. The Set's own notes are never copied as a whole, only loops that repeat.
 
 **Songs from imported Sets**
 
 - "Build a song after the Set 'Phantom'": structure and line-up from the Set, and the Set's own loops where it has them.
 - You don't have to name a genre: without one MidiBakery uses the genre you set on the Set in the importer, or guesses one from its tempo and tells you.
-- `loops_from`: take the loops of another Set for a role: "Use Phantom's structure, but the bass loop of Sound as a Pound". Possible roles: drums, bass, lead.
+- `loops_from`: take the loops of another Set for a role: "Use Phantom's structure, but the bass loop of Sound as a Pound". Possible roles: drums, bass, lead, chords. Without `loops_from`, a song after a Set plays that Set's chord progression.
 - `fill_missing`: roles the Set never plays are left out by default. "...and fill in what's missing" adds them from the genre.
 
 **Limits:** only 4/4 Sets. Many Sets play drums as audio; there are no drum loops to find then. A Set whose key cannot be found yields bass loops but no lead loops. Sections are a good estimate from the clips, not a ground truth: check them in the Library view. Loops are patterns to start from, not a copy of the original song.

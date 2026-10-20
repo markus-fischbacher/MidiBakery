@@ -1,6 +1,6 @@
 """The user's own pattern library: patterns taken from imported Live Sets, one file per Set.
 
-``<MidiBakery folder>/patterns/<set id>.json``. The names (``my_<set>_<bass|lead|drums>_<n>``) work wherever a
+``<MidiBakery folder>/patterns/<set id>.json``. The names (``my_<set>_<bass|lead|drums|chords>_<n>``) work wherever a
 built-in pattern name does, but they are not listed in tool descriptions: they are the user's, and the
 local-model tool budget is full. ``list_patterns`` and the importer show them.
 """
@@ -17,7 +17,7 @@ from midibakery.compose.bass_templates import BassTemplate, TNote
 from midibakery.compose.lead_templates import LeadTemplate, LNote, Part
 from midibakery.compose.techno_templates import DrumHit, TechnoPattern
 
-KINDS = ("bass", "lead", "drums")
+KINDS = ("bass", "lead", "drums", "chords")
 PREFIX = "my_"
 
 
@@ -104,6 +104,12 @@ def _drums(item: dict[str, Any]) -> TechnoPattern:
     bars = tuple(tuple(DrumHit(h["role"], float(h["step"]), float(h["velocity"]), float(h["length"])) for h in bar)
                  for bar in item["bars"])
     return TechnoPattern(item["name"], item["label"], "drums", item.get("description", ""), bars=bars)
+
+
+def chords(name: str) -> tuple[str, float, str]:
+    """A chord loop: (roman numerals, chords per bar, the mode they are read in)."""
+    item = _entry("chords", name)
+    return str(item["progression"]), float(item.get("chords_per_bar", 1.0)), str(item.get("scale", "minor"))
 
 
 def load(kind: str, name: str) -> BassTemplate | LeadTemplate | TechnoPattern:
