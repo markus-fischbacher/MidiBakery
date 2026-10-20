@@ -19,7 +19,8 @@
 - ``GET /importer``: the Set Importer page; ``POST /import/scan`` ``{"path"}`` (a Live Set or a folder: the Sets in it),
   ``POST /import/preview`` ``{"file"}`` (one Set's roles, key and sections), ``POST /import/run`` ``{"files", "genres"?}``
   (stores them as references), ``GET``/``POST /import/queue`` (the list of Sets shared by the device and a popped-out page), ``POST /import/pick`` ``{"kind": "file"|"folder"}`` (the system file dialog, for the page in a browser),
-  ``GET /import/library``, ``GET /import/patterns`` (the loops taken from imported Sets) and ``DELETE /import/{id}``.
+  ``GET /import/library``, ``GET /import/patterns`` (the loops taken from imported Sets), ``DELETE /import/patterns/{id}`` (one Set's loops)
+  and ``DELETE /import/{id}``.
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
@@ -229,6 +230,9 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         keep = ("name", "kind", "label", "description", "set", "set_name", "repeats", "bar_numbers", "bars")
         return {"patterns": [{k: e.get(k) for k in keep} for e in user_patterns.entries()]}
 
+    def import_patterns_delete(_body: dict, request: Request) -> dict:
+        return {"deleted": user_patterns.remove(request.path_params["reference"])}
+
     def import_delete(_body: dict, request: Request) -> dict:
         return {"deleted": als_library.delete(request.path_params["reference"])}
 
@@ -405,6 +409,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/import/pick", guard(importer(import_pick)), methods=["POST"]),
             Route("/import/library", guard(importer(import_library)), methods=["GET"]),
             Route("/import/patterns", guard(importer(import_patterns)), methods=["GET"]),
+            Route("/import/patterns/{reference}", guard(importer(import_patterns_delete)), methods=["DELETE"]),
             Route("/import/{reference}", guard(importer(import_delete)), methods=["DELETE"]),
             Route("/models", guard(models), methods=["GET"]),
             Route("/update", guard(update_status), methods=["GET"]),

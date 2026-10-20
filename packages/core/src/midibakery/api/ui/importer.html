@@ -49,6 +49,10 @@
   table { border-collapse: collapse; width: 100%; margin-top: 6px; }
   td, th { text-align: left; padding: 1px 4px; border-bottom: 1px solid #262626; font-weight: normal; }
   th { color: var(--dim); font-size: 10px; }
+  .loops { margin-top: 8px; border-top: 1px solid #262626; padding-top: 6px; }
+  .loop { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+  .loop canvas { width: 120px; flex: none; }
+  .loop .name { font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
   .empty { color: var(--dim); padding: 14px; line-height: 1.6; }
   .err { color: var(--err); }
 </style>
@@ -89,6 +93,7 @@ const LANES = ["kick", "drums", "bass", "chords", "lead", "fx"];
 const GENRES = ["", "house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap", "other"];
 
 const sets = new Map();   // file -> {file, name, folder, id, imported, info, error, selected, genre}
+let patternList = [];     // the loops of every imported Set
 let shownItem = null;     // the Library entry whose detail is open
 let shown = null;         // file of the detail view
 let view = "sets";
@@ -245,6 +250,59 @@ function detailBody(pane, info) {
   return pane;
 }
 
+const DRUM_ROWS = ["kick", "snare", "clap", "hat", "open_hat", "perc", "tom", "ride", "crash"];
+
+// A small piano roll of a loop: bars side by side, 16 steps each; drums one row per pad role.
+function loopPreview(p) {
+  const w = 240, h = 36, bars = p.bars || [];
+  const canvas = el("canvas", { width: w * 2, height: h * 2 });
+  canvas.style.aspectRatio = `${w} / ${h}`;
+  const g = canvas.getContext("2d");
+  g.scale(2, 2);
+  const per = w / Math.max(bars.length, 1), step = per / 16;
+  const key = (n) => (p.kind === "drums" ? n.role : p.kind === "bass" ? n.interval : n.degree);
+  const all = bars.flat().map(key);
+  let rows;
+  if (p.kind === "drums") {
+    const seen = new Set(all);
+    rows = [...DRUM_ROWS.filter((r) => seen.has(r)), ...[...seen].filter((r) => !DRUM_ROWS.includes(r))];
+  } else {
+    const lo = Math.min(...all, 0), hi = Math.max(...all, lo + 4);
+    rows = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+  }
+  const row = (v) => rows.indexOf(v), rh = (h - 2) / Math.max(rows.length, 1);
+  g.fillStyle = "#222";
+  for (let b = 0; b < bars.length; b += 2) g.fillRect(b * per, 0, per, h);
+  g.fillStyle = "#ffad56";
+  bars.forEach((bar, b) => {
+    for (const n of bar) {
+      const y = h - 1 - (row(key(n)) + 1) * rh;
+      const len = p.kind === "drums" ? 1 : Math.max(n.length * 4, 0.5);  // length in beats; a step is a quarter beat
+      g.fillRect(b * per + (n.step - 1) * step, y, Math.max(len * step - 0.5, 1.5), Math.max(rh - 0.5, 1));
+    }
+  });
+  return canvas;
+}
+
+function loops(item) {
+  const mine = patternList.filter((p) => p.set === item.id);
+  if (!mine.length) return null;
+  const box = el("div", { className: "loops" });
+  const del = el("button", { title: "Delete the loops of this Set; the Set itself stays imported" }, "Delete loops");
+  del.onclick = async () => {
+    if (del.textContent !== "Sure?") { del.textContent = "Sure?"; return; }
+    await api("/import/patterns/" + item.id, null, "DELETE");
+    renderLibrary();
+  };
+  box.append(el("div", { className: "meta" }, el("b", {}, `${mine.length} loops`), el("span", { className: "dim" }, "for compose pattern=... and plan_song loops_from"), del));
+  for (const p of mine) {
+    const where = (p.bar_numbers || []).length ? `bar ${p.bar_numbers[0] + 1}` : "";
+    box.append(el("div", { className: "loop", title: p.description || "" }, loopPreview(p),
+      el("div", {}, el("div", { className: "name" }, p.name), el("div", { className: "dim" }, `${p.label || p.kind} ${where} x${p.repeats}`))));
+  }
+  return box;
+}
+
 function timeline(info) {
   const width = 520, lane = 7, top = 22, height = top + LANES.length * (lane + 1) + 2;
   const canvas = el("canvas", { width: width * 2, height: height * 2 });
@@ -272,6 +330,7 @@ async function renderLibrary() {
   const list = $("list");
   try {
     const { library } = await api("/import/library");
+    patternList = (await api("/import/patterns")).patterns;
     list.replaceChildren();
     if (!library.length) list.append(el("div", { className: "empty" }, "Nothing imported yet."));
     for (const item of library) {
@@ -289,7 +348,12 @@ async function renderLibrary() {
       const row = el("div", { className: "row" + (item.id === shownItem ? " sel" : "") }, el("div", { className: "body" }, el("span", { className: "name", title: item.file }, item.name), chips), del);
       row.onclick = () => { shownItem = shownItem === item.id ? null : item.id; renderLibrary(); };
       list.append(row);
-      if (item.id === shownItem) list.append(detailBody(el("div", { className: "detail" }), item));
+      if (item.id === shownItem) {
+        const pane = detailBody(el("div", { className: "detail" }), item);
+        const cards = loops(item);
+        pane.append(cards || el("p", { className: "dim" }, "No loops found in this Set (nothing played the same figure twice)."));
+        list.append(pane);
+      }
     }
     setStatus(`${library.length} imported - use them with plan_song reference=...`);
   } catch (exc) { setStatus(String(exc.message || exc)); }

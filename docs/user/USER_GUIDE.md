@@ -16,7 +16,7 @@ Deutsche Version (ausführlicher): [BENUTZERHANDBUCH.md](BENUTZERHANDBUCH.md)
 8. [Composing parts and whole songs](#8-composing-parts-and-whole-songs)
 9. [Editing clips](#9-editing-clips)
 10. [The Arrangement](#10-the-arrangement)
-11. [The Reference Analyzer](#11-the-reference-analyzer)
+11. [The Reference Analyzer](#11-the-reference-analyzer) (and [importing your own Sets](#import-your-own-live-sets-set-importer))
 12. [Mixing and sounds](#12-mixing-and-sounds)
 13. [Generator and Transform without the chat](#13-generator-and-transform-without-the-chat)
 14. [Troubleshooting](#14-troubleshooting)
@@ -33,7 +33,7 @@ MidiBakery is an AI assistant that lives **inside** Ableton Live 12. You write w
 - **Build whole songs:** intro, build, drop, break and outro in the Arrangement, from recipes for five genres (house, melodic techno, peak-time techno, drum & bass, trap).
 - **Change existing clips:** vary, transpose, humanize, change only the second half.
 - **Control Live:** tracks, clips, tempo, mixer, effects, automation.
-- **Take a reference song apart:** the *Reference Analyzer* device shows how a song is built, and MidiBakery can build your song after it.
+- **Take a reference song apart:** the *Reference Analyzer* device shows how a song is built, and MidiBakery can build your song after it. The *Set Importer* does the same for your own Live Sets and also collects their loops.
 
 MidiBakery creates **MIDI notes** (and loads sounds from Live's library). It does not create audio or load samples of its own.
 
@@ -47,6 +47,7 @@ You see four parts in Live:
 | **MidiBakery Chat** | the chat device: this is where you talk to the AI |
 | **MidiBakery Generator** and **MidiBakery Transform** | two tools in the clip view, without AI and without chat |
 | **MidiBakery Reference Analyzer** | analyzes a reference song |
+| **MidiBakery Set Importer** | reads Live Sets (.als) into references and loops |
 | **MidiBakery Loudness Meter** | measures the Master's loudness (LUFS) |
 
 ## 2. What you need
@@ -111,6 +112,7 @@ The devices are in the **User Library** in Live's browser (left, or search for "
 |---|---|---|
 | MidiBakery Chat | Presets > MIDI Effects > Max MIDI Effect > MidiBakery | MIDI effect |
 | MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery | audio effect |
+| MidiBakery Set Importer | Presets > MIDI Effects > Max MIDI Effect > MidiBakery | MIDI effect |
 | MidiBakery Loudness Meter | Presets > Audio Effects > Max Audio Effect > MidiBakery | audio effect |
 | MidiBakery Generator | MIDI Tools > Max Generators | MIDI Tool |
 | MidiBakery Transform | MIDI Tools > Max Transformations | MIDI Tool |
@@ -466,6 +468,28 @@ The device stores results in the MidiBakery folder under `references/`. The chat
 - "Build me a peak-time techno song after the reference '<part of the name>'." – section order and lengths follow the reference, snapped to the genre's grid. MidiBakery takes **only the structure**, not the sound of the reference.
 - "… and use the reference's tempo and key."
 - An **unwarped** reference works only if your song plays at the same tempo (otherwise an error message).
+
+### Import your own Live Sets (Set Importer)
+
+The **MidiBakery Set Importer** reads Ableton Live Sets (`.als`) from your disk, e.g. your own projects or royalty-free example Sets, and turns them into references. This is exact: unlike the Analyzer it does not listen to audio, it reads the notes and clips in the Set. Everything stays on your computer.
+
+1. Drag **MidiBakery Set Importer** (User Library > Presets > MIDI Effects > Max MIDI Effect > MidiBakery) onto any MIDI track.
+2. Press **Folder...** (a folder with many Sets; `Backup` folders are skipped) or **Set...** (one file). The Sets appear in a list with tempo and key.
+3. Click a Set to see its **sections**, the lanes of which roles play where, and the tracks MidiBakery could not place. Click the genre chip to set a genre. Untick Sets you do not want and press **Import**.
+4. The **Library** tab lists everything imported. Click a Set to see its **loops**: small piano-roll cards per loop with name, the bar where it first plays and how often it repeats. **Delete loops** removes only the loops, **Delete** removes the Set and its loops.
+
+**What you get from an import**
+
+- **A reference** with the Set's sections (intro, build, drop, break, outro), tempo, key and which roles play in each section. It works like an analyzed reference: "Build me a house song after the reference '<name>'" follows the Set's section order and lengths **and its line-up**: a section without drums gets no drums, chords that never play are not added.
+- **Loops** (the *my* patterns): bass, lead and drum figures of 1, 2 or 4 bars that the Set repeats. They are named like `my_<set>_bass_1` and work wherever a built-in pattern name works: "Compose a bass with pattern my_soundasapound_bass_1". Bass loops follow your chords and key, leads are stored as scale degrees of the Set's key, drums as hits per pad. The Set's own notes are never copied as a whole, only loops that repeat.
+
+**Songs from imported Sets**
+
+- "Build a song after the Set 'Phantom'": structure and line-up from the Set, and the Set's own loops where it has them.
+- `loops_from`: take the loops of another Set for a role: "Use Phantom's structure, but the bass loop of Sound as a Pound". Possible roles: drums, bass, lead.
+- `fill_missing`: roles the Set never plays are left out by default. "...and fill in what's missing" adds them from the genre.
+
+**Limits:** only 4/4 Sets. Many Sets play drums as audio; there are no drum loops to find then. A Set whose key cannot be found yields bass loops but no lead loops. Sections are a good estimate from the clips, not a ground truth: check them in the Library view. Loops are patterns to start from, not a copy of the original song.
 
 ## 12. Mixing and sounds
 

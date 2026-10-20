@@ -16,7 +16,7 @@ English version: [USER_GUIDE.md](USER_GUIDE.md)
 8. [Teile und ganze Songs komponieren](#8-teile-und-ganze-songs-komponieren)
 9. [Clips bearbeiten](#9-clips-bearbeiten)
 10. [Das Arrangement](#10-das-arrangement)
-11. [Der Reference Analyzer](#11-der-reference-analyzer)
+11. [Der Reference Analyzer](#11-der-reference-analyzer) (und [eigene Sets importieren](#eigene-live-sets-importieren-set-importer))
 12. [Mixen und Klänge](#12-mixen-und-klänge)
 13. [Generator und Transform ohne Chat](#13-generator-und-transform-ohne-chat)
 14. [Probleme lösen](#14-probleme-lösen)
@@ -34,7 +34,7 @@ MidiBakery ist ein KI-Assistent, der **in** Ableton Live 12 sitzt. Du schreibst 
 - **Ganze Songs bauen:** Intro, Build, Drop, Break und Outro im Arrangement, nach Rezepten für fünf Genres (House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap).
 - **Vorhandene Clips verändern:** variieren, transponieren, vermenschlichen, nur die zweite Hälfte ändern.
 - **Live steuern:** Spuren, Clips, Tempo, Mixer, Effekte, Automation.
-- **Einen Referenzsong zerlegen:** Das Gerät *Reference Analyzer* zeigt, wie ein Song aufgebaut ist, und MidiBakery kann deinen Song danach aufbauen.
+- **Einen Referenzsong zerlegen:** Das Gerät *Reference Analyzer* zeigt, wie ein Song aufgebaut ist, und MidiBakery kann deinen Song danach aufbauen. Der *Set Importer* tut das für deine eigenen Live-Sets und sammelt zusätzlich ihre Loops.
 
 MidiBakery erzeugt **MIDI-Noten** (und lädt Klänge aus Lives Bibliothek). Es erzeugt kein Audio und lädt keine eigenen Samples.
 
@@ -48,6 +48,7 @@ MidiBakery besteht aus vier Teilen, die du in Live siehst:
 | **MidiBakery Chat** | das Chat-Gerät: hier sprichst du mit der KI |
 | **MidiBakery Generator** und **MidiBakery Transform** | zwei Werkzeuge in der Clip-Ansicht, ohne KI und ohne Chat |
 | **MidiBakery Reference Analyzer** | analysiert einen Referenzsong |
+| **MidiBakery Set Importer** | liest Live-Sets (.als) als Referenzen und Loops ein |
 | **MidiBakery Loudness Meter** | misst die Lautheit des Masters (LUFS) |
 
 ## 2. Was du brauchst
@@ -112,6 +113,7 @@ Die Geräte liegen in der **User Library** im Live-Browser (links, oder mit der 
 |---|---|---|
 | MidiBakery Chat | Presets > MIDI Effects > Max MIDI Effect > MidiBakery | MIDI-Effekt |
 | MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery | Audio-Effekt |
+| MidiBakery Set Importer | Presets > MIDI Effects > Max MIDI Effect > MidiBakery | MIDI-Effekt |
 | MidiBakery Loudness Meter | Presets > Audio Effects > Max Audio Effect > MidiBakery | Audio-Effekt |
 | MidiBakery Generator | MIDI Tools > Max Generators | MIDI Tool |
 | MidiBakery Transform | MIDI Tools > Max Transformations | MIDI Tool |
@@ -467,6 +469,28 @@ Ergebnisse speichert das Gerät im MidiBakery-Ordner unter `references/`. Der Ch
 - „Bau mir einen Peak-Time-Techno-Song nach der Referenz ‚<Teil des Namens>‘.“ – Abschnittsfolge und -längen folgen dem Referenzsong, eingerastet auf das Raster des Genres. MidiBakery erzeugt dabei **nur den Aufbau**, nicht den Klang des Referenzsongs.
 - „… und nimm Tempo und Tonart der Referenz.“
 - Ein **ungewarpter** Referenzsong funktioniert nur, wenn dein Song im gleichen Tempo spielt (sonst Fehlermeldung).
+
+### Eigene Live-Sets importieren (Set Importer)
+
+Der **MidiBakery Set Importer** liest Ableton-Live-Sets (`.als`) von deiner Festplatte, z. B. eigene Projekte oder lizenzfreie Beispiel-Sets, und macht daraus Referenzen. Das ist exakt: Anders als der Analyzer hört er kein Audio, sondern liest die Noten und Clips im Set. Alles bleibt auf deinem Rechner.
+
+1. Ziehe **MidiBakery Set Importer** (User Library > Presets > MIDI Effects > Max MIDI Effect > MidiBakery) auf eine beliebige MIDI-Spur.
+2. Drücke **Folder...** (ein Ordner mit vielen Sets; `Backup`-Ordner werden übersprungen) oder **Set...** (eine Datei). Die Sets erscheinen in einer Liste mit Tempo und Tonart.
+3. Klicke ein Set an, um seine **Abschnitte**, die Bahnen der spielenden Rollen und die nicht zugeordneten Spuren zu sehen. Mit dem Genre-Chip setzt du ein Genre. Hake Sets ab, die du nicht willst, und drücke **Import**.
+4. Der Tab **Library** listet alles Importierte. Klicke ein Set an, um seine **Loops** zu sehen: kleine Pianoroll-Karten je Loop mit Name, dem Takt, in dem er zuerst spielt, und wie oft er sich wiederholt. **Delete loops** entfernt nur die Loops, **Delete** das Set samt Loops.
+
+**Was ein Import ergibt**
+
+- **Eine Referenz** mit den Abschnitten des Sets (Intro, Build, Drop, Break, Outro), Tempo, Tonart und den Rollen, die in jedem Abschnitt spielen. Sie wirkt wie eine analysierte Referenz: „Bau mir einen House-Song nach der Referenz ‚<Name>‘“ folgt Abschnittsfolge und -längen des Sets **und seiner Besetzung**: Ein Abschnitt ohne Drums bekommt keine Drums, Akkorde, die nie spielen, werden nicht ergänzt.
+- **Loops** (die *my*-Patterns): Bass-, Lead- und Drum-Figuren von 1, 2 oder 4 Takten, die das Set wiederholt. Sie heißen z. B. `my_<set>_bass_1` und funktionieren überall, wo ein eingebauter Patternname funktioniert: „Komponiere einen Bass mit dem Pattern my_soundasapound_bass_1“. Bass-Loops folgen deinen Akkorden und deiner Tonart, Leads sind als Stufen der Set-Tonart gespeichert, Drums als Schläge je Pad. Die Noten des Sets werden nie als Ganzes kopiert, nur Loops, die sich wiederholen.
+
+**Songs aus importierten Sets**
+
+- „Bau einen Song nach dem Set ‚Phantom‘“: Aufbau und Besetzung vom Set, dazu die eigenen Loops des Sets, wo es welche hat.
+- `loops_from`: Loops eines anderen Sets für eine Rolle nehmen: „Nimm den Aufbau von Phantom, aber den Bass-Loop von Sound as a Pound.“ Mögliche Rollen: drums, bass, lead.
+- `fill_missing`: Rollen, die das Set nie spielt, bleiben standardmäßig weg. „… und ergänze, was fehlt“ fügt sie aus dem Genre hinzu.
+
+**Grenzen:** nur 4/4-Sets. Viele Sets spielen Drums als Audio; dann gibt es keine Drum-Loops zu finden. Ein Set, dessen Tonart nicht erkannt wird, liefert Bass-Loops, aber keine Lead-Loops. Die Abschnitte sind eine gute Schätzung aus den Clips, keine gesicherte Tatsache: Prüfe sie in der Library-Ansicht. Loops sind Muster zum Weiterarbeiten, keine Kopie des Originalsongs.
 
 ## 12. Mixen und Klänge
 
