@@ -154,3 +154,11 @@ def test_a_chord_loop_composes_on_any_tonic(home):
     roots = [s.chord.root for s in harmony.segments]  # the Gm Eb Bb F of the Set, moved with its key onto D
     assert [(b - a) % 12 for a, b in zip(roots, roots[1:])] == [8, 7, 7] and [s.chord.intervals[1] for s in harmony.segments] == [3, 4, 4, 4]
     assert harmony_mod and user_pattern_names("chords") == ("my_chord_demo_chords_1",)
+
+
+def test_api_lists_the_progression_of_a_chord_loop(home):
+    from test_api import ScriptedProvider, Turn
+    client = TestClient(build_app(BridgeClient(), lambda options: ScriptedProvider([Turn("end_turn", text="hi")]), TOKEN))
+    client.post("/import/run", json={"files": [str(_chord_set(home / "Chord Demo.als"))]}, headers=AUTH)
+    chords = [p for p in client.get("/import/patterns", headers=AUTH).json()["patterns"] if p["kind"] == "chords"]
+    assert len(chords) == 1 and len(chords[0]["progression"].split()) == 4 and chords[0]["chords_per_bar"] == 1.0

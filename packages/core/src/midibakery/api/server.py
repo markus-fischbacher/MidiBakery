@@ -227,7 +227,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         return {"library": als_library.library()}
 
     def import_patterns(_body: dict, _request: Request) -> dict:
-        keep = ("name", "kind", "label", "description", "set", "set_name", "repeats", "bar_numbers", "bars")
+        keep = ("name", "kind", "label", "description", "set", "set_name", "repeats", "bar_numbers", "bars", "progression", "chords_per_bar")
         return {"patterns": [{k: e.get(k) for k in keep} for e in user_patterns.entries()]}
 
     def import_patterns_delete(_body: dict, request: Request) -> dict:
