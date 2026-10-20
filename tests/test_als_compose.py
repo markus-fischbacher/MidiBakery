@@ -136,3 +136,8 @@ def test_a_name_finds_the_song_before_a_folder_of_the_same_name(home):
     assert find_reference("Funx")["name"] == "Funx"  # not the newest Set, "Other", whose path holds "Funx Project"
     assert find_reference("Other")["name"] == "Other"
     assert find_reference("Project")["name"] in ("Funx", "Other")  # the folder name still finds a Set
+
+
+def test_a_clip_slot_given_as_a_name_points_to_loops_from():
+    with pytest.raises(ValueError, match="loops_from"):
+        SongRequest(genre="house", clips=[{"role": "bass", "track": 1, "slot": "Sound as a Pound"}])
