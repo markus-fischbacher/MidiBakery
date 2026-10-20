@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MidiBakery Set Importer</title>
+<style>
+  :root {
+    --bg: #1e1e1e; --panel: #2a2a2a; --line: #3a3a3a; --text: #d9d9d9; --dim: #8a8a8a;
+    --accent: #ffad56; --err: #ff6b6b; --ok: #7fd18b;
+    font: 12px/1.35 -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+  body { display: flex; flex-direction: column; }
+  header, footer { display: flex; gap: 6px; align-items: center; padding: 4px 6px; border-color: var(--line); border-style: solid; border-width: 0; }
+  header { border-bottom-width: 1px; }
+  footer { border-top-width: 1px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.on { background: var(--ok); }
+  .dot.busy { background: var(--accent); }
+  .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dim { color: var(--dim); }
+  button, input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 3px; }
+  button { padding: 1px 8px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button:disabled:hover { border-color: var(--line); }
+  button.primary { background: var(--accent); color: #1e1e1e; border-color: var(--accent); }
+  input[type=text] { flex: 1; padding: 1px 6px; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #list { flex: 1; overflow-y: auto; min-width: 0; }
+  .detail { padding: 6px 8px 8px; background: #232323; border-bottom: 1px solid #262626; }
+  .row { display: flex; gap: 6px; align-items: center; padding: 4px 6px; cursor: pointer; border-bottom: 1px solid #262626; }
+  .row:hover { background: #242424; }
+  .row.sel { background: #2f2a24; }
+  button.x { padding: 0 6px; flex: none; color: var(--dim); }
+  .row .body { flex: 1; min-width: 0; }
+  .row .meta { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 2px; }
+  .row .name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip { padding: 0 5px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); font-size: 10px; white-space: nowrap; color: var(--dim); }
+  .chip.ok { color: var(--ok); border-color: var(--ok); }
+  .chip.err { color: var(--err); border-color: var(--err); }
+  .chip.genre { cursor: pointer; }
+  .chip.genre.set { color: var(--accent); border-color: var(--accent); }
+  h3 { margin: 0 0 4px; font-size: 13px; }
+  .facts { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+  canvas { width: 100%; display: block; background: #181818; border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+  td, th { text-align: left; padding: 1px 4px; border-bottom: 1px solid #262626; font-weight: normal; }
+  th { color: var(--dim); font-size: 10px; }
+  .empty { color: var(--dim); padding: 14px; line-height: 1.6; }
+  .err { color: var(--err); }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <span class="grow dim" id="status">Choose Live Sets (.als) or a folder with Folder... / Set...</span>
+  <button id="tab-sets" class="primary">Sets</button>
+  <button id="tab-library">Library</button>
+</header>
+<header id="typed">
+  <input type="text" id="path" placeholder="/path/to/Set.als or a folder">
+  <button id="pick-folder" title="Choose a folder with Live Sets">Folder...</button>
+  <button id="pick-file" title="Choose a Live Set">Set...</button>
+  <button id="scan">Add</button>
+</header>
+<main>
+  <div id="list"></div>
+</main>
+<footer>
+  <button id="all">All</button><button id="none">None</button>
+  <span class="grow dim" id="count"></span>
+  <button class="primary" id="import" disabled>Import</button>
+</footer>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const hash = new URLSearchParams(location.hash.slice(1));
+const token = hash.get("token");
+// The token is read once; a new one (the API restarted) needs a fresh page.
+addEventListener("hashchange", () => location.reload());
+const inDevice = Boolean(window.max && window.max.bindInlet);
+if (inDevice) $("typed").style.display = "none";  // Live passes no keystrokes to jweb: the device's buttons add paths
+
+const COLORS = { intro: "#737880", groove: "#5c9e6b", build: "#e69940", drop: "#db544d", break: "#5485cc", outro: "#737880" };
+const LANES = ["kick", "drums", "bass", "chords", "lead", "fx"];
+const GENRES = ["", "house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap", "other"];
+
+const sets = new Map();   // file -> {file, name, folder, id, imported, info, error, selected, genre}
+let shownItem = null;     // the Library entry whose detail is open
+let shown = null;         // file of the detail view
+let view = "sets";
+let queue = Promise.resolve();
+
+// The list lives in the API too, so the device and a popped-out page show the same Sets: every change is
+// sent (persist) and the other page picks it up (pull, polled).
+let rev = -1, saving = 0, timer = null;
+function persist() {  // batched: reading 40 Sets would otherwise send 40 updates
+  if (timer) return;
+  saving++;
+  timer = setTimeout(async () => {
+    timer = null;
+    try {
+      const keep = ["file", "name", "folder", "id", "imported", "selected", "genre"];
+      const list = [...sets.values()].map((s) => Object.fromEntries(keep.filter((k) => s[k] !== undefined && s[k] !== null).map((k) => [k, s[k]])));
+      rev = (await api("/import/queue", { sets: list })).rev;
+    } catch (_) {} finally { saving--; }
+  }, 300);
+}
+async function pull() {
+  if (saving || !token) return;
+  try {
+    const shared = await api("/import/queue");
+    if (shared.rev === rev || saving) return;
+    rev = shared.rev;
+    const wanted = new Set(shared.sets.map((s) => s.file));
+    for (const file of [...sets.keys()]) if (!wanted.has(file)) sets.delete(file);
+    const fresh = [];
+    for (const entry of shared.sets) {
+      const have = sets.get(entry.file);
+      if (have) Object.assign(have, entry);
+      else { sets.set(entry.file, { info: null, error: null, genre: "", selected: false, ...entry }); fresh.push(entry.file); }
+    }
+    render();
+    for (const file of fresh) queue = queue.then(() => read(sets.get(file)));
+  } catch (_) {}
+}
+
+function setStatus(text, busy) {
+  $("status").textContent = text;
+  $("dot").className = "dot " + (busy ? "busy" : "on");
+}
+
+async function api(path, body, method) {
+  const response = await fetch(path, {
+    method: method || (body ? "POST" : "GET"),
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || data.error || response.statusText);
+  return data;
+}
+
+function el(tag, props, ...children) {
+  const node = Object.assign(document.createElement(tag), props || {});
+  for (const c of children) node.append(c);
+  return node;
+}
+
+async function addPath(path) {
+  const raw = (path || "").trim();
+  path = raw.replace(/^file:\/\//, "");
+  if (/^file:/.test(raw)) { try { path = decodeURI(path); } catch (_) {} }
+  path = path.replace(/^[^/:\\]{2,}:(?=\/)/, "");  // Max can hand over "Macintosh HD:/Users/..."
+  if (!path) return;
+  if (!/^([/~]|[A-Za-z]:[\\/])/.test(path)) {
+    if (raw !== "cancel") setStatus("Not a file path: " + raw);  // a dialog reports "cancel" when dismissed
+    return;
+  }
+  setStatus("Looking for Sets in " + path, true);
+  try {
+    const { sets: found } = await api("/import/scan", { path });
+    if (!found.length) { setStatus("No Live Sets in " + path); return; }
+    for (const s of found) if (!sets.has(s.file)) sets.set(s.file, { ...s, info: null, error: null, selected: false, genre: "", auto: true });
+    persist();
+    setStatus(`${found.length} Set${found.length === 1 ? "" : "s"} found - reading...`, true);
+    render();
+    for (const s of found) queue = queue.then(() => read(sets.get(s.file)));
+    await queue;
+    setStatus(`${sets.size} Set${sets.size === 1 ? "" : "s"} - untick any you do not want, then Import`);
+  } catch (exc) {
+    setStatus(String(exc.message || exc));
+  }
+}
+
+async function read(set) {
+  if (!set || set.info || set.error) return;  // a Set removed from the list while it waited to be read
+  try {
+    set.info = await api("/import/preview", { file: set.file });
+    if (set.auto) { set.selected = !set.imported; persist(); }  // a Set that reads fine is ready to import; untick the ones you do not want
+    delete set.auto;
+  } catch (exc) {
+    set.error = String(exc.message || exc);
+  }
+  render();
+}
+
+function render() {
+  const list = $("list");
+  list.replaceChildren();
+  if (view === "library") return renderLibrary();
+  if (!sets.size) {
+    list.append(el("div", { className: "empty" }, "Choose a Live Set or a folder of them with Folder... or Set... on the device. Backup folders are skipped."));
+  }
+  for (const set of sets.values()) {
+    const box = el("input", { type: "checkbox", checked: set.selected, disabled: Boolean(set.error) });
+    box.onclick = (e) => { e.stopPropagation(); set.selected = box.checked; counts(); persist(); };
+    const meta = el("div", { className: "meta" });
+    const row = el("div", { className: "row" + (set.file === shown ? " sel" : "") }, box,
+      el("div", { className: "body" }, el("span", { className: "name", title: set.file }, set.name), meta));
+    if (set.info) meta.append(el("span", { className: "chip" }, `${Math.round(set.info.tempo)} BPM`), el("span", { className: "chip" }, set.info.key));
+    const genre = el("span", { className: "chip genre" + (set.genre ? " set" : ""), title: "Click to choose the genre" }, set.genre || "genre");
+    genre.onclick = (e) => { e.stopPropagation(); set.genre = GENRES[(GENRES.indexOf(set.genre) + 1) % GENRES.length]; render(); persist(); };
+    meta.append(genre);
+    if (set.error) meta.append(el("span", { className: "chip err", title: set.error }, "error"));
+    else if (set.imported) meta.append(el("span", { className: "chip ok" }, "imported"));
+    else if (!set.info) meta.append(el("span", { className: "chip" }, "..."));
+    const remove = el("button", { title: "Remove from this list", className: "x" }, "\u00d7");
+    remove.onclick = (e) => { e.stopPropagation(); sets.delete(set.file); if (shown === set.file) shown = null; render(); persist(); };
+    row.append(remove);
+    row.onclick = () => { shown = shown === set.file ? null : set.file; render(); };  // click again to fold it
+    list.append(row);
+    if (set.file === shown) list.append(detail(set));
+  }
+  counts();
+}
+
+function counts() {
+  const n = [...sets.values()].filter((s) => s.selected).length;
+  $("count").textContent = view === "sets" ? `${n} of ${sets.size} selected` : "";
+  $("import").disabled = view !== "sets" || n === 0;
+}
+
+function detail(set) {
+  const pane = el("div", { className: "detail" });
+  if (set.error) { pane.append(el("h3", {}, set.name), el("div", { className: "err" }, set.error)); return pane; }
+  if (!set.info) { pane.append(el("div", { className: "dim" }, "Reading...")); return pane; }
+  return detailBody(pane, set.info);
+}
+
+function detailBody(pane, info) {
+  const facts = el("div", { className: "facts" });
+  for (const t of [info.live, `${info.bars} bars`, `${info.tracks} tracks`]) facts.append(el("span", { className: "chip" }, t));
+  pane.append(facts);
+  pane.append(timeline(info));
+  const table = el("table", {}, el("tr", {}, el("th", {}, "Section"), el("th", {}, "Bar"), el("th", {}, "Bars"), el("th", {}, "Plays")));
+  for (const s of info.sections) table.append(el("tr", {}, el("td", {}, s.name), el("td", {}, String(s.start_bar)), el("td", {}, String(s.bars)), el("td", { className: "dim" }, s.elements.join(", "))));
+  pane.append(table);
+  const roles = Object.entries(info.roles || {}).filter(([r]) => !["group", "return"].includes(r)).map(([r, n]) => `${r} ${n}`).join(" · ");
+  pane.append(el("p", { className: "dim" }, "Tracks: " + roles));
+  if ((info.unknown || []).length) pane.append(el("p", { className: "dim" }, "Not placed: " + info.unknown.join(", ")));
+  return pane;
+}
+
+function timeline(info) {
+  const width = 520, lane = 7, top = 22, height = top + LANES.length * (lane + 1) + 2;
+  const canvas = el("canvas", { width: width * 2, height: height * 2 });
+  canvas.style.aspectRatio = `${width} / ${height}`;
+  const g = canvas.getContext("2d");
+  g.scale(2, 2);
+  const per = width / info.bars;
+  g.font = "9px sans-serif";
+  for (const s of info.sections) {
+    g.fillStyle = COLORS[s.kind] || "#888";
+    g.fillRect(s.start_bar * per - per, 2, s.bars * per - 1, top - 6);
+    g.fillStyle = "#111";
+    if (s.bars * per > 28) g.fillText(s.name, s.start_bar * per - per + 3, 13);
+  }
+  LANES.forEach((role, i) => {
+    const y = top + i * (lane + 1);
+    const on = (info.lanes || {})[role] || [];
+    g.fillStyle = "#6b6b6b";
+    for (let b = 0; b < on.length; b++) if (on[b]) g.fillRect(b * per, y, Math.max(per - 0.5, 0.5), lane);
+  });
+  return canvas;
+}
+
+async function renderLibrary() {
+  const list = $("list");
+  try {
+    const { library } = await api("/import/library");
+    list.replaceChildren();
+    if (!library.length) list.append(el("div", { className: "empty" }, "Nothing imported yet."));
+    for (const item of library) {
+      const del = el("button", {}, "Delete");
+      del.onclick = async (e) => {
+        e.stopPropagation();
+        if (del.textContent !== "Sure?") { del.textContent = "Sure?"; return; }
+        await api("/import/" + item.id, null, "DELETE");
+        for (const s of sets.values()) if (s.id === item.id) s.imported = false;
+        renderLibrary();
+      };
+      const chips = el("div", { className: "meta" }, el("span", { className: "chip" }, `${Math.round(item.tempo)} BPM`),
+        el("span", { className: "chip" }, item.key || "?"), el("span", { className: "chip" }, `${item.sections.length} sections`));
+      if (item.genre) chips.append(el("span", { className: "chip genre set" }, item.genre));
+      const row = el("div", { className: "row" + (item.id === shownItem ? " sel" : "") }, el("div", { className: "body" }, el("span", { className: "name", title: item.file }, item.name), chips), del);
+      row.onclick = () => { shownItem = shownItem === item.id ? null : item.id; renderLibrary(); };
+      list.append(row);
+      if (item.id === shownItem) list.append(detailBody(el("div", { className: "detail" }), item));
+    }
+    setStatus(`${library.length} imported - use them with plan_song reference=...`);
+  } catch (exc) { setStatus(String(exc.message || exc)); }
+  counts();
+}
+
+async function importSelected() {
+  const chosen = [...sets.values()].filter((s) => s.selected && s.info);
+  if (!chosen.length) return;
+  setStatus(`Importing ${chosen.length}...`, true);
+  $("import").disabled = true;
+  try {
+    const genres = Object.fromEntries(chosen.filter((s) => s.genre).map((s) => [s.file, s.genre]));
+    const result = await api("/import/run", { files: chosen.map((s) => s.file), genres });
+    for (const done of result.imported) { const s = sets.get(done.file); if (s) { s.imported = true; s.selected = false; } }
+    for (const bad of result.failed) { const s = sets.get(bad.file); if (s) s.error = bad.error; }
+    persist();
+    setStatus(`Imported ${result.imported.length}` + (result.failed.length ? `, ${result.failed.length} failed` : "") + " - ready for plan_song");
+  } catch (exc) { setStatus(String(exc.message || exc)); }
+  render();
+}
+
+function show(which) {
+  view = which;
+  $("tab-sets").className = which === "sets" ? "primary" : "";
+  $("tab-library").className = which === "library" ? "primary" : "";
+  render();
+}
+
+$("tab-sets").onclick = () => show("sets");
+$("tab-library").onclick = () => show("library");
+$("all").onclick = () => { for (const s of sets.values()) if (!s.error) s.selected = true; render(); persist(); };
+$("none").onclick = () => { for (const s of sets.values()) s.selected = false; render(); persist(); };
+$("import").onclick = importSelected;
+$("scan").onclick = () => { addPath($("path").value); $("path").value = ""; };
+for (const kind of ["folder", "file"]) {
+  $("pick-" + kind).onclick = async () => {
+    setStatus("Waiting for the file dialog...", true);
+    try { addPath((await api("/import/pick", { kind })).path); } catch (exc) { setStatus(String(exc.message || exc)); }
+  };
+}
+$("path").onkeydown = (e) => { if (e.key === "Enter") $("scan").click(); };
+
+if (inDevice) window.max.bindInlet("add_path", (...words) => addPath(words.join(" ")));
+try {
+  if (window.max && window.max.outlet) window.max.outlet("loaded");
+} catch (_) {}
+if (!token) setStatus("No access token. Open this page from the MidiBakery device.");
+else { $("dot").className = "dot on"; render(); pull(); setInterval(pull, 2000); }
+</script>
+</body>
+</html>

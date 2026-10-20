@@ -42,6 +42,10 @@ REDUCED_TOOLS = frozenset({
 # For 8k-context models: plan_changes alone is ~3k tokens of schema.
 SMALL_TOOLS = REDUCED_TOOLS - {"plan_changes"}
 
+# Local models get every tool but these: the 36k-character budget is nearly full, and a song built on the
+# Arrangement (plan_song, compose) needs no session playing, hand-drawn clip automation or take lanes.
+LOCAL_HIDDEN = frozenset({"launch_clip", "fire_scene", "create_scene", "transport", "write_clip_envelope", "compose_takes"})
+
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -81,10 +85,12 @@ def tidy_validation_error(text: str) -> str:
 class ToolHost:
     """An in-process MCP client session on the MidiBakery server."""
 
-    def __init__(self, server: MCPServer, confirm: Confirm, allowed: frozenset[str] | None = None):
+    def __init__(self, server: MCPServer, confirm: Confirm, allowed: frozenset[str] | None = None,
+                 hidden: frozenset[str] = frozenset()):
         self._server = server
         self._confirm = confirm
         self._allowed = allowed
+        self._hidden = hidden
         self._client: Client | None = None
         self.tools: list[ToolSpec] = []
 
@@ -101,7 +107,7 @@ class ToolHost:
                     bool(t.annotations and t.annotations.read_only_hint),
                 )
                 for t in listed
-                if self._allowed is None or t.name in self._allowed
+                if (self._allowed is None or t.name in self._allowed) and t.name not in self._hidden
             ),
             key=lambda t: t.name,  # deterministic order keeps the prompt cache warm
         )

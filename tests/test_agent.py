@@ -5,7 +5,7 @@ import json
 import httpx2 as httpx
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
 
-from midibakery.agent import REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost
+from midibakery.agent import LOCAL_HIDDEN, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost
 from midibakery.agent.providers.anthropic import FALLBACK_BETA, AnthropicProvider
 from midibakery.agent.providers.base import Provider, ToolCall, Turn
 from midibakery.agent.providers import make_provider
@@ -560,11 +560,23 @@ async def test_full_tool_set_stays_within_the_local_budget(client):
     async def no(message):
         return False
 
-    async with ToolHost(build_server(client), no, None) as host:
+    async with ToolHost(build_server(client), no, None, LOCAL_HIDDEN) as host:
         Agent(provider, host, SYSTEM_PROMPT, compact=True)
     payload = json.dumps([{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in provider.tools])
-    assert {"get_mixer", "update_mixer", "create_return_track"} <= {t.name for t in provider.tools}
-    assert len(payload) + len(SYSTEM_PROMPT) < 36000
+    names = {t.name for t in provider.tools}
+    assert {"get_mixer", "update_mixer", "create_return_track", "plan_song", "compose"} <= names
+    assert not LOCAL_HIDDEN & names
+    assert len(payload) + len(SYSTEM_PROMPT) < 32000  # was 36000 with every tool; the room is for the importer's patterns
+
+
+async def test_local_models_lack_the_hidden_tools_and_claude_keeps_them(client):
+    async def no(message):
+        return False
+
+    async with ToolHost(build_server(client), no, None) as everything:
+        async with ToolHost(build_server(client), no, None, LOCAL_HIDDEN) as local:
+            assert LOCAL_HIDDEN <= everything.names() and not LOCAL_HIDDEN & local.names()
+            assert everything.names() - local.names() == set(LOCAL_HIDDEN)
 
 
 async def test_a_model_repeating_a_failing_call_is_stopped(client, live):
@@ -828,3 +840,12 @@ async def test_a_plan_waits_for_apply_without_a_nudge(client, live):
     await _compact_send(client, provider, "Leg eine Master-Kette für House an.")
     assert not provider.turns and not any(u.startswith("[No tool ran") for u in provider.users)
     assert live.on_main(lambda: len(live.song.master_track.devices)) == 0
+
+
+def test_the_prompt_for_local_models_does_not_name_tools_they_lack():
+    from midibakery.agent import without_tools
+
+    local = without_tools(SYSTEM_PROMPT, LOCAL_HIDDEN)
+    assert "compose_takes" in SYSTEM_PROMPT and "compose_takes" not in local
+    assert all(name not in local for name in LOCAL_HIDDEN)
+    assert "plan_song" in local and without_tools(SYSTEM_PROMPT, frozenset()) == SYSTEM_PROMPT

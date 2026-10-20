@@ -6,6 +6,8 @@
 Devices:
 - MidiBakery Chat (MIDI Effect): chat with the MidiBakery agent in Live's device
   view (jweb shows the API's /ui page). MIDI passes through unchanged.
+- MidiBakery Set Importer (MIDI Effect): reads Ableton Live Sets (.als) you choose (one Set or a
+  folder) and stores their structure as references for plan_song. The page is the API's /importer.
 - MidiBakery Generator / MidiBakery Transform (MIDI Tools, Live 12.2+): the
   composition engine in the clip view's Generate / Transform panels.
 - MidiBakery Reference Analyzer (Audio Effect): analyzes the reference song on its track
@@ -34,7 +36,7 @@ SRC = HERE / "src"
 DIST = HERE / "dist"
 NODE_SCRIPT = "midibakery-node.js"
 # node.script entry files per device kind; each sets its mode and loads NODE_SCRIPT.
-NODE_ENTRIES = ("midibakery-chat.js", "midibakery-miditool.js")
+NODE_ENTRIES = ("midibakery-chat.js", "midibakery-miditool.js", "midibakery-importer.js")
 REFERENCE_FILES = ("midibakery-reference.js", "reference-analysis.js")  # the Reference device's node.script
 METER_FILES = ("midibakery-meter.js", "loudness.js")  # the Loudness Meter's node.script
 ABOUT_SCRIPT = "midibakery-about.js"  # the About button's version line, for every node.script
@@ -332,6 +334,60 @@ def chat_device() -> dict[str, Any]:
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
     _on_press(p, popout, "popout", node, 440, 100)
     return p.to_json(kind="midi_effect", title="MidiBakery Chat", width=width, height=height)
+
+
+def importer_device() -> dict[str, Any]:
+    """MIDI Effect: the Set Importer page (jweb) beside a column to hand it Sets: Folder... and
+    Set... (native Max dialogs, since jweb has no file access), Pop out (the page has room in a browser)."""
+    p = Patcher()
+    width, height = 700.0, 169.0
+    column_x, column_w = 506.0, 190.0
+    half = (column_w - 4) / 2
+    midiin = p.obj("midiin", 20, 20, outlets=["int"], width=50)
+    midiout = p.obj("midiout", 20, 60, outlets=[], width=50)
+    p.connect(midiin, 0, midiout)  # MIDI passes through untouched
+
+    node = p.obj("node.script midibakery-importer.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=320)
+    route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
+    web_rect = (0, 0, 500, height)
+    web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url="")
+    set_url = p.obj("prepend url", 120, 100)
+    p.connect(node, 0, route)
+    p.connect(route, 0, set_url)
+    p.connect(set_url, 0, web)
+    loaded = p.obj("route loaded", 120, 400, outlets=["", ""], width=90)
+    loaded_msg = p.message("loaded", 120, 440)
+    p.connect(web, 0, loaded)
+    p.connect(loaded, 0, loaded_msg)
+    p.connect(loaded_msg, 0, node)
+    other = p.obj("prepend jweb", 220, 440, width=90)
+    p.connect(loaded, 1, other)
+    p.connect(other, 0, node)
+
+    # A path from a dialog goes to the page as "add_path <path>"; the page lists the Sets found there.
+    to_page = p.obj("prepend add_path", 700, 300, width=120)
+    p.connect(to_page, 0, web)
+    for i, (label, dialog) in enumerate((("Folder...", "opendialog fold"), ("Set...", "opendialog"))):
+        x = 700 + i * 200
+        opener = p.obj(dialog, x, 200, outlets=["", "", ""], width=100)
+        button = p.parameter("live.text", (x, 160, 90, 16), (column_x + i * (half + 4), 4, half, 18),
+                             name=f"Choose {label[:-3].lower()}", short=label, ptype=ENUM, inlets=1, outlets=["", ""],
+                             parameter_enum=["val1", "val2"], parameter_mmax=1)
+        p.boxes[-1]["box"].update({"mode": 0, "text": label, "texton": label})
+        _on_press(p, button, "bang", opener, x, 220)
+        p.connect(opener, 0, to_page)
+
+    popout = p.parameter("live.text", (440, 60, 70, 16), (column_x, 28, half, 18), name="Pop out", short="Pop out",
+                         ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
+    p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
+    _on_press(p, popout, "popout", node, 440, 100)
+    _about(p, (column_x + half + 4, 28, half, 18), node, 440, 160)
+    set_status = p.obj("prepend set", 260, 100)
+    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 56, column_w, 100),
+                       linecount=4, fontsize=9.0, **THEMED_TEXT)
+    p.connect(route, 1, set_status)
+    p.connect(set_status, 0, status)
+    return p.to_json(kind="midi_effect", title="MidiBakery Set Importer", width=width, height=height)
 
 
 def _miditool_core(p: Patcher, mode: str) -> tuple[str, str]:
@@ -640,6 +696,7 @@ def meter_device() -> dict[str, Any]:
 
 DEVICES = {
     "MidiBakery Chat": ("midi_effect", chat_device),
+    "MidiBakery Set Importer": ("midi_effect", importer_device),
     "MidiBakery Reference Analyzer": ("audio_effect", reference_device),
     "MidiBakery Loudness Meter": ("audio_effect", meter_device),
     "MidiBakery Generator": ("generator", generator_device),

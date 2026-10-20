@@ -147,7 +147,7 @@ def test_node_scripts_ship_next_to_every_device(devices):
 
 def test_each_device_starts_the_node_entry_for_its_mode(devices):
     """Node for Max does not pass script arguments in process.argv, so the mode comes from the entry file."""
-    expected = {"MidiBakery Chat": "midibakery-chat.js", "MidiBakery Generator": "midibakery-miditool.js",
+    expected = {"MidiBakery Chat": "midibakery-chat.js", "MidiBakery Set Importer": "midibakery-importer.js", "MidiBakery Generator": "midibakery-miditool.js",
                 "MidiBakery Transform": "midibakery-miditool.js", "MidiBakery Reference Analyzer": "midibakery-reference.js",
                 "MidiBakery Loudness Meter": "midibakery-meter.js"}
     for name, path in devices.items():
@@ -184,6 +184,33 @@ def test_chat_page_script_parses(tmp_path):
     script = page.split("<script>", 1)[1].split("</script>", 1)[0]
     (tmp_path / "chat.js").write_text(script)
     result = subprocess.run([node, "--check", str(tmp_path / "chat.js")], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_importer_device_hands_paths_to_its_page(devices):
+    """A file dialog sends "add_path <path>" to the jweb that shows the API's /importer page."""
+    _, patcher = build.read_amxd(devices["MidiBakery Set Importer"])
+    boxes = _boxes(patcher)
+    by_text = {b.get("text"): i for i, b in boxes.items() if b.get("text")}
+    web = next(i for i, b in boxes.items() if b["maxclass"] == "jweb")
+    lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0]) for l in patcher["patcher"]["lines"]}
+    assert (by_text["prepend add_path"], web) in lines
+    assert not any(b["maxclass"] == "live.drop" for b in boxes.values())
+    for dialog in ("opendialog fold", "opendialog"):
+        assert (by_text[dialog], by_text["prepend add_path"]) in lines
+    assert (by_text["midiin"], by_text["midiout"]) in lines  # MIDI passes through
+    node = (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
+    assert 'importer: "/importer"' in node
+
+
+@pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
+def test_importer_page_script_parses(tmp_path):
+    node = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
+    page = (ROOT / "packages/core/src/midibakery/api/ui/importer.html").read_text()
+    script = page.split("<script>", 1)[1].split("</script>", 1)[0]
+    assert 'bindInlet("add_path"' in script
+    (tmp_path / "importer.js").write_text(script)
+    result = subprocess.run([node, "--check", str(tmp_path / "importer.js")], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
 
