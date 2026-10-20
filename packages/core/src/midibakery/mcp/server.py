@@ -76,7 +76,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   'Breakdown Lead'; without slot the counter clips land at the same bars on track); or plan_changes, where later steps share the first step's chords.
 - preview=true or plan_changes return a diff (a piano roll in MCP Apps clients) and a plan_id;
   apply_plan writes it as one undo step.
-- get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick); plan_song(reference=name) follows one (warped; an unwarped one only at its own tempo).
+- get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick); plan_song(reference=name) follows one (warped; an unwarped one only at its own tempo). An imported Set (.als) also sets which roles play per section and its loops (my_* patterns) are played; loops_from takes a role's loops from another Set.
 - Deleting tracks or clips and replacing notes ask the user first; a declined change returns CANCELLED.
 """
 
