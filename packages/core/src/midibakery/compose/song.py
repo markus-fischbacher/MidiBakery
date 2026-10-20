@@ -43,7 +43,7 @@ import secrets
 from dataclasses import dataclass, field, replace
 from typing import Annotated, Any, Callable, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
@@ -94,7 +94,8 @@ class UseClip(BaseModel):
 class SongRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    genre: Literal["house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"]
+    genre: Literal["house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"] | None = Field(
+        None, description="Required, unless a reference is given: then the reference's genre, or one guessed from its tempo")
     length: Literal["radio", "standard", "extended"] = Field("standard", description="Or minutes for a duration ('3 minutes' -> minutes 3)")
     minutes: Annotated[float, Field(ge=0.5, le=20, description="Target duration; overrides length")] | None = None
     start_bar: Annotated[int, Field(ge=1, description="Arrangement bar to start at (default: after the last clip, or under the reference)")] | None = None
@@ -116,6 +117,29 @@ class SongRequest(BaseModel):
         default_factory=dict, description="Take a role's loops from another imported Set (part of its name), e.g. {\"bass\": \"Sound as a Pound\"}")
     fill_missing: bool = Field(False, description="With an imported Set: also play roles the Set lacks, from the genre")
     seed: Annotated[int, Field(ge=0)] | None = None
+    _genre_note: str = PrivateAttr("")
+
+    @model_validator(mode="after")
+    def _genre_from_reference(self) -> SongRequest:
+        if self.genre:
+            return self
+        found = find_reference(self.reference) if self.reference else None
+        if not found:
+            if self.reference:
+                raise ValueError(f"No analyzed reference matches '{self.reference}'; get_reference lists them")
+            raise ValueError("genre: Field required (or give a reference)")
+        self.genre, self._genre_note = _reference_genre(found)
+        return self
+
+
+def _reference_genre(reference: dict[str, Any]) -> tuple[str, str]:
+    """The genre of a reference: the one set on it, else a guess from its tempo (an imported Set has none unless chosen)."""
+    if reference.get("genre") in TEMPLATES:
+        return reference["genre"], ""
+    tempo = float(reference.get("tempo") or 0)
+    genre = ("drum_and_bass" if tempo >= 165 else "trap" if 138 <= tempo < 152 else "peak_time_techno" if 126 <= tempo < 138
+             else "house")
+    return genre, f"No genre given: took {genre} from the reference's tempo ({round(tempo)} BPM); name a genre to change it"
 
 
 @dataclass
@@ -793,6 +817,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     seed = request.seed if request.seed is not None else new_seed()
 
     roles, warnings = _assign_roles(session, request)
+    if request._genre_note:
+        warnings.append(request._genre_note)
     if reference is not None and reference.get("bar_grid") == "als" and not request.fill_missing:
         for role in ROLES:  # the Set's own line-up: a role it never plays gets no track
             if role in roles and role not in request.loops_from and not any(s.parts.get(role) not in (None, "-", "") for s in sections):

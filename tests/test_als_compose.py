@@ -107,3 +107,21 @@ async def test_loops_from_plays_a_role_the_structure_set_lacks(client, live, hom
                                                      fx=False, sidechain=False))
     assert "bass" in plan.roles and _clips(plan, "bass")
     assert "lead" not in plan.roles  # still the Set's own line-up for the rest
+
+
+async def test_genre_is_optional_with_a_reference(client, live, home):
+    _studio(live)
+    _import(home)
+    server = build_server(client)
+    from test_song import _payload
+    preview = _payload(await server.call_tool("plan_song", {"reference": "Loops Demo", "seed": 7}))  # no genre: guessed from the tempo
+    assert any("No genre given" in w for w in preview["warnings"])
+    named = await _plan(server, reference="Loops Demo", genre="trap")
+    assert not any("No genre given" in w for w in named["warnings"])
+
+
+def test_genre_is_still_required_without_a_reference():
+    with pytest.raises(ValueError, match="genre"):
+        SongRequest()
+    with pytest.raises(ValueError, match="No analyzed reference"):
+        SongRequest(reference="Nothing Like This")
