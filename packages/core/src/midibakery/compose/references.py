@@ -31,9 +31,15 @@ def load_references() -> list[dict[str, Any]]:
 
 
 def find_reference(name: str) -> dict[str, Any] | None:
-    """The newest analysis whose song, file or track name contains `name` (any case)."""
+    """The newest analysis whose song name contains `name` (any case); failing that, whose file or track name does.
+    The song name goes first: a Live project folder holds several Sets, so its folder name is in all their paths."""
     wanted = name.casefold()
-    return next((r for r in load_references() if any(wanted in str(r.get(k, "")).casefold() for k in ("name", "file", "track"))), None)
+    found = load_references()
+    for keys in (("name",), ("file", "track")):
+        hit = next((r for r in found if any(wanted in str(r.get(k, "")).casefold() for k in keys)), None)
+        if hit:
+            return hit
+    return None
 
 
 def reference_scale(key: str | None) -> Scale | None:
