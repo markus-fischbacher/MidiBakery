@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from midibakery.compose import harmony as harmony_mod
+from midibakery.compose import user_patterns
 from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, describe_template
 from midibakery.compose.chord_templates import CHORD_TEMPLATES, ChordTemplate, describe_chords, template_scale
 from midibakery.compose.lead_templates import LEADS, LeadTemplate, describe_lead
@@ -36,15 +37,24 @@ def mood_names() -> tuple[str, ...]:
 def bass_template(name: str) -> BassTemplate:
     if name in BASS_TEMPLATES:
         return BASS_TEMPLATES[name]
+    if name not in TECHNO:
+        return user_patterns.load("bass", name)  # type: ignore[return-value]
     return BASS_TEMPLATES[TECHNO[name].ref]
 
 
 def lead_template(name: str) -> LeadTemplate:
-    return LEADS[name] if name in LEADS else TECHNO_LEADS[name]
+    if name in LEADS:
+        return LEADS[name]
+    return TECHNO_LEADS[name] if name in TECHNO_LEADS else user_patterns.load("lead", name)  # type: ignore[return-value]
 
 
 def drum_pattern(name: str) -> TechnoPattern:
-    return TECHNO[name]
+    return TECHNO[name] if name in TECHNO else user_patterns.load("drums", name)  # type: ignore[return-value]
+
+
+def user_pattern_names(family: str) -> tuple[str, ...]:
+    """The imported Sets' patterns of one family (bass, melody, drums); not part of the tool descriptions."""
+    return user_patterns.names("lead" if family == "melody" else family)
 
 
 def mood_template(name: str) -> ChordTemplate:

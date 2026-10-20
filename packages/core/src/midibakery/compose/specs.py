@@ -10,7 +10,7 @@ from midibakery.compose.bass import BassStyle, KickRelation
 from midibakery.compose.chords import ChordRhythm
 from midibakery.compose.counter import MODES as COUNTER_MODES
 from midibakery.compose.drums import DrumStyle
-from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
+from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names, user_pattern_names
 from midibakery.compose.transform import ArpDirection, Operation
 
 CounterMode = Literal[COUNTER_MODES]  # type: ignore[valid-type]
@@ -48,8 +48,8 @@ def _check_mood(spec: Any) -> None:
 
 
 def _check_pattern(name: str | None, names: tuple[str, ...], what: str) -> None:
-    if name is not None and name not in names:
-        raise ValueError(f"unknown {what} pattern {name!r}; use one of: {', '.join(names)}")
+    if name is not None and name not in names and name not in user_pattern_names(what):
+        raise ValueError(f"unknown {what} pattern {name!r}; use one of: {', '.join(names)}, or a my_* pattern from an imported Set")
 
 
 def _one_place(spec: Any, required: bool) -> None:

@@ -19,7 +19,7 @@
 - ``GET /importer``: the Set Importer page; ``POST /import/scan`` ``{"path"}`` (a Live Set or a folder: the Sets in it),
   ``POST /import/preview`` ``{"file"}`` (one Set's roles, key and sections), ``POST /import/run`` ``{"files", "genres"?}``
   (stores them as references), ``GET``/``POST /import/queue`` (the list of Sets shared by the device and a popped-out page), ``POST /import/pick`` ``{"kind": "file"|"folder"}`` (the system file dialog, for the page in a browser),
-  ``GET /import/library`` and ``DELETE /import/{id}``.
+  ``GET /import/library``, ``GET /import/patterns`` (the loops taken from imported Sets) and ``DELETE /import/{id}``.
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
@@ -57,6 +57,7 @@ from midibakery.als import library as als_library
 from midibakery.agent import LOCAL_HIDDEN, LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost, without_tools
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
+from midibakery.compose import user_patterns
 from midibakery.compose.standalone import GenerateRequest, TransformRequest, generate, transform
 from midibakery import __version__
 from midibakery.api.live_state import LiveState
@@ -223,6 +224,10 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
 
     def import_library(_body: dict, _request: Request) -> dict:
         return {"library": als_library.library()}
+
+    def import_patterns(_body: dict, _request: Request) -> dict:
+        keep = ("name", "kind", "label", "description", "set", "set_name", "repeats", "bar_numbers", "bars")
+        return {"patterns": [{k: e.get(k) for k in keep} for e in user_patterns.entries()]}
 
     def import_delete(_body: dict, request: Request) -> dict:
         return {"deleted": als_library.delete(request.path_params["reference"])}
@@ -399,6 +404,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/import/queue", guard(importer(import_queue)), methods=["GET", "POST"]),
             Route("/import/pick", guard(importer(import_pick)), methods=["POST"]),
             Route("/import/library", guard(importer(import_library)), methods=["GET"]),
+            Route("/import/patterns", guard(importer(import_patterns)), methods=["GET"]),
             Route("/import/{reference}", guard(importer(import_delete)), methods=["DELETE"]),
             Route("/models", guard(models), methods=["GET"]),
             Route("/update", guard(update_status), methods=["GET"]),

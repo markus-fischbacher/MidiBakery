@@ -14,9 +14,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from midibakery.als.reader import AlsError
+from midibakery.als import patterns as patterns_mod
+from midibakery.als import roles as roles_mod
+from midibakery.als.reader import AlsError, read
 from midibakery.als.reference import build, reference_id
 from midibakery.bridge.client import config_dir
+from midibakery.compose import user_patterns
 
 SKIP_DIRS = {"Backup", "Samples", "Ableton Project Info", ".git", "node_modules"}
 MAX_FILES = 2000
@@ -83,14 +86,23 @@ def store(analysis: dict[str, Any], genre: str | None = None) -> dict[str, Any]:
     return analysis
 
 
+def store_patterns(file: str, analysis: dict[str, Any]) -> list[dict[str, Any]]:
+    """The loops of the Set into the user's pattern library (replacing what an earlier import of it left)."""
+    song = read(file)
+    items = patterns_mod.extract(song, roles_mod.assign(song), analysis.get("key") or "?", analysis["id"])
+    user_patterns.save(analysis["id"], analysis["name"], items)
+    return items
+
+
 def run(files: list[str], genres: dict[str, str] | None = None) -> dict[str, Any]:
     """Imports each Set; one that fails is reported and the others still go through."""
     imported, failed = [], []
     for file in files:
         try:
             analysis = store(preview(file), (genres or {}).get(file))
+            found = store_patterns(file, analysis)
             imported.append({"file": file, "id": analysis["id"], "name": analysis["name"], "bars": analysis["bars"],
-                             "sections": len(analysis["sections"])})
+                             "sections": len(analysis["sections"]), "patterns": [p["name"] for p in found]})
         except (ValueError, OSError) as exc:
             failed.append({"file": file, "error": str(exc)})
     return {"imported": imported, "failed": failed}
@@ -115,6 +127,7 @@ def delete(reference: str) -> bool:
     if not path.exists():
         return False
     path.unlink()
+    user_patterns.remove(reference)
     return True
 
 
