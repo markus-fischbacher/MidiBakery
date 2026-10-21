@@ -197,3 +197,23 @@ async def test_my_loops_lets_the_seed_draw_loops_from_the_imported_sets(client, 
     named = await build_song(client.call, SongRequest(genre="house", seed=7, my_loops=True, loops_from={"bass": "Loops Demo"},
                                                       fx=False, sidechain=False))
     assert "bass from" not in next(w for w in named.warnings if w.startswith("my_loops:"))  # a role loops_from names is not drawn
+
+
+async def test_chord_loops_of_sets_tagged_with_the_genre_join_the_genres_progressions(client, live, home):
+    _studio(live)
+    chords = [(55, 58, 62), (51, 55, 58), (58, 62, 65), (53, 57, 60)]
+    keys = [keytrack(pitch, *(note(bar * 4, 4) for bar in range(16) if pitch in chords[bar % 4])) for pitch in sorted({p for c in chords for p in c})]
+    path = write_set(home / "Chord Demo.als", [track("MidiTrack", "Kick", four_on_the_floor(16)), track("MidiTrack", "Chords", midi_clip(0, 64, keys), id_=2)])
+
+    from midibakery.compose.song import _genre_chord_loops
+
+    from midibakery.compose.rhythm import Meter
+    from midibakery.compose.theory import Scale
+
+    scale, meter = Scale(0, (0, 2, 4, 5, 7, 9, 11), "Major"), Meter(4, 4)
+    library.run([str(path)], {str(path): "peak_time_techno"})
+    assert _genre_chord_loops("house", scale, meter) == []  # tagged with another genre
+    assert len(_genre_chord_loops("peak_time_techno", scale, meter)) == 1
+    library.run([str(path)], {str(path): "house"})
+    (loop,) = _genre_chord_loops("house", scale, meter)
+    assert [c.split()[0] for c in loop.describe()[:4]] == ["Am", "F", "C", "G"]

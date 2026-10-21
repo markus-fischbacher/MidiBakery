@@ -548,6 +548,7 @@ The **MidiBakery Set Importer** reads Ableton Live Sets (`.als`) from your disk,
 
 - "Build a song after the Set 'Phantom'": structure and line-up from the Set, and the Set's own loops where it has them.
 - You don't have to name a genre: without one MidiBakery uses the genre you set on the Set in the importer, or guesses one from its tempo and tells you.
+- Chord loops of your Sets join the genre's own chord progressions: when you plan a song in a genre, the seed picks from the genre's built-in progressions **and** from the chord loops of Sets you tagged with that genre in the importer (same mode, moved to the song's key). Sets tagged with another genre or "other" add nothing. This needs no extra wording in your request.
 - `loops_from`: take the loops of another Set for a role: "Use Phantom's structure, but the bass loop of Sound as a Pound". Possible roles: drums, bass, lead, chords. Without `loops_from`, a song after a Set plays that Set's chord progression.
 - `fill_missing`: roles the Set never plays are left out by default. "...and fill in what's missing" adds them from the genre.
 - `my_loops`: "...with my own loops" lets the seed draw drums, bass, lead and chords from your imported Sets (a different mix per seed; a role you name with `loops_from`, or that the reference Set plays itself, is not drawn). The reply says which Set each role came from. Off unless you ask.

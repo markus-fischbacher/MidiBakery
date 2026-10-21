@@ -548,6 +548,7 @@ Der **MidiBakery Set Importer** liest Ableton-Live-Sets (`.als`) von deiner Fest
 
 - „Bau einen Song nach dem Set ‚Phantom‘“: Aufbau und Besetzung vom Set, dazu die eigenen Loops des Sets, wo es welche hat.
 - Ein Genre musst du nicht nennen: Ohne Angabe nimmt MidiBakery das Genre, das du im Importer am Set gesetzt hast, oder schätzt eines aus dem Tempo und sagt es dir.
+- Akkord-Loops deiner Sets kommen zu den Akkordfolgen des Genres dazu: Planst du einen Song in einem Genre, wählt der Seed aus den eingebauten Folgen **und** aus den Akkord-Loops der Sets, die du im Importer mit diesem Genre markiert hast (gleicher Modus, in die Tonart des Songs verschoben). Sets mit anderem Genre oder „other“ ändern nichts. Du musst dafür nichts Besonderes schreiben.
 - `loops_from`: Loops eines anderen Sets für eine Rolle nehmen: „Nimm den Aufbau von Phantom, aber den Bass-Loop von Sound as a Pound.“ Mögliche Rollen: drums, bass, lead, chords. Ohne `loops_from` spielt ein Song nach einem Set dessen Akkordfolge.
 - `fill_missing`: Rollen, die das Set nie spielt, bleiben standardmäßig weg. „… und ergänze, was fehlt“ fügt sie aus dem Genre hinzu.
 - `my_loops`: „… mit meinen eigenen Loops“ lässt den Seed Drums, Bass, Lead und Akkorde aus deinen importierten Sets ziehen (pro Seed eine andere Mischung; eine Rolle, die du mit `loops_from` nennst oder die das Referenz-Set selbst spielt, wird nicht gezogen). Die Antwort sagt, aus welchem Set jede Rolle kam. Nur auf Wunsch.
