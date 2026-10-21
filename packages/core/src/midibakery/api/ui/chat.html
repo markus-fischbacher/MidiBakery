@@ -143,14 +143,14 @@
   <button id="licenseEnter" type="button">Enter key</button>
   <button id="licenseLater" type="button" hidden>Later</button>
   <div id="licenseEntry" hidden>
-    <span class="note device-only">Type the key into the message field on the right and press Send.</span>
+    <span class="note device-only">Type the key into the message field on the right and press Enter.</span>
     <input id="licenseInput" autocomplete="off" placeholder="MB-XXXX-XXXX-XXXX-XXXX">
     <button id="licenseSave" class="primary" type="button">Activate</button>
   </div>
 </div>
 <div id="keyPanel" hidden>
   <span id="keyText" class="text"></span>
-  <span id="keyTypeHint" class="note">Paste the key into the message field on the right and press Send. It is not sent to any model.</span>
+  <span id="keyTypeHint" class="note">Paste the key into the message field on the right and press Enter. It is not sent to any model.</span>
   <input id="keyInput" type="password" autocomplete="off" placeholder="sk-ant-…">
   <button id="keySave" class="primary" type="button">Save</button>
   <button id="keyRemove" type="button" hidden>Remove</button>
@@ -816,7 +816,7 @@ $("modelSelect").onchange = () => setChoice(models[Number($("modelSelect").value
 // The device's Model menu (umenu) sends "model_index <n>", in the order of the list sent to it.
 if (inDevice) window.max.bindInlet("model_index", (n) => setChoice(models[Number(n)]));
 
-// The device's Max text field sends "chat_input <words...>" when its Send button is pressed.
+// The device's Max text field sends "chat_input <words...>" on Enter or when its Send button is pressed.
 if (inDevice) window.max.bindInlet("chat_input", (...words) => sendText(words.join(" ")));
 
 // Inside the Max for Live device (jweb): tell the device the page is up.

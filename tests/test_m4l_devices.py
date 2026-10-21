@@ -86,20 +86,22 @@ def test_chat_device_types_into_a_native_field(devices):
     entry = next(i for i, b in boxes.items() if b["maxclass"] == "textedit")
     web = next(i for i, b in boxes.items() if b["maxclass"] == "jweb")
     lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0]) for l in patcher["patcher"]["lines"]}
-    assert boxes[entry]["keymode"] == 0  # Enter adds a line break; the Send button sends
+    assert boxes[entry]["keymode"] == 0  # the patch decides: Enter sends, Shift+Enter adds a line break
     web_box, entry_box = boxes[web], boxes[entry]
     assert web_box["patching_rect"][2:] == web_box["presentation_rect"][2:]  # jweb renders at one size
     wx, wy, ww, wh = web_box["presentation_rect"]
     assert wx + ww <= entry_box["presentation_rect"][0]  # the text field sits beside the chat, never over it
     assert (by_text["prepend chat_input"], web) in lines
     assert (entry, by_text["route text"]) in lines
-    # only the Send button sends: textedit also outputs its text when it loses focus (selecting another track)
+    # only Enter (without Shift) or Send sends: textedit also outputs its text when it loses focus (selecting another track)
     full = {(l["patchline"]["source"][0], l["patchline"]["source"][1], l["patchline"]["destination"][0],
              l["patchline"]["destination"][1]) for l in patcher["patcher"]["lines"]}
     gate, ask = by_text["gate 1 0"], by_text["t 0 b 1"]
     assert (by_text["route text"], 0, gate, 1) in full and (gate, 0, by_text["t b l"], 0) in full
     send = next(i for i, b in boxes.items() if b.get("varname") == "send")
-    assert not any(b.get("text") == "sel 13 3" for b in boxes.values())  # no key handling: Enter is a line break
+    assert (entry, 1, by_text["sel 13 3"], 0) in full  # the key outlet
+    assert (by_text["modifiers"], 0, by_text["sel 0"], 0) in full  # Shift held: the line break stays
+    assert (by_text["sel 0"], 0, ask, 0) in full
     assert any(src == send for src, _, _, _ in full)
     # Send: open (right outlet fires first), bang the field for its text, close
     assert {(ask, 2, gate, 0), (ask, 1, entry, 0), (ask, 0, gate, 0)} <= full

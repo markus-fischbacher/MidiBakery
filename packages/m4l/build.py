@@ -261,16 +261,21 @@ def chat_device() -> dict[str, Any]:
     web_rect = (0, 0, 500, height)
     web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url=LOADING_URL)
     # Live does not pass keystrokes to jweb, so typing happens in a native Max text field.
-    # The Send button sends "chat_input <words>" to the page (window.max.bindInlet), then clears the field.
-    # Enter only adds a line break.
+    # Enter or the Send button sends "chat_input <words>" to the page (window.max.bindInlet), then clears
+    # the field; Shift+Enter only adds a line break.
     entry = p.box("textedit", (700, 200, 190, 96), inlets=1, outlets=["", "int", "", ""],
                   presentation=(column_x, 26, column_w, 96), keymode=0, lines=0, wordwrap=1, fontsize=12.0,
                   bgcolor=[0.165, 0.165, 0.165, 1.0], textcolor=[0.85, 0.85, 0.85, 1.0],
                   bordercolor=[0.3, 0.3, 0.3, 1.0], varname="chat_entry")
     on_text = p.obj("route text", 700, 240, outlets=["", ""], width=70)
     # textedit also outputs its text when it loses focus (selecting another track), so its own output is
-    # dropped: the Send button opens the gate, bangs the field for its current text and closes the gate again.
+    # dropped: Send, or Return (13) / keypad Enter (3) on the key outlet without Shift, opens the gate, bangs
+    # the field for its current text and closes the gate again (the line break Enter typed is trimmed by the page).
     gate = p.obj("gate 1 0", 760, 240, inlets=2, outlets=[""], width=50)
+    on_enter = p.obj("sel 13 3", 820, 170, inlets=2, outlets=["bang", "bang", ""], width=60)
+    enter_delay = p.obj("deferlow", 880, 170, width=60)
+    shift = p.obj("modifiers", 940, 170, outlets=["", "", "", "", ""], width=70)
+    no_shift = p.obj("sel 0", 1020, 170, inlets=2, outlets=["bang", ""], width=50)
     ask_text = p.obj("t 0 b 1", 820, 260, outlets=["int", "bang", "int"], width=60)
     order = p.obj("t b l", 700, 270, outlets=["bang", ""], width=50)
     as_symbol = p.obj("tosymbol", 760, 300, width=60)
@@ -280,6 +285,12 @@ def chat_device() -> dict[str, Any]:
     refocus_delay = p.obj("deferlow", 700, 360, width=60)
     refocus = p.message("select", 700, 390)
     p.connect(entry, 0, on_text)
+    p.connect(entry, 1, on_enter)
+    p.connect(on_enter, 0, enter_delay)
+    p.connect(on_enter, 1, enter_delay)
+    p.connect(enter_delay, 0, shift)
+    p.connect(shift, 0, no_shift)
+    p.connect(no_shift, 0, ask_text)
     p.connect(on_text, 0, gate, 1)
     p.connect(gate, 0, order)
     p.connect(ask_text, 2, gate)
