@@ -944,3 +944,26 @@ async def test_set_tempo_varies_a_little_with_the_seed(client, live):
     tempos = {_payload(await server.call_tool("plan_song", {"genre": "house", "seed": seed, "set_tempo": True, "fx": False,
                                                              "sidechain": False, "create_missing": False}))["tempo"] for seed in range(8)}
     assert len(tempos) >= 2 and all(121 <= t <= 127 for t in tempos), tempos
+
+
+def _drop_chords(clips):
+    """The pitch classes sounding in each bar of 'Drop Chords', as (first half, second half)."""
+    clip, notes = clips["Drop Chords"]
+    bars = round(max(n["start_time"] + n["duration"] for n in notes) / 4)
+    per_bar = [frozenset(n["pitch"] % 12 for n in notes if bar * 4 <= n["start_time"] < bar * 4 + 4) for bar in range(bars)]
+    return per_bar[: bars // 2], per_bar[bars // 2:]
+
+
+async def test_a_long_drop_turns_to_other_chords_in_its_second_half(client, live):
+    _studio(live)
+    _, clips = await _song_notes(client, build_server(client), "house", seed=7)
+    first, second = _drop_chords(clips)
+    assert first and second and first != second
+
+
+async def test_second_progression_sets_the_chords_of_the_drops_second_half(client, live):
+    _studio(live)
+    _, clips = await _song_notes(client, build_server(client), "house", seed=7, progression="I I I I", second_progression="V V V V")
+    first, second = _drop_chords(clips)
+    assert all(0 in bar for bar in first) and not any(0 in bar for bar in second)  # C chords, then G chords (no C in them)
+    assert all(2 in bar for bar in second)

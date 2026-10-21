@@ -299,6 +299,8 @@ Genres: House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap. Name genre a
 - "Again, different." (new seed: different bass, chord loops and hook)
 - "Use seed 42." (the same notes as before)
 - "Same song, but a different bass."
+- "The chords in the second half of the drops should be different: IV V iii vi." (`second_progression`; without it, a long drop of 16+ bars turns to another genre progression in its second half, in House, Drum & Bass and Trap; Melodic and Peak-Time Techno keep their loop)
+- To change one existing clip: "In the clip 'Drop Chords' play other chords in the second half." (the chords of that clip are rewritten, one chord per bar)
 
 ### Giving your own chords
 
