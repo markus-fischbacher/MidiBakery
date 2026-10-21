@@ -63,7 +63,7 @@ MidiBakery controls the Ableton Live 12 set that is open right now.
   a clip; clip tools take arrangement_clip (from get_arrangement) instead of slot. compose and
   transform_notes too: to rewrite or vary one part of a song (the bass in its Groove), give the
   arrangement clip, by index or by its name ('Groove Bass'); compose then replaces its notes over
-  its whole length.
+  its whole length. Other chords in half a clip: compose chords on that clip with a progression naming every bar.
 - A whole song: plan_song, then apply_plan; say which tracks it used and created.
   compose_takes puts variations of a part on take lanes to comp in Live.
 - plan_master + apply_plan: a master chain as a starting point; it cannot hear the song.

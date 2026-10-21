@@ -124,6 +124,7 @@ class SongRequest(BaseModel):
     loops_from: dict[Literal["drums", "bass", "lead", "chords"], str] = Field(
         default_factory=dict, description="Take a role's loops from another imported Set (part of its name), e.g. {\"bass\": \"Sound as a Pound\"}")
     fill_missing: bool = Field(False, description="With an imported Set: also play roles the Set lacks, from the genre")
+    second_progression: str | None = Field(None, description="Chords of each drop's second half, e.g. 'IV V iii vi'")
     my_loops: bool = Field(False, description="The seed draws loops for the roles from the user's imported Sets")
     seed: Annotated[int, Field(ge=0)] | None = None
     _genre_note: str = PrivateAttr("")
@@ -735,14 +736,16 @@ def _chord_loop(reference: dict[str, Any] | None, loops_from: dict[str, str]) ->
     return entries[0] if entries else None
 
 
-def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Random, chord_loop: dict[str, Any] | None = None) -> tuple[Harmony, Harmony]:
-    """Main loop and break loop: the request's progression, a Set's chord loop, or two different genre loops."""
+def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Random, chord_loop: dict[str, Any] | None = None) -> tuple[Harmony, Harmony, Harmony | None]:
+    """Main loop, break loop and the loop for the second half of a long drop: the request's progression, a Set's
+    chord loop, or different genre loops."""
     pool = list(style.progressions["minor" if _is_minor(scale) else "major"]) if len(scale) == 7 else []
     candidates = [harmony_mod.timeline([diatonic_chord(scale, d) for d in degrees], meter, 8, style.chords_per_bar, "progression") for degrees in pool]
     if pool:  # the chord loops of the user's Sets tagged with this genre join the genre's own
         candidates += _genre_chord_loops(request.genre, scale, meter)
     r.shuffle(candidates)
     loops = candidates[:2]
+    turn = candidates[2] if len(candidates) > 2 and request.genre != "peak_time_techno" else None  # Peak-Time's drop keeps one home chord (its recipe)
     if not loops:  # pentatonic and other scales: the generic generator
         loops = [harmony_mod.auto(scale, meter, 8, style.chords_per_bar, r) for _ in range(2)]
     if len(loops) == 1:
@@ -756,7 +759,12 @@ def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Rando
         mode = Scale(scale.root, (0, 2, 4, 5, 7, 9, 11) if chord_loop.get("scale") == "major" else (0, 2, 3, 5, 7, 8, 10), "")
         loops[0] = replace(harmony_mod.from_progression(chord_loop["progression"], mode, meter, 8, float(chord_loop.get("chords_per_bar", 1.0))),
                            explicit=True)
-    return loops[0], loops[1]
+    if request.second_progression:
+        try:
+            turn = replace(harmony_mod.from_progression(request.second_progression, scale, meter, 8, style.chords_per_bar), explicit=True)
+        except ValueError as exc:
+            raise BridgeError("INVALID_PARAMS", str(exc)) from None
+    return loops[0], loops[1], turn
 
 
 # plan_song genre -> the bass templates (bass_templates.py) that suit it besides the genre's own recipe.
@@ -966,7 +974,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     def rng(*key: object) -> random.Random:
         return random.Random(":".join(str(k) for k in (seed, *key)))
 
-    main, alt = _harmonies(request, style, scale, meter, rng("harmony"), _chord_loop(reference, request.loops_from))
+    main, alt, turn = _harmonies(request, style, scale, meter, rng("harmony"), _chord_loop(reference, request.loops_from))
 
     drum_map = map_pads(None)
     drums = roles.get("drums")
@@ -1110,6 +1118,10 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     section_harmonies: list[Harmony] = []
     for section, at in zip(sections, starts):
         harmony: Harmony = (alt if section.kind == "break" else main).for_length(meter, section.bars)
+        if turn is not None and section.kind == "drop" and section.bars >= 16 and section.bars % 2 == 0:  # a long drop turns to other chords for its second half
+            half = section.bars // 2
+            harmony = Harmony(tuple(main.for_length(meter, half).segments) + tuple(_shift(turn.for_length(meter, half), half * bpb)),
+                              main.source, main.explicit)
         if clip_harmony is not None:
             chord_parts = [seg for seg in parse_segments(section.parts.get("chords", ""), section.bars) if seg[0] != "-"] if "chords" in roles else []
             harmony = _follow_clip(clip_harmony, chord_parts, meter, section.bars)

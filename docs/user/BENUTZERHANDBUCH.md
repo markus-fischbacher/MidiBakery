@@ -300,6 +300,8 @@ Genres: House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap. Nenne Genre 
 - „Nochmal, anders.“ (neuer Seed: anderer Bass, andere Akkordfolgen, anderer Hook)
 - „Nimm Seed 42.“ (dieselben Noten wie damals)
 - „Gleicher Song, aber ein anderer Bass.“
+- „Die Akkorde in der zweiten Hälfte der Drops sollen anders sein: IV V iii vi.“ (`second_progression`; ohne Angabe wechselt ein langer Drop ab 16 Takten in der zweiten Hälfte zu einer anderen Genre-Folge, bei House, Drum & Bass und Trap; Melodic und Peak-Time Techno behalten ihren Loop)
+- Einen vorhandenen Clip ändern: „Im Clip ‚Drop Chords‘ sollen in der zweiten Hälfte andere Akkorde spielen.“ (die Akkorde dieses Clips werden neu geschrieben, ein Akkord pro Takt)
 
 ### Eigene Akkorde vorgeben
 
