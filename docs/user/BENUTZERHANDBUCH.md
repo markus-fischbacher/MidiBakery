@@ -297,7 +297,7 @@ Genres: House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap. Nenne Genre 
 - „Drum & Bass, Radio-Edit, in A-Moll.“
 - „Zeig mir erst den Plan für den Song und schreib noch nichts.“ (Vorschau, dann Apply oder Undo)
 - „Mach den letzten Schritt rückgängig.“
-- „Nochmal, anders.“ (neuer Seed: anderer Bass, andere Akkordfolgen, anderer Hook)
+- „Nochmal, anders.“ (neuer Seed: anderer Bass, andere Akkordfolgen, anderer Drum-Groove, anderer Hook)
 - „Nimm Seed 42.“ (dieselben Noten wie damals)
 - „Gleicher Song, aber ein anderer Bass.“
 - „Die Akkorde in der zweiten Hälfte der Drops sollen anders sein: IV V iii vi.“ (`second_progression`; ohne Angabe wechselt ein langer Drop ab 16 Takten in der zweiten Hälfte zu einer anderen Genre-Folge, bei House, Drum & Bass und Trap; Melodic und Peak-Time Techno behalten ihren Loop)

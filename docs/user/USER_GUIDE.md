@@ -296,7 +296,7 @@ Genres: House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap. Name genre a
 - "Drum and bass, radio edit, in A minor."
 - "Show me the plan for the song first and write nothing yet." (a preview, then Apply or Undo)
 - "Undo the last step."
-- "Again, different." (new seed: different bass, chord loops and hook)
+- "Again, different." (new seed: different bass, chord loops, drum groove and hook)
 - "Use seed 42." (the same notes as before)
 - "Same song, but a different bass."
 - "The chords in the second half of the drops should be different: IV V iii vi." (`second_progression`; without it, a long drop of 16+ bars turns to another genre progression in its second half, in House, Drum & Bass and Trap; Melodic and Peak-Time Techno keep their loop)
@@ -379,7 +379,7 @@ If a small local model ignores the roles, say it outright: "For the song after '
 - **One part at a time** when you want precision; **several parts or a song** when you want something to continue from, fast.
 - **Say what's missing:** "The bass is too busy", "More air in the drums" – the AI adjusts density, swing or style.
 - **Seed:** every idea has a number (seed). "Use seed 42" brings the same notes back. If you liked an idea, ask for its seed.
-  In a whole song (`plan_song`) the seed also picks the bass (the genre's own pattern or a matching bass template for House, Melodic and Peak-Time Techno) and the chord loops, and with `set_tempo` a tempo within ±2 % of the genre's.
+  In a whole song (`plan_song`) the seed also picks the bass (the genre's own pattern or a matching bass template for House, Melodic and Peak-Time Techno) the chord loops and the drum groove (the genre's own or a variant with other hats, rim or ghost notes; the kick stays), and with `set_tempo` a tempo within ±2 % of the genre's.
 
 ## 8. Composing parts and whole songs
 

@@ -937,6 +937,22 @@ def test_the_seed_picks_the_bass_among_the_templates_that_suit_the_genre():
     assert {_bass_variant("house", 90, random.Random(seed)) for seed in range(10)} == {None}  # none fits the tempo
 
 
+def test_the_seed_picks_a_drum_groove_variant_and_keeps_the_kick():
+    import random
+
+    from midibakery.compose.grooves import GROOVE_VARIANTS, GROOVES
+    from midibakery.compose.song import _groove_variant
+
+    for genre, groove in GROOVES.items():
+        picks = {id(_groove_variant(genre, random.Random(seed))) for seed in range(40)}
+        assert len(picks) == 1 + len(GROOVE_VARIANTS[genre])  # the genre's own groove and every variant
+        kick = [lane for lane in groove.lanes if lane.role == "kick"]
+        for variant in GROOVE_VARIANTS[genre]:
+            assert [lane for lane in variant.lanes if lane.role == "kick"] == kick  # the sidechain trigger follows the kick
+            assert variant.parts == groove.parts and variant.swing == groove.swing
+    assert _groove_variant("house", random.Random(3)) is _groove_variant("house", random.Random(3))
+
+
 @pytest.mark.asyncio
 async def test_set_tempo_varies_a_little_with_the_seed(client, live):
     _studio(live)
