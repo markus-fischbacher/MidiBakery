@@ -54,10 +54,10 @@ from midibakery.compose.notes import Note, fit_to_length
 from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.rollback import batch_steps, completed, restore_locators, undo, undo_batch
+from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, generate_bass_template
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
 from midibakery.compose import user_patterns
-from midibakery.compose.bass_templates import generate_bass_template
 from midibakery.compose.lead_templates import generate_lead_template
 from midibakery.compose.references import find_reference, reference_scale
 from midibakery.compose.techno_templates import generate_techno_drums
@@ -755,6 +755,22 @@ def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Rando
     return loops[0], loops[1]
 
 
+# plan_song genre -> the bass templates (bass_templates.py) that suit it besides the genre's own recipe.
+BASS_VARIANTS = {
+    "house": ("tech_house",),
+    "melodic_techno": ("melodic_techno", "progressive"),
+    "peak_time_techno": ("peak_time_techno",),
+}
+
+
+def _bass_variant(genre: str, tempo: float, r: random.Random) -> BassTemplate | None:
+    """The seed picks the song's bass: the genre's own recipe or one of the templates that suit it
+    and its tempo (None = the recipe). Without a fitting template the recipe stays."""
+    tags = BASS_VARIANTS.get(genre, ())
+    pool = [t for t in BASS_TEMPLATES.values() if set(t.genres) & set(tags) and t.bpm[0] - 4 <= tempo <= t.bpm[1] + 4]
+    return r.choice([None, *pool]) if pool else None
+
+
 def _is_minor(scale: Scale) -> bool:
     return len(scale.intervals) >= 3 and scale.intervals[2] == 3
 
@@ -837,6 +853,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             key = reference_scale(reference.get("key"))
             if key is not None:
                 scale = key
+    seed = request.seed if request.seed is not None else new_seed()
+    if request.set_tempo and reference is None:  # the genre's tempo, a little different each time (+-2 %)
+        new_tempo = float(round(style.tempo * (1 + random.Random(f"{seed}:tempo").uniform(-0.02, 0.02))))
     if new_tempo is not None:
         tempo = new_tempo
     if reference is not None:
@@ -845,7 +864,6 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                                   True if request.fill_missing else frozenset(request.loops_from), frozenset(GROOVES[request.genre].parts))
     else:
         sections = sized(template, request.length, request.minutes, bpb, tempo)
-    seed = request.seed if request.seed is not None else new_seed()
 
     roles, warnings = _assign_roles(session, request)
     if request._genre_note:
@@ -1003,6 +1021,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     counts: dict[str, int] = {r: 0 for r in roles}
     groove, bass_pattern, chord_pattern = GROOVES[request.genre], BASS[request.genre], CHORDS[request.genre]
     swing = groove.swing
+    bass_template = _bass_variant(request.genre, tempo, rng("bass"))
     hook = make_hook(rng("hook"))
     arp = make_arp(rng("arp"))
     acid = make_acid(rng("acid"))
@@ -1023,6 +1042,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         if role == "bass":
             if part == "rumble":
                 return _rumble(harmony, meter, bars)
+            if bass_template is not None:
+                return _energize(generate_bass_template(bass_template, harmony, meter, bars)["main"], section.energy)
             return _energize(generate_recipe_bass(bass_pattern, harmony, meter, bars, swing, r), section.energy)
         if role == "chords":
             chords = seventh_harmony(harmony, scale) if chord_pattern.sevenths else harmony
