@@ -124,6 +124,7 @@ class SongRequest(BaseModel):
     loops_from: dict[Literal["drums", "bass", "lead", "chords"], str] = Field(
         default_factory=dict, description="Take a role's loops from another imported Set (part of its name), e.g. {\"bass\": \"Sound as a Pound\"}")
     fill_missing: bool = Field(False, description="With an imported Set: also play roles the Set lacks, from the genre")
+    my_loops: bool = Field(False, description="The seed draws loops for the roles from the user's imported Sets")
     seed: Annotated[int, Field(ge=0)] | None = None
     _genre_note: str = PrivateAttr("")
 
@@ -775,6 +776,22 @@ def _is_minor(scale: Scale) -> bool:
     return len(scale.intervals) >= 3 and scale.intervals[2] == 3
 
 
+def _draw_loops(request: SongRequest, reference: dict[str, Any] | None, seed: int) -> dict[str, str]:
+    """role -> the name of an imported Set the seed draws its loops from. Roles that loops_from names, and
+    those the reference Set plays with its own loops, are not drawn."""
+    own = reference.get("id") if reference is not None and reference.get("bar_grid") == "als" else None
+    stored = user_patterns.entries()
+    r = random.Random(f"{seed}:my_loops")
+    drawn: dict[str, str] = {}
+    for role in ROLES:
+        if role in request.loops_from or any(e["set"] == own and e["kind"] == role for e in stored):
+            continue
+        sets = sorted({e["set_name"] for e in stored if e["kind"] == role and e.get("set_name")})
+        if sets:
+            drawn[role] = r.choice(sets)
+    return drawn
+
+
 def _loops(reference: dict[str, Any] | None, loops_from: dict[str, str]) -> dict[str, tuple[list[dict[str, Any]], bool]]:
     """role -> (the imported Set's loops for it, whether they come from the reference that sets the structure)."""
     out: dict[str, tuple[list[dict[str, Any]], bool]] = {}
@@ -854,6 +871,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             if key is not None:
                 scale = key
     seed = request.seed if request.seed is not None else new_seed()
+    drawn = _draw_loops(request, reference, seed) if request.my_loops else {}
+    if drawn:
+        request = request.model_copy(update={"loops_from": {**drawn, **request.loops_from}})
     if request.set_tempo and reference is None:  # the genre's tempo, a little different each time (+-2 %)
         new_tempo = float(round(style.tempo * (1 + random.Random(f"{seed}:tempo").uniform(-0.02, 0.02))))
     if new_tempo is not None:
@@ -868,6 +888,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     roles, warnings = _assign_roles(session, request)
     if request._genre_note:
         warnings.append(request._genre_note)
+    if request.my_loops:
+        warnings.append("my_loops: " + ("; ".join(f"{role} from '{name}'" for role, name in drawn.items()) if drawn
+                                         else "no imported loops for the roles: the genre's own patterns"))
     if reference is not None and reference.get("bar_grid") == "als" and not request.fill_missing:
         for role in ROLES:  # the Set's own line-up: a role it never plays gets no track
             if role in roles and role not in request.loops_from and not any(s.parts.get(role) not in (None, "-", "") for s in sections):
