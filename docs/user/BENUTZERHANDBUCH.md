@@ -286,6 +286,63 @@ Du kannst Deutsch und Englisch mischen. Spuren und Clips kannst du beim Namen ne
 - „Lösche den Clip ‚Outro Hats‘.“
 - „Setze einen Marker ‚Drop‘ auf Takt 33.“ (Locator)
 
+### Ganze Songs: Genre, Länge, Varianten
+
+Genres: House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap. Nenne Genre und Länge im selben Satz; die Tonart des Sets bleibt, wenn du nichts anderes sagst.
+
+- „Bau mir einen Melodic-Techno-Song, 5 Minuten.“
+- „Peak-Time Techno, etwa 6 Minuten, setz das Tempo des Genres.“ (Das Tempo wird nur auf Wunsch gesetzt, mit etwas Streuung um das Genre-Tempo.)
+- „House-Track in Standardlänge, ohne Sidechain und ohne Effekte.“
+- „Ein Trap-Beat mit 808-Bass, kurz.“
+- „Drum & Bass, Radio-Edit, in A-Moll.“
+- „Zeig mir erst den Plan für den Song und schreib noch nichts.“ (Vorschau, dann Apply oder Undo)
+- „Mach den letzten Schritt rückgängig.“
+- „Nochmal, anders.“ (neuer Seed: anderer Bass, andere Akkordfolgen, anderer Hook)
+- „Nimm Seed 42.“ (dieselben Noten wie damals)
+- „Gleicher Song, aber ein anderer Bass.“
+
+### Eigene Akkorde vorgeben
+
+- „Nimm die Progression i – VI – III – VII.“ (Römische Ziffern; die Folge wird übernommen, nicht geraten)
+- „Akkorde Am – F – C – G, ein Akkord pro Takt.“
+- „Zwei Akkorde pro Takt, Vierklänge.“
+- „Setz die Tonart auf F-Moll und baue den Song neu.“
+
+### Songs nach einem importierten Set
+
+Voraussetzung: Das Set ist im Set Importer importiert (Kapitel 11). Die Namen müssen so stehen wie in der Bibliothek.
+
+- „Bau einen Song nach der Referenz ‚Sound as a Pound‘.“ (Aufbau und Tempo kommen vom Set)
+- „Nach ‚Sound as a Pound‘, mit dem Tempo und der Tonart des Sets.“
+- „Wie ‚Sound as a Pound‘, aber spiel auch die Rollen, die das Set nicht hat, aus dem Genre.“ (`fill_missing`)
+- „Nach ‚Sound as a Pound‘, aber mit den Akkorden von ‚Summer Funx‘.“
+- „Nach ‚Sound as a Pound‘, aber mit dem Bass von ‚Summer Funx‘.“
+- „Wie ‚X‘, aber mit den Drums von ‚Y‘ und dem Lead von ‚Z‘.“
+- „Welche Sets habe ich importiert?“
+- „Zeig mir die Struktur von ‚Summer Funx‘.“
+
+Wenn ein kleines lokales Modell die Rollen ignoriert, schreib es ausdrücklich: „Nimm für den Song nach ‚Sound as a Pound‘ `loops_from` mit chords von ‚Summer Funx‘.“
+
+### Eigene Loops einzeln benutzen
+
+- „Spiel einen Bass mit dem Muster `my_soundasapound_bass_1` auf Spur 2, 8 Takte.“
+- „Drums mit `my_summerfunx_drums_1` auf Spur 1.“
+- „Lead mit `my_soundasapound_lead_1` über die Akkorde auf Spur 3.“
+- „Welche eigenen Muster gibt es für Bass?“
+
+### Bass und Lead nach Stil
+
+- „Rollender Bass mit Oktav-Sprüngen, 8 Takte, Spur 2.“
+- „Bass im Stil ‚rolling_octaves‘ auf Spur 2.“
+- „Ein langsamer, melodischer Bass im Stil von Progressive.“
+- „Welche Bass-Muster kennst du?“ (die KI listet sie)
+- „Lead mit weichem Hook und Frage-und-Antwort, 8 Takte.“
+
+### Zusammen auf einmal
+
+- „Bau mir einen House-Song nach ‚Summer Funx‘ in 6 Minuten, Akkorde von ‚Sound as a Pound‘, ohne Effekte, und zeig mir erst den Plan.“
+- „Neue Spuren anlegen für Bass, Akkorde und Lead, die Drums auf Spur 1 bleiben.“
+
 ### Live steuern
 
 - „Setze das Tempo auf 126.“ / *Set the tempo to 126.*
