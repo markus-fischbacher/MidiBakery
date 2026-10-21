@@ -324,6 +324,8 @@ If a small local model ignores the roles, say it outright: "For the song after '
 
 ### Using your own loops one at a time
 
+- "Build a house song with my own loops." (the seed draws them from your imported Sets; "Again, different" draws another mix)
+
 - "Play a bass with the pattern `my_soundasapound_bass_1` on track 2, 8 bars."
 - "Drums with `my_summerfunx_drums_1` on track 1."
 - "A lead with `my_soundasapound_lead_1` over the chords on track 3."
@@ -548,6 +550,7 @@ The **MidiBakery Set Importer** reads Ableton Live Sets (`.als`) from your disk,
 - You don't have to name a genre: without one MidiBakery uses the genre you set on the Set in the importer, or guesses one from its tempo and tells you.
 - `loops_from`: take the loops of another Set for a role: "Use Phantom's structure, but the bass loop of Sound as a Pound". Possible roles: drums, bass, lead, chords. Without `loops_from`, a song after a Set plays that Set's chord progression.
 - `fill_missing`: roles the Set never plays are left out by default. "...and fill in what's missing" adds them from the genre.
+- `my_loops`: "...with my own loops" lets the seed draw drums, bass, lead and chords from your imported Sets (a different mix per seed; a role you name with `loops_from`, or that the reference Set plays itself, is not drawn). The reply says which Set each role came from. Off unless you ask.
 
 **Limits:** only 4/4 Sets. Many Sets play drums as audio; there are no drum loops to find then. A Set whose key cannot be found yields bass loops but no lead loops. Sections are a good estimate from the clips, not a ground truth: check them in the Library view. Loops are patterns to start from, not a copy of the original song.
 

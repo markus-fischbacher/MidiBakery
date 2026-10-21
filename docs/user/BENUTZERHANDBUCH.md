@@ -325,6 +325,8 @@ Wenn ein kleines lokales Modell die Rollen ignoriert, schreib es ausdrücklich: 
 
 ### Eigene Loops einzeln benutzen
 
+- „Bau einen House-Song mit meinen eigenen Loops.“ (der Seed zieht sie aus deinen importierten Sets; „Nochmal, anders“ zieht eine andere Mischung)
+
 - „Spiel einen Bass mit dem Muster `my_soundasapound_bass_1` auf Spur 2, 8 Takte.“
 - „Drums mit `my_summerfunx_drums_1` auf Spur 1.“
 - „Lead mit `my_soundasapound_lead_1` über die Akkorde auf Spur 3.“
@@ -548,6 +550,7 @@ Der **MidiBakery Set Importer** liest Ableton-Live-Sets (`.als`) von deiner Fest
 - Ein Genre musst du nicht nennen: Ohne Angabe nimmt MidiBakery das Genre, das du im Importer am Set gesetzt hast, oder schätzt eines aus dem Tempo und sagt es dir.
 - `loops_from`: Loops eines anderen Sets für eine Rolle nehmen: „Nimm den Aufbau von Phantom, aber den Bass-Loop von Sound as a Pound.“ Mögliche Rollen: drums, bass, lead, chords. Ohne `loops_from` spielt ein Song nach einem Set dessen Akkordfolge.
 - `fill_missing`: Rollen, die das Set nie spielt, bleiben standardmäßig weg. „… und ergänze, was fehlt“ fügt sie aus dem Genre hinzu.
+- `my_loops`: „… mit meinen eigenen Loops“ lässt den Seed Drums, Bass, Lead und Akkorde aus deinen importierten Sets ziehen (pro Seed eine andere Mischung; eine Rolle, die du mit `loops_from` nennst oder die das Referenz-Set selbst spielt, wird nicht gezogen). Die Antwort sagt, aus welchem Set jede Rolle kam. Nur auf Wunsch.
 
 **Grenzen:** nur 4/4-Sets. Viele Sets spielen Drums als Audio; dann gibt es keine Drum-Loops zu finden. Ein Set, dessen Tonart nicht erkannt wird, liefert Bass-Loops, aber keine Lead-Loops. Die Abschnitte sind eine gute Schätzung aus den Clips, keine gesicherte Tatsache: Prüfe sie in der Library-Ansicht. Loops sind Muster zum Weiterarbeiten, keine Kopie des Originalsongs.
 

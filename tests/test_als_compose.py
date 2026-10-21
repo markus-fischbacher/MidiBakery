@@ -180,3 +180,20 @@ async def test_a_left_out_role_leaves_no_gap_among_the_new_tracks(client, live, 
     assert new and new == list(range(new[0], new[0] + len(new)))
     assert {a["track"] for a in plan.actions} <= {t.index for t in plan.roles.values()}
     assert any("loops_from={\"chords\"" in w and "Chord Demo" in w for w in plan.warnings)
+
+
+async def test_my_loops_lets_the_seed_draw_loops_from_the_imported_sets(client, live, home):
+    _studio(live)
+    _import(home)
+    _chord_set(home)
+    plain = await build_song(client.call, SongRequest(genre="house", seed=7, fx=False, sidechain=False))
+    drawn = await build_song(client.call, SongRequest(genre="house", seed=7, my_loops=True, fx=False, sidechain=False))
+    again = await build_song(client.call, SongRequest(genre="house", seed=7, my_loops=True, fx=False, sidechain=False))
+    note = next(w for w in drawn.warnings if w.startswith("my_loops:"))
+    assert "chords from 'Chord Demo'" in note and "bass from" in note
+    assert drawn.harmony["main"] != plain.harmony["main"]  # the Set's chord loop is the harmony
+    assert drawn.harmony == again.harmony and note in again.warnings  # same seed, same draw
+    assert not any(w.startswith("my_loops") for w in plain.warnings)  # off unless asked
+    named = await build_song(client.call, SongRequest(genre="house", seed=7, my_loops=True, loops_from={"bass": "Loops Demo"},
+                                                      fx=False, sidechain=False))
+    assert "bass from" not in next(w for w in named.warnings if w.startswith("my_loops:"))  # a role loops_from names is not drawn
