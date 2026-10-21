@@ -128,7 +128,7 @@ Du brauchst das Gerät nur **einmal** im Set, auf irgendeiner MIDI-Spur. Am best
 
 ### Schritt 4: Prüfen
 
-Schreibe in das Eingabefeld rechts im Gerät „Hallo“ und drücke Enter. Antwortet die KI, ist alles bereit. Falls nach einem Schlüssel gefragt wird: weiter mit Kapitel 5.
+Schreibe in das Eingabefeld rechts im Gerät „Hallo“ und klicke **Send**. Antwortet die KI, ist alles bereit. Falls nach einem Schlüssel gefragt wird: weiter mit Kapitel 5.
 
 Jedes Gerät hat einen **About**-Knopf. Er zeigt die Versionen von Gerät, API und Remote Script. Sie sollten übereinstimmen.
 
@@ -150,7 +150,7 @@ Standardmäßig benutzt MidiBakery **Claude Sonnet 5.5**. Im Menü gibt es auch 
 
 1. Erstelle bei Anthropic (console.anthropic.com) ein Konto, hinterlege eine Zahlungsmethode und erzeuge unter **API Keys** einen Schlüssel. Er beginnt mit `sk-ant-`. Das Claude-Abo für den Chat auf claude.ai ist etwas anderes und reicht dafür nicht: die API wird getrennt abgerechnet.
 2. Wähle im Modell-Menü ein Claude-Modell. Rechts oben im Chat erscheint der Knopf **Key**.
-3. Klicke **Key**. Im Chat-Gerät gibst du den Schlüssel dann **in das Eingabefeld rechts** ein (nicht in das Chat-Fenster) und drückst Enter. Der Schlüssel wird dabei nicht angezeigt und nie an ein Modell geschickt. Im Browser-Fenster (*Pop out*) gibt es ein eigenes Feld.
+3. Klicke **Key**. Im Chat-Gerät gibst du den Schlüssel dann **in das Eingabefeld rechts** ein (nicht in das Chat-Fenster) und klickst **Send**. Der Schlüssel wird dabei nicht angezeigt und nie an ein Modell geschickt. Im Browser-Fenster (*Pop out*) gibt es ein eigenes Feld.
 4. MidiBakery prüft den Schlüssel bei Anthropic und speichert ihn in der **macOS-Schlüsselbundverwaltung** (Dienst „MidiBakery“) bzw. der **Windows-Anmeldeinformationsverwaltung**. Danach steht auf dem Knopf „Key ✓“.
 5. Entfernen: **Key** > **Remove**.
 
@@ -198,7 +198,8 @@ Das Fenster des Chat-Geräts:
 | **Copy** | kopiert das ganze Gespräch (Gedanken, Werkzeugaufrufe, Antworten) in die Zwischenablage |
 | **New** | vergisst das Gespräch und fängt neu an (dein Set bleibt, wie es ist) |
 | **Pop out** (rechts im Gerät) | öffnet denselben Chat im Browser, mit mehr Platz |
-| **Eingabefeld** (rechts im Gerät) | hier tippst du; Enter sendet |
+| **Eingabefeld** (rechts im Gerät) | hier tippst du; Enter macht einen Zeilenumbruch |
+| **Send** (unter dem Eingabefeld) | schickt deinen Text ab; nur dieser Button sendet |
 
 **Wichtig:** Live reicht Tastatureingaben nicht an das Chat-Fenster weiter. Tippen kannst du deshalb nur in das **Eingabefeld rechts im Gerät**. Im Browser-Fenster (*Pop out*) hat die Seite ein eigenes Eingabefeld.
 
