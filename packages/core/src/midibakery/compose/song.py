@@ -59,7 +59,7 @@ from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, g
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
 from midibakery.compose import user_patterns
 from midibakery.compose.lead_templates import generate_lead_template
-from midibakery.compose.references import find_reference, reference_scale
+from midibakery.compose.references import find_reference, load_references, reference_scale
 from midibakery.compose.techno_templates import generate_techno_drums
 from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, from_reference, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
@@ -738,8 +738,11 @@ def _chord_loop(reference: dict[str, Any] | None, loops_from: dict[str, str]) ->
 def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Random, chord_loop: dict[str, Any] | None = None) -> tuple[Harmony, Harmony]:
     """Main loop and break loop: the request's progression, a Set's chord loop, or two different genre loops."""
     pool = list(style.progressions["minor" if _is_minor(scale) else "major"]) if len(scale) == 7 else []
-    r.shuffle(pool)
-    loops = [harmony_mod.timeline([diatonic_chord(scale, d) for d in degrees], meter, 8, style.chords_per_bar, "progression") for degrees in pool[:2]]
+    candidates = [harmony_mod.timeline([diatonic_chord(scale, d) for d in degrees], meter, 8, style.chords_per_bar, "progression") for degrees in pool]
+    if pool:  # the chord loops of the user's Sets tagged with this genre join the genre's own
+        candidates += _genre_chord_loops(request.genre, scale, meter)
+    r.shuffle(candidates)
+    loops = candidates[:2]
     if not loops:  # pentatonic and other scales: the generic generator
         loops = [harmony_mod.auto(scale, meter, 8, style.chords_per_bar, r) for _ in range(2)]
     if len(loops) == 1:
@@ -770,6 +773,22 @@ def _bass_variant(genre: str, tempo: float, r: random.Random) -> BassTemplate | 
     tags = BASS_VARIANTS.get(genre, ())
     pool = [t for t in BASS_TEMPLATES.values() if set(t.genres) & set(tags) and t.bpm[0] - 4 <= tempo <= t.bpm[1] + 4]
     return r.choice([None, *pool]) if pool else None
+
+
+def _genre_chord_loops(genre: str, scale: Scale, meter) -> list[Harmony]:
+    """Chord loops of imported Sets whose genre (set in the Set Importer) is `genre` and whose mode is the song's."""
+    minor = "minor" if _is_minor(scale) else "major"
+    genres = {r.get("id"): r.get("genre") for r in load_references()}
+    out = []
+    for e in user_patterns.entries():
+        if e["kind"] != "chords" or genres.get(e["set"]) != genre or e.get("scale") != minor:
+            continue
+        mode = Scale(scale.root, (0, 2, 4, 5, 7, 9, 11) if minor == "major" else (0, 2, 3, 5, 7, 8, 10), "")
+        try:
+            out.append(harmony_mod.from_progression(e["progression"], mode, meter, 8, float(e.get("chords_per_bar", 1.0))))
+        except ValueError:
+            continue
+    return out
 
 
 def _is_minor(scale: Scale) -> bool:
