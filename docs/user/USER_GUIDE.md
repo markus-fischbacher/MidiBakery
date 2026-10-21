@@ -127,7 +127,7 @@ You need the device only **once** per set, on any MIDI track. It's nice to keep 
 
 ### Step 4: Test
 
-Type "Hello" into the input field on the right of the device and press Send. If the AI answers, you're ready. If a key is requested: on to chapter 5.
+Type "Hello" into the input field on the right of the device and press Enter. If the AI answers, you're ready. If a key is requested: on to chapter 5.
 
 Every device has an **About** button showing the versions of device, API and Remote Script. They should match.
 
@@ -149,7 +149,7 @@ By default MidiBakery uses **Claude Sonnet 5.5**. The menu also offers Claude Op
 
 1. Create an account at Anthropic (console.anthropic.com), add a payment method and create a key under **API Keys**. It starts with `sk-ant-`. A Claude subscription for claude.ai is something else and is not enough: the API is billed separately.
 2. Pick a Claude model in the menu. A **Key** button appears at the top right of the chat.
-3. Click **Key**. Then enter the key **in the input field on the right of the device** (not in the chat window) and press Send. The key isn't displayed and never sent to a model. The browser window (*Pop out*) has its own field.
+3. Click **Key**. Then enter the key **in the input field on the right of the device** (not in the chat window) and press Enter. The key isn't displayed and never sent to a model. The browser window (*Pop out*) has its own field.
 4. MidiBakery checks the key with Anthropic and stores it in the **macOS Keychain** (service "MidiBakery") or the **Windows Credential Manager**. The button then reads "Key ✓".
 5. To remove it: **Key** > **Remove**.
 
@@ -197,8 +197,8 @@ The Chat device window:
 | **Copy** | copies the whole conversation (thoughts, tool calls, answers) to the clipboard |
 | **New** | forgets the conversation and starts over (your set stays as it is) |
 | **Pop out** (right in the device) | opens the same chat in the browser, with more room |
-| **Input field** (right in the device) | where you type; Enter adds a line break |
-| **Send** (below the input field) | sends your text; only this button sends |
+| **Input field** (right in the device) | where you type; Enter sends, Shift+Enter adds a line break |
+| **Send** (below the input field) | sends your text, like Enter |
 
 **Important:** Live doesn't pass keyboard input to the chat window. You can only type in the **input field on the right of the device**. In the browser window (*Pop out*) the page has its own input field.
 

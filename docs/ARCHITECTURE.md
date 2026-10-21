@@ -101,7 +101,7 @@ flowchart LR
 - The chat page has: model menu, **Stop**, **Undo** (reverts the last change in Live), **Key** (only for Claude models), **Copy** (the whole conversation to the clipboard; a click on a single answer copies it), **New** (forget the conversation), a status line with the Live state, plan cards with **Apply** (note diff as a piano roll, a timeline for songs) and the banners for update and license. Local models need no key.
 - On the right are native Max controls, because Live does not pass the keyboard on to `jweb` and dropdowns do not open in it:
   - **Model menu** (`umenu`): The page fills it with the list from `/models`, and the selection goes back as `model_index`.
-  - **Input field** (`textedit`): the Send button sends the text as `chat_input` to the page, then the field gets focus back.
+  - **Input field** (`textedit`): Enter (or the Send button) sends the text as `chat_input` to the page, then the field gets focus back.
   - **Pop out** opens the same page in the browser.
 - `node.script midibakery-chat.js` reads `api.json`, gives `jweb` the URL and sends it again until the page reports "loaded". If the token changes, for example when the API restarts, it reloads the page automatically.
 
