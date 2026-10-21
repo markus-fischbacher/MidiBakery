@@ -318,6 +318,7 @@ You can mix English and German. Name tracks and clips ("Bass", "Intro Kick") or 
 - **One part at a time** when you want precision; **several parts or a song** when you want something to continue from, fast.
 - **Say what's missing:** "The bass is too busy", "More air in the drums" – the AI adjusts density, swing or style.
 - **Seed:** every idea has a number (seed). "Use seed 42" brings the same notes back. If you liked an idea, ask for its seed.
+  In a whole song (`plan_song`) the seed also picks the bass (the genre's own pattern or a matching bass template for House, Melodic and Peak-Time Techno) and the chord loops, and with `set_tempo` a tempo within ±2 % of the genre's.
 
 ## 8. Composing parts and whole songs
 

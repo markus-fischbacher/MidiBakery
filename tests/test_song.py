@@ -923,3 +923,24 @@ async def test_a_track_of_an_unapplied_song_plan_says_apply_first(client, live):
     lead = preview["tracks"]["lead"]["track"]
     with pytest.raises(ToolError, match=rf"comes from song plan {preview['plan_id']}, which is not applied yet: apply_plan"):
         await server.call_tool("compose", {"kind": "melody", "track": 1, "counter_to": {"track": lead}})
+
+
+def test_the_seed_picks_the_bass_among_the_templates_that_suit_the_genre():
+    import random
+
+    from midibakery.compose.song import _bass_variant
+
+    picks = {getattr(_bass_variant("melodic_techno", 122, random.Random(seed)), "name", None) for seed in range(40)}
+    assert None in picks and len(picks) >= 3  # the genre's own recipe and several templates
+    assert _bass_variant("melodic_techno", 122, random.Random(5)) == _bass_variant("melodic_techno", 122, random.Random(5))
+    assert {_bass_variant("trap", 140, random.Random(seed)) for seed in range(10)} == {None}  # no fitting template: the recipe
+    assert {_bass_variant("house", 90, random.Random(seed)) for seed in range(10)} == {None}  # none fits the tempo
+
+
+@pytest.mark.asyncio
+async def test_set_tempo_varies_a_little_with_the_seed(client, live):
+    _studio(live)
+    server = build_server(client)
+    tempos = {_payload(await server.call_tool("plan_song", {"genre": "house", "seed": seed, "set_tempo": True, "fx": False,
+                                                             "sidechain": False, "create_missing": False}))["tempo"] for seed in range(8)}
+    assert len(tempos) >= 2 and all(121 <= t <= 127 for t in tempos), tempos
