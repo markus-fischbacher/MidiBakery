@@ -58,7 +58,6 @@ from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, gene
 from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
 from midibakery.compose import user_patterns
-from midibakery.compose.bass_templates import generate_bass_template
 from midibakery.compose.lead_templates import generate_lead_template
 from midibakery.compose.references import find_reference, reference_scale
 from midibakery.compose.techno_templates import generate_techno_drums
