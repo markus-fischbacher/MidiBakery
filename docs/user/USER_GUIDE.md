@@ -285,6 +285,63 @@ You can mix English and German. Name tracks and clips ("Bass", "Intro Kick") or 
 - "Delete the clip 'Outro Hats'."
 - "Set a marker 'Drop' at bar 33." (locator)
 
+### Whole songs: genre, length, variations
+
+Genres: House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap. Name genre and length in the same sentence; the Set's key stays unless you say otherwise.
+
+- "Build me a melodic techno song, 5 minutes."
+- "Peak-time techno, about 6 minutes, set the genre's tempo." (The tempo is only set on request, with a little spread around the genre's tempo.)
+- "A house track at standard length, no sidechain and no effects."
+- "A trap beat with an 808 bass, short."
+- "Drum and bass, radio edit, in A minor."
+- "Show me the plan for the song first and write nothing yet." (a preview, then Apply or Undo)
+- "Undo the last step."
+- "Again, different." (new seed: different bass, chord loops and hook)
+- "Use seed 42." (the same notes as before)
+- "Same song, but a different bass."
+
+### Giving your own chords
+
+- "Use the progression i - VI - III - VII." (Roman numerals; the progression is taken, not guessed)
+- "Chords Am - F - C - G, one chord per bar."
+- "Two chords per bar, seventh chords."
+- "Set the key to F minor and build the song again."
+
+### Songs after an imported Set
+
+Requires the Set to be imported with the Set Importer (chapter 11). Names must match the Library.
+
+- "Build a song after the reference 'Sound as a Pound'." (structure and tempo come from the Set)
+- "After 'Sound as a Pound', with the Set's tempo and key."
+- "Like 'Sound as a Pound', but play the roles the Set lacks from the genre." (`fill_missing`)
+- "After 'Sound as a Pound', but with the chords of 'Summer Funx'."
+- "After 'Sound as a Pound', but with the bass of 'Summer Funx'."
+- "Like 'X', but with the drums of 'Y' and the lead of 'Z'."
+- "Which Sets have I imported?"
+- "Show me the structure of 'Summer Funx'."
+
+If a small local model ignores the roles, say it outright: "For the song after 'Sound as a Pound' use `loops_from` with chords from 'Summer Funx'."
+
+### Using your own loops one at a time
+
+- "Play a bass with the pattern `my_soundasapound_bass_1` on track 2, 8 bars."
+- "Drums with `my_summerfunx_drums_1` on track 1."
+- "A lead with `my_soundasapound_lead_1` over the chords on track 3."
+- "Which of my own patterns exist for bass?"
+
+### Bass and lead by style
+
+- "Rolling bass with octave jumps, 8 bars, track 2."
+- "A bass in the style 'rolling_octaves' on track 2."
+- "A slow, melodic bass in the progressive style."
+- "Which bass patterns do you know?" (the AI lists them)
+- "A lead with a soft hook and call and response, 8 bars."
+
+### Several things at once
+
+- "Build me a house song after 'Summer Funx' in 6 minutes, chords of 'Sound as a Pound', no effects, and show me the plan first."
+- "Create new tracks for bass, chords and lead; the drums on track 1 stay."
+
 ### Controlling Live
 
 - "Set the tempo to 126."
