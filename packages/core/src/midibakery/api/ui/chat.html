@@ -28,8 +28,11 @@
   .msg.user { background: var(--user); align-self: flex-end; }
   .msg.assistant { background: var(--panel); align-self: flex-start; }
   .msg.thinking { color: var(--dim); font-style: italic; align-self: flex-start; }
-  /* Click a thinking or answer to copy it (jweb in Live passes no Cmd+C). */
-  .msg.thinking, .msg.assistant { cursor: copy; }
+  /* Thinking is collapsed to one line; click the line to read it. */
+  .think-head { cursor: pointer; user-select: none; }
+  .msg.thinking.collapsed .think-body { display: none; }
+  /* Click an answer (or opened thinking) to copy it (jweb in Live passes no Cmd+C). */
+  .msg.assistant, .msg.thinking:not(.collapsed) .think-body { cursor: copy; }
   .msg.copied { outline: 1px solid var(--ok); }
   .tool { color: var(--dim); font-family: Menlo, monospace; font-size: 11px; align-self: flex-start; }
   .tool.err { color: var(--err); }
@@ -296,6 +299,24 @@ function followBottom(update) {
   if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
+// Thinking streams into a collapsed block (header + body): all the tokens arrive, few are shown.
+function addThinking() {
+  const el = add("msg thinking collapsed", "");
+  const head = document.createElement("div");
+  head.className = "think-head";
+  const body = document.createElement("div");
+  body.className = "think-body";
+  el.append(head, body);
+  el.body = body;
+  el.updateHead = () => {
+    const words = body.textContent.split(/\s+/).filter(Boolean).length;
+    head.textContent = `${el.classList.contains("collapsed") ? "▸" : "▾"} Thinking · ${words} words`;
+  };
+  head.onclick = () => { el.classList.toggle("collapsed"); el.updateHead(); };
+  el.updateHead();
+  return el;
+}
+
 function handle(ev) {
   switch (ev.type) {
     case "ready":
@@ -307,9 +328,10 @@ function handle(ev) {
       showLive(ev);
       break;
     case "thinking":
-      if (!thinking) thinking = add("msg thinking", "");
+      if (!thinking) thinking = addThinking();
       if (pending.el && pending.el.querySelector(".label").textContent !== "Thinking") showPending("Thinking");
-      thinking.textContent += ev.text;
+      thinking.body.textContent += ev.text;
+      thinking.updateHead();
       break;
     case "text":
       thinking = null;
@@ -780,7 +802,7 @@ function transcript() {
   for (const el of log.children) {
     if (el === pending.el) continue;
     const label = TRANSCRIPT_LABELS.find(([selector]) => el.matches(selector));
-    const text = el.innerText.trim();
+    const text = (el.body ? el.body.textContent : el.innerText).trim();
     if (text) lines.push(label ? `${label[1]}: ${text}` : text);
   }
   return lines.join("\n\n");
@@ -793,9 +815,10 @@ $("copyAll").onclick = async () => {
 };
 
 log.addEventListener("click", async (event) => {
-  const msg = event.target.closest(".msg.thinking, .msg.assistant");
+  const target = event.target.closest(".msg.assistant, .think-body");
+  const msg = target && target.closest(".msg");
   if (!msg || String(window.getSelection())) return;  // leave a browser text selection alone
-  if (await copyText(msg.textContent)) {
+  if (await copyText((msg.body || msg).textContent)) {
     msg.classList.add("copied");
     setTimeout(() => msg.classList.remove("copied"), 800);
   }
