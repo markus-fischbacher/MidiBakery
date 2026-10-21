@@ -195,6 +195,45 @@ GROOVES: dict[str, Groove] = {
 }
 
 
+def _remix(groove: Groove, role: str, *lanes: Lane) -> Groove:
+    """The groove with every lane of `role` swapped for `lanes` (kick lanes are never touched: the
+    sidechain trigger follows them)."""
+    assert role != "kick"
+    return replace(groove, lanes=tuple(lane for lane in groove.lanes if lane.role != role) + lanes)
+
+
+_EIGHTHS = (1, 3, 5, 7, 9, 11, 13, 15)
+
+# Other hat/percussion patterns per genre; the seed picks one of them or the genre's own groove.
+# Kick and clap/snare backbone stay, so the genre is still recognisable.
+GROOVE_VARIANTS: dict[str, tuple[Groove, ...]] = {
+    "house": (
+        _remix(HOUSE, "closed_hat", Lane("closed_hat", (1, 4, 6, 9, 12, 14), 76, jitter=8, alternate=14)),  # broken hats
+        _remix(_remix(HOUSE, "closed_hat", Lane("closed_hat", _EIGHTHS, 70, jitter=8, alternate=20)),
+               "shaker", Lane("shaker", tuple(range(1, 17)), 62, jitter=14)),  # 8th hats, loud shaker
+    ),
+    "melodic_techno": (
+        _remix(MELODIC_TECHNO, "rim", Lane("rim", (3, 7, 11, 15), 62, jitter=8, probability=0.85)),
+        _remix(MELODIC_TECHNO, "closed_hat", Lane("closed_hat", (3, 7, 11, 15), 88, jitter=6),
+               Lane("closed_hat", (2, 6, 10, 14), 50, jitter=8)),  # sparser 16th layer
+    ),
+    "peak_time_techno": (
+        _remix(PEAK_TIME, "rim", Lane("rim", (3, 6, 9, 11, 14), 64, jitter=8)),
+        _remix(PEAK_TIME, "low_tom", Lane("low_tom", (16,), 72, probability=0.6)),
+    ),
+    "drum_and_bass": (
+        _remix(DNB, "closed_hat", Lane("closed_hat", tuple(range(1, 17)), 80, jitter=6, alternate=30)),  # 16th hats
+        _remix(DNB, "snare", Lane("snare", (5,), 112, swing=False), Lane("snare", (13,), 122, swing=False),
+                       Lane("snare", (4, 7, 10, 15), 42, jitter=8, probability=0.6, swing=False),
+                       Lane("snare", (15,), 64, cycle=2, bars=(1,), swing=False)),
+    ),
+    "trap": (
+        _remix(TRAP, "closed_hat", Lane("closed_hat", tuple(range(1, 17)), 72, jitter=8, alternate=24)),  # 16th hats
+        _remix(TRAP, "open_hat", Lane("open_hat", (15,), 80, length=0.5, cycle=2, bars=(1,))),
+    ),
+}
+
+
 def _hits(lane: Lane, grid: Grid, straight: Grid, bar: int, rng: random.Random) -> list[Note]:
     if bar % lane.cycle not in lane.bars:
         return []

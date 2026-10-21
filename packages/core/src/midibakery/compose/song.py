@@ -55,7 +55,7 @@ from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.rollback import batch_steps, completed, restore_locators, undo, undo_batch
 from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, generate_bass_template
-from midibakery.compose.grooves import BASS, CHORDS, GROOVES, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
+from midibakery.compose.grooves import BASS, CHORDS, GROOVE_VARIANTS, GROOVES, Groove, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
 from midibakery.compose import user_patterns
 from midibakery.compose.lead_templates import generate_lead_template
@@ -775,6 +775,12 @@ BASS_VARIANTS = {
 }
 
 
+def _groove_variant(genre: str, r: random.Random) -> Groove:
+    """The genre's drum groove or, by the seed, one of its variants."""
+    options = (GROOVES[genre], *GROOVE_VARIANTS.get(genre, ()))
+    return options[r.randrange(len(options))]
+
+
 def _bass_variant(genre: str, tempo: float, r: random.Random) -> BassTemplate | None:
     """The seed picks the song's bass: the genre's own recipe or one of the templates that suit it
     and its tempo (None = the recipe). Without a fitting template the recipe stays."""
@@ -1069,7 +1075,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     cache: dict[tuple, list[Note]] = {}
     actions: list[dict[str, Any]] = []
     counts: dict[str, int] = {r: 0 for r in roles}
-    groove, bass_pattern, chord_pattern = GROOVES[request.genre], BASS[request.genre], CHORDS[request.genre]
+    groove, bass_pattern, chord_pattern = _groove_variant(request.genre, rng("groove")), BASS[request.genre], CHORDS[request.genre]
     swing = groove.swing
     bass_template = _bass_variant(request.genre, tempo, rng("bass"))
     hook = make_hook(rng("hook"))
