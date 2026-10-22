@@ -207,19 +207,17 @@ def test_bake_device_shows_its_page(devices):
     assert (by_text["prepend url"], web) in lines
     assert (by_text["midiin"], by_text["midiout"]) in lines
     node = by_text["node.script midibakery-bake.js @autostart 1 @watch 0"]
-    window = next(i for i, b in boxes.items() if b.get("text") == "p sounds")  # the Sounds... window is a subpatcher
-    assert (by_text["pcontrol"], window) in lines  # how Max opens a subpatcher window
-    assert (window, node) in lines and (by_text["route url status label"], window) in lines
-    sounds = next(i for i, b in boxes.items() if b.get("varname") == "sounds")  # its button opens the window and asks for the labels
-    assert sounds and not any(b["maxclass"] == "live.drop" for b in boxes.values())  # no drop zones on the device itself
-    inner = {b["box"]["id"]: b["box"] for b in boxes[window]["patcher"]["boxes"]}
-    inner_text = {b.get("text"): i for i, b in inner.items() if b.get("text")}
-    inner_lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0]) for l in boxes[window]["patcher"]["lines"]}
-    for part in ("drums", "bass", "chords", "lead"):  # a drop zone per part sends "sound <part> <path>" out
-        zone = next(i for i, b in inner.items() if b["maxclass"] == "live.drop" and b.get("varname") == f"drop {part}")
-        assert (zone, inner_text[f"prepend sound {part}"]) in inner_lines
-    assert (inner_text["prepend topmost"], inner_text["thispatcher"]) in inner_lines  # the window stays on top of Live
-    assert "topmost 1" in by_text
+    assert not any(b.get("text") in ("p sounds", "pcontrol") for b in boxes.values())  # no window: tabs in the device
+    thispatcher = by_text["thispatcher"]
+    shown = {i for i, b in boxes.items() if b.get("hidden") == 1}  # the Sounds page starts hidden
+    assert next(i for i, b in boxes.items() if b["maxclass"] == "jweb") not in shown
+    for part in ("drums", "bass", "chords", "lead"):  # a drop zone per part sends "sound <part> <path>" to the node
+        zone = next(i for i, b in boxes.items() if b["maxclass"] == "live.drop" and b.get("varname") == f"drop_{part}")
+        assert zone in shown and (zone, by_text[f"prepend sound {part}"]) in lines and (by_text[f"prepend sound {part}"], node) in lines
+    scripts = [b["text"] for b in boxes.values() if b.get("text", "").startswith("script ")]
+    assert any(t.startswith("script show bake_page") for t in scripts) and any(t.startswith("script hide bake_page") and "script show drop_drums" in t for t in scripts)
+    assert all(" " not in b["varname"] for b in boxes.values() if b.get("varname") and b["varname"].split("_")[0] in ("drop", "label", "name"))
+    assert any((l[1] == thispatcher) for l in lines)
     node_js = (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
     for handler in ("sounds", "sound", "genre", "labels"):
         assert f'Max.addHandler("{handler}"' in node_js
