@@ -162,11 +162,11 @@ def cmd_sound(args: argparse.Namespace) -> int:
     try:
         if args.part:
             if args.preset:
-                my_sounds.save(args.part, None if args.preset == "-" else args.preset)
-            elif args.part not in my_sounds.load():
+                my_sounds.save(args.part, None if args.preset == "-" else args.preset, args.genre)
+            elif args.part not in my_sounds.load(args.genre):
                 print(f"{args.part}: the genre's preset")
                 return 0
-        mine = my_sounds.load()
+        mine = my_sounds.load(args.genre)
     except ValueError as exc:
         print(exc)
         return 1
@@ -330,6 +330,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("sound", help="the default preset for new tracks of a part (drums, bass, chords, lead); no preset: show or clear")
     p.add_argument("part", nargs="?", help="drums, bass, chords or lead")
+    p.add_argument("--genre", help="only for this genre (default: every genre)")
     p.add_argument("preset", nargs="?", help='browser path, e.g. "Synth Keys/Light Keys.adg"; "-" clears it')
     p.set_defaults(func=cmd_sound)
 
