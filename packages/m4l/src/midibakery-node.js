@@ -150,6 +150,27 @@ Max.addHandler("about", async (version) => {
   await Max.outlet("status", await about(version));
 });
 
+// Bake device: a preset dragged from Live's browser onto a part's drop zone ("sound <part> <path>") becomes that
+// part's default sound. The path may arrive as "symbol <path>" and split at spaces.
+Max.addHandler("sound", async (part, ...rest) => {
+  if (rest[0] === "symbol") rest.shift();
+  const file = rest.join(" ");
+  if (!api || !file) return;
+  try {
+    const response = await fetch(`http://127.0.0.1:${api.port}/sounds/drop`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${api.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ part, file }),
+      signal: AbortSignal.timeout(40000),
+    });
+    const data = await response.json().catch(() => ({}));
+    await Max.outlet("status", response.ok ? `${part}: ${data.preset}` : data.message || `HTTP ${response.status}`);
+  } catch (err) {
+    log("sound drop failed", String(err));
+    await Max.outlet("status", "The sound could not be set: " + (err && err.message));
+  }
+});
+
 Max.addHandler("refresh", () => {
   api = null;
   return refresh();

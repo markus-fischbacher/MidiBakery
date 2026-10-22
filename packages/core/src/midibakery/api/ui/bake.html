@@ -245,6 +245,11 @@ async function load() {
   render();
 }
 
+setInterval(async () => {  // a preset dropped on the device sets a sound: show it
+  if (!options || $("presets").classList.contains("open")) return;
+  try { const now = (await api("/sounds")).mine; if (JSON.stringify(now) !== JSON.stringify(mine)) { mine = now; renderSounds(); } } catch (_) {}
+}, 2500);
+
 $("my-loops").onclick = () => { choice.my_loops = !choice.my_loops; save(); render(); };
 $("ref-name").onclick = () => { if (options) showRefs(); };
 $("bake").onclick = () => run("new");
