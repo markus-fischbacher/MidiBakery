@@ -129,6 +129,16 @@ Apply kann einige Undo-Schritte brauchen (Spuren, Returns, Clips): drück **Undo
 
 **Grenzen:** nur 4/4. Keine Samples, Breaks oder Vocals. Ein Rezept klingt genretypisch; deins wird es durch Hören, Sounds tauschen und Arrangieren.
 
+### Dein eigener Sound pro Part
+
+Neue Spuren bekommen die Presets des Genres. Eigene Presets stellst du im Terminal ein (der Pfad ist ein Browser-Pfad; er beginnt in „sounds“, außer er beginnt mit „packs“, „user_library“ usw.):
+
+```bash
+midibakery sound lead "Synth Keys/Light Keys.adg"
+```
+
+Parts: `drums`, `bass`, `chords`, `lead`. `midibakery sound lead -` stellt das Genre-Preset wieder her; `midibakery sound` zeigt deine Auswahl. Sie steht in `sounds.json` im MidiBakery-Ordner.
+
 ## 6. Songs nach deinen eigenen Sets (Set Importer)
 
 Freie Beispiel-Live-Sets und deine eigenen Projekte sind die beste Inspiration. Der **Set Importer** liest `.als`-Dateien exakt (Noten und Clips, keine Audioanalyse) und speichert alles auf deinem Rechner.

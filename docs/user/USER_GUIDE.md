@@ -129,6 +129,16 @@ Apply may take a few undo steps (tracks, returns, clips): press **Undo** until e
 
 **Limits:** 4/4 only. No samples, breaks or vocals. A recipe sounds genre-typical; it becomes yours through listening, swapping sounds and arranging.
 
+### Your own sound per part
+
+New tracks get the genre's presets. To use your own instead, run in a terminal (the path is a browser path; it starts in "sounds" unless it begins with "packs", "user_library" and so on):
+
+```bash
+midibakery sound lead "Synth Keys/Light Keys.adg"
+```
+
+Parts: `drums`, `bass`, `chords`, `lead`. `midibakery sound lead -` goes back to the genre's preset; `midibakery sound` lists yours. The choice is kept in `sounds.json` in the MidiBakery folder.
+
 ## 6. Songs after your own Sets (Set Importer)
 
 Free example Live Sets and your own projects are the best inspiration. The **Set Importer** reads `.als` files exactly (notes and clips, no audio analysis) and stores everything on your computer.
