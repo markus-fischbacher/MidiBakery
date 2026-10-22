@@ -206,11 +206,20 @@ def test_bake_device_shows_its_page(devices):
     web = next(i for i, b in boxes.items() if b["maxclass"] == "jweb")
     assert (by_text["prepend url"], web) in lines
     assert (by_text["midiin"], by_text["midiout"]) in lines
-    sounds = next(i for i, b in boxes.items() if b.get("varname") == "sounds")  # the Sounds... button opens the settings page
-    assert sounds and 'Max.addHandler("sounds"' in (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
-    for part in ("drums", "bass", "chords", "lead"):  # a drop zone per part sends "sound <part> <path>" to the node
-        zone = next(i for i, b in boxes.items() if b["maxclass"] == "live.drop" and b.get("varname") == f"drop {part}")
-        assert (zone, by_text[f"prepend sound {part}"]) in lines and (by_text[f"prepend sound {part}"], by_text["node.script midibakery-bake.js @autostart 1 @watch 0"]) in lines
+    node = by_text["node.script midibakery-bake.js @autostart 1 @watch 0"]
+    window = next(i for i, b in boxes.items() if b.get("text") == "p sounds")  # the Sounds... window is a subpatcher
+    assert (window, node) in lines and (by_text["route url status label"], window) in lines
+    sounds = next(i for i, b in boxes.items() if b.get("varname") == "sounds")  # its button opens the window and asks for the labels
+    assert sounds and not any(b["maxclass"] == "live.drop" for b in boxes.values())  # no drop zones on the device itself
+    inner = {b["box"]["id"]: b["box"] for b in boxes[window]["patcher"]["boxes"]}
+    inner_text = {b.get("text"): i for i, b in inner.items() if b.get("text")}
+    inner_lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0]) for l in boxes[window]["patcher"]["lines"]}
+    for part in ("drums", "bass", "chords", "lead"):  # a drop zone per part sends "sound <part> <path>" out
+        zone = next(i for i, b in inner.items() if b["maxclass"] == "live.drop" and b.get("varname") == f"drop {part}")
+        assert (zone, inner_text[f"prepend sound {part}"]) in inner_lines
+    node_js = (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
+    for handler in ("sounds", "sound", "genre", "labels"):
+        assert f'Max.addHandler("{handler}"' in node_js
     assert 'bake: "/bake"' in (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
 
 
