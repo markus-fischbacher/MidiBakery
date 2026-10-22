@@ -305,3 +305,17 @@ def test_bake_endpoints(app_factory, live):
     baked = api.post("/bake/run", headers=AUTH, json={"genre": "house", "length": "radio", "seed": 3}).json()
     assert baked["seed"] == 3 and baked["baked"]["genre"] == "house"
     assert api.get("/bake/options", headers=AUTH).json()["baked"]["seed"] == 3
+
+
+def test_sounds_endpoints(app_factory, live, tmp_path, monkeypatch):
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    api, _ = app_factory()
+    assert api.get("/sounds").status_code == 401
+    assert api.get("/sounds", headers=AUTH).json() == {"mine": {}}
+    presets = api.get("/sounds/presets?part=drums", headers=AUTH).json()["presets"]
+    assert any(p["name"] == "909 Core Kit" for p in presets)
+    assert api.get("/sounds/presets?part=riser", headers=AUTH).status_code == 422
+    chosen = api.post("/sounds", headers=AUTH, json={"part": "lead", "path": "Synth Keys/Light Keys.adg"}).json()
+    assert chosen == {"mine": {"lead": "sounds/Synth Keys/Light Keys.adg"}}
+    assert api.post("/sounds", headers=AUTH, json={"part": "lead", "path": None}).json() == {"mine": {}}
+    assert api.post("/sounds", headers=AUTH, json={"part": "riser", "path": "x"}).status_code == 422
