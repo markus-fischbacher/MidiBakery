@@ -55,6 +55,34 @@
   .loop .name { font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
   .empty { color: var(--dim); padding: 14px; line-height: 1.6; }
   .err { color: var(--err); }
+
+  /* Shared look of the three device pages (Bake, Chat, Set Importer). */
+  :root {
+    --bg: #19191b; --panel: #232427; --raise: #2c2d31; --line: #36373c; --text: #e6e6e8; --dim: #8b8c93;
+    --accent: #ffad56; --accent-ink: #1a1206; --user: #34445a; --err: #ff7a7a; --ok: #6fd48a; --r: 7px;
+    font: 12px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  select, button, input { border-radius: var(--r); transition: background .12s, border-color .12s, color .12s; }
+  button, select { padding: 3px 11px; }
+  button:hover:not(:disabled) { background: var(--raise); border-color: #4a4b52; }
+  button:disabled { opacity: .35; }
+  button.primary, button.primary:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #ffbd77; border-color: #ffbd77; }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  header, footer, form { padding: 7px 10px; gap: 7px; }
+  header { border-bottom: 1px solid var(--line); background: var(--panel); }
+  footer { border-top: 1px solid var(--line); background: var(--panel); }
+  .row { padding: 8px 12px; gap: 10px; border-bottom: 1px solid var(--line); }
+  .row:hover { background: var(--panel); }
+  .row.sel { background: rgba(255, 173, 86, .09); }
+  .detail { background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 12px 12px; }
+  .chip { padding: 1px 8px; border-radius: 99px; }
+  canvas { border-radius: 6px; background: var(--bg); }
+  td, th { border-bottom: 1px solid var(--line); padding: 3px 6px; }
+  .loops { border-top: 1px solid var(--line); }
+  input[type=text] { padding: 4px 10px; }
+  .empty { padding: 20px; }
 </style>
 </head>
 <body>
