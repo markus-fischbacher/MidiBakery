@@ -208,6 +208,7 @@ def test_bake_device_shows_its_page(devices):
     assert (by_text["midiin"], by_text["midiout"]) in lines
     node = by_text["node.script midibakery-bake.js @autostart 1 @watch 0"]
     window = next(i for i, b in boxes.items() if b.get("text") == "p sounds")  # the Sounds... window is a subpatcher
+    assert (by_text["pcontrol"], window) in lines  # how Max opens a subpatcher window
     assert (window, node) in lines and (by_text["route url status label"], window) in lines
     sounds = next(i for i, b in boxes.items() if b.get("varname") == "sounds")  # its button opens the window and asks for the labels
     assert sounds and not any(b["maxclass"] == "live.drop" for b in boxes.values())  # no drop zones on the device itself
