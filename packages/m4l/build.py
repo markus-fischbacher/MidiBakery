@@ -405,8 +405,9 @@ def bake_device() -> dict[str, Any]:
     """MIDI Effect: the Bake page (jweb; clicks only, Live passes it no keys) beside Pop out, About, a drop zone per part
     (drag a preset from Live's browser) and the status."""
     p = Patcher()
-    width, height = 560.0, 169.0
-    column_x, column_w = 446.0, 110.0
+    width, height = 780.0, 169.0
+    drops_x, drop_w, drop_h = 446.0, 106.0, 58.0  # the drop zones, 2 x 2, between the page and the column
+    column_x, column_w = 666.0, 110.0
     midiin = p.obj("midiin", 20, 20, outlets=["int"], width=50)
     midiout = p.obj("midiout", 20, 60, outlets=[], width=50)
     p.connect(midiin, 0, midiout)  # MIDI passes through untouched
@@ -436,16 +437,16 @@ def bake_device() -> dict[str, Any]:
     # One drop zone per part: a preset dragged from Live's browser (live.drop sends its file path) becomes the
     # default sound of new tracks of that part ("sound <part> <path>" to the node.script).
     for i, (part, label) in enumerate((("drums", "Drums"), ("bass", "Bass"), ("chords", "Chords"), ("lead", "Lead"))):
-        x, y = column_x + (i % 2) * (column_w / 2 + 1), 50 + (i // 2) * 38
-        zone = p.box("live.drop", (700 + i * 120, 300, 100, 22), inlets=1, outlets=[""], presentation=(x, y, column_w / 2 - 2, 22),
+        x, y = drops_x + (i % 2) * (drop_w + 4), 4 + (i // 2) * (drop_h + 16 + 6)
+        zone = p.box("live.drop", (700 + i * 120, 300, 100, 22), inlets=1, outlets=[""], presentation=(x, y, drop_w, drop_h),
                      varname=f"drop {part}")
         prefix = p.obj(f"prepend sound {part}", 700 + i * 120, 340, width=110)
         p.connect(zone, 0, prefix)
         p.connect(prefix, 0, node)
-        p.comment(label, (700 + i * 120, 380, 60, 18), presentation=(x, y + 22, column_w / 2 - 2, 12), fontsize=9.0, **THEMED_TEXT)
+        p.comment(label, (700 + i * 120, 380, 60, 18), presentation=(x, y + drop_h + 1, drop_w, 16), fontsize=11.0, **THEMED_TEXT)
     set_status = p.obj("prepend set", 260, 100)
-    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 126, column_w, 40),
-                       linecount=3, fontsize=9.0, **THEMED_TEXT)
+    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 56, column_w, 100),
+                       linecount=6, fontsize=9.0, **THEMED_TEXT)
     p.connect(route, 1, set_status)
     p.connect(set_status, 0, status)
     return p.to_json(kind="midi_effect", title="MidiBakery Bake", width=width, height=height)
