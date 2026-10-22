@@ -13,77 +13,47 @@ import json
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from importlib.resources import files
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from mcp.server import MCPServer
-from mcp.server.apps import Apps
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from mcp_types import CallToolResult, InputRequiredResult, TextContent
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from midibakery import __version__, license
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.catalog import get_op
 from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty
-from midibakery.compose import (
-    ComposeRequest,
-    PlanStore,
-    Step,
-    TransformSpec,
-    apply_plan,
-    build_plan,
-)
+from midibakery.compose import ComposeRequest, PlanStore, apply_plan, build_plan
 from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
 from midibakery.compose.plan import Plan, new_seed
-from midibakery.compose.rollback import locators as read_locators, restore_locators, undo_batch, undo_edit
+from midibakery.compose.rollback import locators as read_locators, restore_locators, undo_edit
 from midibakery.compose.references import find_reference, load_references
-from midibakery.compose.loudness import LoudnessPlan, LoudnessRequest, apply_loudness, build_loudness
-from midibakery.compose.master import MasterPlan, MasterRequest, apply_master, build_master
-from midibakery.compose.meter import MeterQuery, measure_master
 from midibakery.compose.song import SongPlan, SongRequest, apply_song, build_song
-from midibakery.compose.takes import TakesRequest, build_takes
 from midibakery.mcp.confirm import confirm, request_state
 
 INSTRUCTIONS = """\
-MidiBakery controls the Ableton Live 12 set that is open right now.
-- Call get_session first (tempo, signature, scale with root_note 0=C..11=B, tracks with
-  devices and clips). Tracks, slots (= scenes), devices, returns (A = 0) and scenes are zero-based indices that shift
-  when tracks or scenes are created or deleted; users count from 1 ("track 1" = index 0).
-- Times are beats (quarter notes); pitch 60 = C3. Prefer notes from the song scale.
-- edit_notes and transform_notes are diffs by note_id from get_clip; never rewrite a whole
-  clip to change a few notes. transform_notes half ('first'/'second') or from_bar/to_bar (bars
-  of the clip, 1 = its first bar) limit it to part of the clip. Transpose: semitones are chromatic (12 = octave), steps are scale steps.
-  run_batch makes several edits one undo step; undo takes back any write.
-- Mixer: volume and sends in dB as Live shows them; routing by the names get_mixer(options=true)
-  lists. Devices inside racks: chain_path [chain, device, ...].
-- Arrangement: bar n starts at beat (n-1) * beats per bar. edit_arrangement never overwrites
-  a clip; clip tools take arrangement_clip (from get_arrangement) instead of slot. compose and
-  transform_notes too: to rewrite or vary one part of a song (the bass in its Groove), give the
-  arrangement clip, by index or by its name ('Groove Bass'); compose then replaces its notes over
-  its whole length. Other chords in half a clip: compose chords on that clip with a progression naming every bar.
-- A whole song: plan_song, then apply_plan; say which tracks it used and created.
-  compose_takes puts variations of a part on take lanes to comp in Live.
-- plan_master + apply_plan: a master chain as a starting point; it cannot hear the song.
-- measure_master: approximate LUFS/sample peak, not true peak. plan_loudness needs scope declared by the user
-  after reset/playback; never infer whole_song coverage from elapsed time or from a request to make it louder.
-  Genre targets need whole_song; excerpts need an explicit target_lufs. on_target is not mastering quality.
-- compose writes one part into the track's first free slot (if_exists for occupied ones),
-  reproducible by seed. Make parts fit: bass and melody chords_from the chord clip, the bass
-  follow_kick the drum clip; a counter melody is kind melody with counter_to = the lead clip (an arrangement lead: its name, e.g.
-  'Breakdown Lead'; without slot the counter clips land at the same bars on track); or plan_changes, where later steps share the first step's chords.
-- preview=true or plan_changes return a diff (a piano roll in MCP Apps clients) and a plan_id;
-  apply_plan writes it as one undo step.
-- get_reference: songs the MidiBakery Reference Analyzer device analyzed (sections, key, kick); plan_song(reference=name) follows one (warped; an unwarped one only at its own tempo). An imported Set (.als) also sets which roles play per section and its loops (my_* patterns) are played; "X but with the bass/lead/drums/chords of Set Y" = plan_song reference X + loops_from {"chords": "Y"} (never a progression guess); fill_missing plays roles the Set lacks; my_loops=true lets the seed draw loops from the user's imported Sets ("with my loops").
-- Deleting tracks or clips and replacing notes ask the user first; a declined change returns CANCELLED.
+MidiBakery builds EDM song sketches in the Ableton Live 12 set that is open right now.
+- A whole song: plan_song, then apply_plan; say which tracks it used and created. "Again, different" = plan_song
+  again without seed; "seed 42" = that seed. get_reference lists the analyzed songs and imported Sets; plan_song(reference=name)
+  follows one. "X but with the bass/lead/drums/chords of Set Y" = reference X + loops_from {"bass": "Y"}.
+- get_session first when you need tracks or clips. Tracks and clips are zero-based; users count from 1 ("track 1" = index 0).
+  Times are beats (quarter notes); bar n starts at beat (n-1) * beats per bar.
+- compose rewrites one part: give the arrangement clip by index or name ('Drop Bass'); it replaces that clip's notes, by seed.
+  Other chords in half a clip: compose chords on that clip with a progression naming every bar.
+- edit_arrangement moves, copies or deletes arrangement clips and locators; undo takes back any write.
+- Deleting clips and replacing notes ask the user first; a declined change returns CANCELLED.
 """
 
-PIANO_ROLL_URI = "ui://midibakery/piano-roll.html"
-UI_META = {"ui": {"resourceUri": PIANO_ROLL_URI}}
-# Ops that delete something the user made; edit_notes removals are explicit by note_id and not asked.
-CONFIRM_OPS = {"track.delete", "clip.delete"}
+# plan_song's options the model does not see: they keep these values (a song sketch with everything on).
+SONG_DEFAULTS: dict[str, Any] = {"set_tempo": True, "fill_missing": True}
+SONG_HIDDEN = ("minutes", "start_bar", "roles", "clips", "create_missing", "sounds", "mix", "fx", "sidechain",
+               "sidechain_mode", "set_tempo", "fill_missing")
+
+# Ops that delete something the user made.
+CONFIRM_OPS = {"clip.delete"}
 
 Runner = Callable[[dict[str, Any], Context | None], Awaitable[Any]]
 
@@ -91,94 +61,26 @@ Runner = Callable[[dict[str, Any], Context | None], Awaitable[Any]]
 TOOL_OPS: list[tuple[str, str, str]] = [
     ("set_song", "song.set", "Set tempo, signature, scale or loop"),
     ("transport", "transport.control", "Play / stop / stop all clips / record"),
-    ("create_track", "track.create", "Create track"),
-    ("update_track", "track.set", "Update track"),
-    ("delete_track", "track.delete", "Delete track"),
-    ("create_clip", "clip.create", "Create MIDI clip"),
-    ("update_clip", "clip.set", "Update clip"),
     ("delete_clip", "clip.delete", "Delete clip"),
-    ("launch_clip", "clip.launch", "Launch or stop clip"),
-    ("edit_notes", "notes.apply", "Edit notes (diff)"),
-    ("insert_device", "device.insert", "Insert native device"),
-    ("find_browser_items", "browser.search", "Find presets, kits and devices"),
-    ("load_browser_item", "browser.load", "Load preset, kit or device onto a track"),
-    ("get_device_parameters", "device.params", "Get device parameters"),
-    ("write_clip_envelope", "clip.envelope", "Write clip automation"),
-    ("get_drum_pads", "drum_rack.pads", "Get Drum Rack pads"),
-    ("set_device_parameter", "device.set_param", "Set device parameter"),
-    ("get_mixer", "mixer.get", "Get mixer and routing"),
-    ("update_mixer", "mixer.set", "Set volume, pan, sends or routing"),
-    ("create_return_track", "return.create", "Create return track"),
-    ("get_rack", "rack.get", "Get rack chains and macros"),
-    ("update_rack", "rack.set", "Set macros, edit or add rack chains"),
     ("get_arrangement", "arrangement.get", "Get arrangement clips and locators"),
-    ("create_scene", "scene.create", "Create scene"),
-    ("fire_scene", "scene.fire", "Launch scene"),
     ("undo", "history.step", "Undo / redo"),
-    ("run_batch", "batch", "Run several ops as one undo step"),
 ]
 
 
-# (tool name, request model, title, description)
-COMPOSE_TOOLS: list[tuple[str, type[BaseModel], str, str]] = [
-    (
-        "compose",
-        ComposeRequest,
-        "Compose a part",
+COMPOSE_DESCRIPTION = (
         "Write one part as a new MIDI clip in the song scale and time signature. kind drums: pattern on the track's "
         "Drum Rack pads (found by name, General MIDI fallback); bass: follows the chords and can lock to or avoid a "
         "drum clip's kick (follow_kick); chords: voice-led, a functional progression unless given one; melody: motifs "
         "(A A' A B), chord tones on strong beats. Fields tagged (kind) are only for those kinds. "
         "pattern replaces style/progression with a named one: drums " + ", ".join(drum_names()) + "; bass " + ", ".join(bass_names())
-        + "; melody " + ", ".join(lead_names()) + "; chords (emotion) " + ", ".join(mood_names()) + ".",
-    ),
-    (
-        "transform_notes",
-        TransformSpec,
-        "Transform notes",
-        "Change a MIDI clip as a diff by note_id: humanize, quantize, invert (diatonic), "
-        "arpeggiate, variation, or transpose (semitones chromatic, steps in key).",
-    ),
-]
-
-
-class PlanStep(BaseModel):
-    """One step: `kind` plus the fields of that compose tool. The schema stays small (it would
-    otherwise repeat every compose tool); the full step is validated when the plan is built."""
-
-    model_config = ConfigDict(extra="allow")
-
-    kind: Literal["drums", "bass", "chords", "melody", "transform"] = Field(
-        description="drums/bass/chords/melody take the compose fields, transform the transform_notes fields"
-    )
-
-
-STEP = TypeAdapter(Step)
-
-
-class PlanChanges(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    steps: list[PlanStep] = Field(min_length=1, max_length=16, description="Composition steps, in order")
-
-    def specs(self) -> list[Any]:
-        # preview inside a step: models copy it from compose; plan_changes always previews
-        return [STEP.validate_python({k: v for k, v in _unnest(step.model_dump()).items() if k != "preview"}) for step in self.steps]
-
-
-def _unnest(step: dict[str, Any]) -> dict[str, Any]:
-    """Local models nest a step's fields in operation: {"kind": "transform", "operation": {"operation":
-    "variation", "track": 3, ...}}; three retries of that ended in a stuck chat, so lift them out."""
-    nested = step.get("operation")
-    if not isinstance(nested, dict):
-        return step
-    return {**{k: v for k, v in step.items() if k != "operation"}, **nested}
+        + "; melody " + ", ".join(lead_names()) + "; chords (emotion) " + ", ".join(mood_names()) + "."
+)
 
 
 class ApplyPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    plan_id: str = Field(description="plan_id returned by plan_changes or a compose tool with preview=true")
+    plan_id: str = Field(description="plan_id returned by plan_song or by compose with preview=true")
 
 
 PREVIEW_FIELD = Field(False, description="Only return the planned diff and a plan_id; nothing changes until apply_plan")
@@ -256,15 +158,12 @@ def _validation_message(exc: ValidationError, model: type[BaseModel]) -> str:
             parts.append(f"{where}: {e['msg']}")
     if any(e["type"] == "extra_forbidden" and len(e["loc"]) == 1 for e in exc.errors()):
         parts.append("fields of this tool: " + ", ".join(model.model_fields))
-    if any(e["type"] == "extra_forbidden" and e["loc"][-1] == "operation" for e in exc.errors()):
-        parts.append("operation changes an existing clip: use transform_notes (in plan_changes a step with kind 'transform'), "
-                     "e.g. operation 'variation' with arrangement_clip")
     return "; ".join(parts)
 
 
 def with_arrangement(session: dict[str, Any], arrangement: dict[str, Any]) -> dict[str, Any]:
     """The Arrangement in bars next to the Session View: locators, and per track its arrangement clips
-    (the index compose and transform_notes take as arrangement_clip). A song from plan_song lives there;
+    (the index compose takes as arrangement_clip). A song from plan_song lives there;
     without this a model only sees the slots and writes a new clip instead of changing the section."""
     song = session["song"]
     bpb = song.get("signature_numerator", 4) * 4 / (song.get("signature_denominator", 4) or 4)
@@ -291,7 +190,7 @@ def _clip_label(change: Any) -> str:
 
 
 def _with_roll(plan: Plan, payload: dict[str, Any], applied: bool) -> CallToolResult:
-    """Text + structured result for the model, full before/after notes in _meta for the piano-roll view."""
+    """Text + structured result for the model, full before/after notes in _meta for the chat page's piano roll."""
     roll = plan.roll() | {"applied": applied}
     if applied:
         roll.pop("plan_id")
@@ -300,10 +199,6 @@ def _with_roll(plan: Plan, payload: dict[str, Any], applied: bool) -> CallToolRe
         structured_content=payload,
         _meta={"midibakery/roll": roll},
     )
-
-
-def _piano_roll_html() -> str:
-    return files("midibakery.mcp").joinpath("piano_roll.html").read_text(encoding="utf-8")
 
 
 def _track_identity(tracks: list[dict[str, Any]]) -> tuple[Any, ...]:
@@ -326,7 +221,9 @@ class PendingCall:
                 "apply_plan(plan_id) runs it (one undo step). This client cannot show a confirmation dialog."}
 
 
-def build_server(client: BridgeClient | None = None) -> MCPServer:
+def build_server(client: BridgeClient | None = None, all_song_options: bool = False) -> MCPServer:
+    """all_song_options: plan_song takes every SongRequest field with its own default (tests, scripts);
+    without it the model sees the few that shape a sketch and the rest keep SONG_DEFAULTS."""
     bridge = client or BridgeClient()
     plans = PlanStore()
 
@@ -341,21 +238,11 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
 
     global _unapplied_track
     _unapplied_track = unapplied_track
-    apps = Apps()
-    apps.add_html_resource(
-        PIANO_ROLL_URI,
-        _piano_roll_html(),
-        name="piano-roll",
-        title="MidiBakery piano roll",
-        description="Before/after piano roll of planned or applied note changes",
-        prefers_border=True,
-    )
     server = MCPServer(
         "midibakery",
         title="MidiBakery by Klirrwerk for Ableton Live",
         instructions=INSTRUCTIONS,
         version=__version__,
-        extensions=[apps],
     )
 
     async def get_session(_: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
@@ -374,13 +261,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         return clip
 
     async def call_op(op: str, args: dict[str, Any]) -> Any:
-        if op != "batch":
-            return await bridge.call(op, args)
-        try:
-            return await bridge.call(op, args)
-        except BridgeError as exc:  # all or nothing, like a plan
-            await undo_batch(bridge.call, exc, [_item_op(item) for item in args.get("ops", [])])
-            raise
+        return await bridge.call(op, args)
 
     async def defer(op: str, args: dict[str, Any], message: str) -> dict[str, Any]:
         tracks = _track_identity((await bridge.call("tracks.list"))["tracks"])
@@ -389,16 +270,13 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         return pending.preview()
 
     async def describe(op: str, params: dict[str, Any]) -> str:
-        """Human wording for a destructive op, with track and clip names."""
+        """Human wording for deleting a clip, with track and clip names."""
         try:
             tracks = (await bridge.call("tracks.list"))["tracks"]
         except BridgeError:
             tracks = []
         track = tracks[params["track"]] if 0 <= params.get("track", -1) < len(tracks) else {}
         track_name = f"track {params.get('track', 0) + 1} '{track.get('name', '?')}'"
-        if op == "track.delete":
-            clips = len(track.get("clips", []))
-            return f"Delete {track_name} with {clips} clip(s)?"
         ref = params.get("arrangement_clip")
         if ref is not None:
             # by index or by name ('Intro Kick'): name it as the user sees it
@@ -440,7 +318,7 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         name="get_reference",
         title="Get reference song analysis",
         description="Sections (start bar, length, kick, elements), key and tempo of reference songs analyzed by the "
-        "MidiBakery Reference Analyzer device in Live. " + inspect.cleandoc(ReferenceQuery.__doc__ or ""),
+        "MidiBakery Reference Analyzer device or imported from Live Sets by the Set Importer. " + inspect.cleandoc(ReferenceQuery.__doc__ or ""),
         annotations=read_only,
     )
 
@@ -490,14 +368,6 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
                 asked = await confirm(ctx, await describe(_op, args), later=lambda m: defer(_op, args, m))
                 if asked is not None:
                     return asked
-            elif _op == "batch":
-                risky = [item for item in args.get("ops", []) if _item_op(item) in CONFIRM_OPS]
-                if risky:
-                    questions = [await describe(_item_op(i), _item_params(i)) for i in risky]
-                    asked = await confirm(ctx, "Run this batch? It will " + " ".join(q[0].lower() + q[1:] for q in questions),
-                                          later=lambda m: defer(_op, args, m))
-                    if asked is not None:
-                        return asked
             return await call_op(_op, args)
 
         server.add_tool(
@@ -527,61 +397,38 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         # apply_plan is itself the go-ahead for a plan the user saw
         return await confirm(ctx, f"Replace {removed} existing note(s) in {clips}?", state, later if defer_plan else None)
 
-    for tool_name, model, title, description in COMPOSE_TOOLS:
+    async def compose(args: dict[str, Any], ctx: Context | None) -> Any:
+        args = dict(args)
+        preview = args.pop("preview", False)
+        if args.get("seed") is None:
+            # Keep the idea stable across a confirmation round trip.
+            args["seed"] = request_state(ctx).get("seed", new_seed())
+        spec = ComposeRequest.model_validate(args).spec()
+        plan = await build_plan(bridge.call, [spec])
+        if preview:
+            plans.put(plan)
+            return _with_roll(plan, {**plan.preview(), "next": "apply_plan(plan_id) writes this as one undo step"}, False)
+        asked = await ask_before_replacing(plan, ctx, {"seed": args["seed"]}, defer_plan=True)
+        if asked is not None:
+            return asked
+        applied = await apply_plan(bridge.call, plan, verify=False)
+        result = plan.preview()
+        result.pop("plan_id")
+        extra = {k: applied[k] for k in ("instruments", "warnings") if k in applied}
+        return _with_roll(plan, {**result, "applied": applied["applied"], **extra}, True)
 
-        async def compose(args: dict[str, Any], ctx: Context | None, _model: type[BaseModel] = model) -> Any:
-            args = dict(args)
-            preview = args.pop("preview", False)
-            if args.get("seed") is None:
-                # Keep the idea stable across a confirmation round trip.
-                args["seed"] = request_state(ctx).get("seed", new_seed())
-            spec = _model.model_validate(args)
-            if isinstance(spec, ComposeRequest):
-                spec = spec.spec()
-            plan = await build_plan(bridge.call, [spec])
-            if preview:
-                plans.put(plan)
-                return _with_roll(plan, {**plan.preview(), "next": "apply_plan(plan_id) writes this as one undo step"}, False)
-            asked = await ask_before_replacing(plan, ctx, {"seed": args["seed"]}, defer_plan=True)
-            if asked is not None:
-                return asked
-            applied = await apply_plan(bridge.call, plan, verify=False)
-            result = plan.preview()
-            result.pop("plan_id")
-            extra = {k: applied[k] for k in ("instruments", "warnings") if k in applied}
-            return _with_roll(plan, {**result, "applied": applied["applied"], **extra}, True)
-
-        server.add_tool(
-            _make_tool(model, compose, skip=() if model is ComposeRequest else ("kind",), extra={"preview": (Annotated[bool, PREVIEW_FIELD], False)}),
-            name=tool_name,
-            title=title,
-            description=description,
-            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
-            meta=UI_META,
-        )
-
-    async def plan_changes(args: dict[str, Any], ctx: Context | None) -> Any:
-        request = PlanChanges.model_validate(args)
-        plan = await build_plan(bridge.call, request.specs())
-        plans.put(plan)
-        return _with_roll(plan, {**plan.preview(), "next": "apply_plan(plan_id) writes all steps as one undo step"}, False)
+    server.add_tool(
+        _make_tool(ComposeRequest, compose, extra={"preview": (Annotated[bool, PREVIEW_FIELD], False)}),
+        name="compose",
+        title="Compose a part",
+        description=COMPOSE_DESCRIPTION,
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
+    )
 
     async def plan_song(args: dict[str, Any], ctx: Context | None) -> Any:
-        song = await build_song(bridge.call, SongRequest.model_validate(args))
+        song = await build_song(bridge.call, SongRequest.model_validate(args if all_song_options else {**SONG_DEFAULTS, **args}))
         plans.put(song)  # type: ignore[arg-type]  # apply_plan tells songs and clip plans apart
         return song.preview()
-
-    async def plan_master(args: dict[str, Any], ctx: Context | None) -> Any:
-        master = await build_master(bridge.call, MasterRequest.model_validate(args))
-        plans.put(master)  # type: ignore[arg-type]  # apply_plan tells master plans apart too
-        return master.preview()
-
-    async def plan_loudness(args: dict[str, Any], ctx: Context | None) -> Any:
-        loudness = await build_loudness(bridge.call, LoudnessRequest.model_validate(args))
-        if not isinstance(loudness, LoudnessPlan):
-            return loudness  # on target: nothing to plan
-        plans.put(loudness)  # type: ignore[arg-type]
-        return loudness.preview()
 
     async def run_plan(args: dict[str, Any], ctx: Context | None) -> Any:
         plan = plans.get(args["plan_id"])
@@ -603,11 +450,6 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
             result = await call_op(plan.op, plan.args)
             plans.applied(plan.id)
             return result
-        if isinstance(plan, (MasterPlan, LoudnessPlan)):
-            plans.pop(plan.id)
-            result = await (apply_master(bridge.call, plan) if isinstance(plan, MasterPlan) else apply_loudness(bridge.call, plan))
-            plans.applied(plan.id)
-            return result
         asked = await ask_before_replacing(plan, ctx)
         if asked is not None:
             return asked
@@ -622,74 +464,20 @@ def build_server(client: BridgeClient | None = None) -> MCPServer:
         return result
 
     server.add_tool(
-        _make_tool(PlanChanges, plan_changes),
-        name="plan_changes",
-        title="Plan composition changes",
-        description="Plan several composition steps (drums, bass, chords, melody, transform) without changing Live. "
-        "Later steps see earlier ones: bass can follow_kick a planned drum clip, and harmonic steps without chords "
-        "share the first step's chords. Returns a diff preview and a plan_id.",
-        annotations=read_only,
-        meta=UI_META,
-    )
-    async def compose_takes(args: dict[str, Any], ctx: Context | None) -> Any:
-        actions, summary = await build_takes(bridge.call, TakesRequest.model_validate(args))
-        try:
-            await bridge.call("arrangement.edit", {"actions": actions})
-        except BridgeError as exc:
-            await undo_edit(bridge.call, exc)
-            raise
-        return summary
-
-    server.add_tool(
-        _make_tool(TakesRequest, compose_takes),
-        name="compose_takes",
-        title="Compose takes to comp",
-        description="Several variations of one part (hook, melody, bass, chords, drums) over the same chords, each on its "
-        "own take lane of a track in the Arrangement View (Live 12.2+), to comp the best one in Live. One undo step.",
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
-    )
-    server.add_tool(
-        _make_tool(SongRequest, plan_song),
+        _make_tool(SongRequest, plan_song, skip=() if all_song_options else SONG_HIDDEN),
         name="plan_song",
         title="Plan a whole song in the Arrangement View",
-        description="Full song from a genre template: intro, builds, drops, breaks, outro "
-        "with locators, on the drum/bass/chords/lead tracks (found by Drum Rack or name; missing ones are created). "
-        "Length radio/standard/extended or minutes; starts after the last arrangement clip unless start_bar. "
+        description="Full song sketch from a genre template or a reference: intro, builds, drops, breaks, outro "
+        "with locators, on the drum/bass/chords/lead tracks (found by Drum Rack or name; missing ones are created), "
+        "after the last arrangement clip, at the genre's or the reference's tempo. "
         "Preview and plan_id for apply_plan; nothing changes before that.",
         annotations=read_only,
-        meta=UI_META,
-    )
-    server.add_tool(
-        _make_tool(MasterRequest, plan_master),
-        name="plan_master",
-        title="Plan a master chain",
-        description="Master chain for the genre (EQ Eight low cut, Glue Compressor, Limiter), a starting point. "
-        "Preview and plan_id for apply_plan.",
-        annotations=read_only,
-    )
-    server.add_tool(
-        _make_tool(LoudnessRequest, plan_loudness),
-        name="plan_loudness",
-        title="Plan a loudness round",
-        description=inspect.cleandoc(LoudnessRequest.__doc__ or "") + " plan_id for apply_plan.",
-        annotations=read_only,
-    )
-
-    async def run_measure_master(args: dict[str, Any], ctx: Context | None) -> Any:
-        return await measure_master(bridge.call, MeterQuery.model_validate(args))
-
-    server.add_tool(
-        _make_tool(MeterQuery, run_measure_master, free=True),
-        name="measure_master",
-        title="Measure the Master's loudness",
-        description=inspect.cleandoc(MeterQuery.__doc__ or ""),
-        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     )
     server.add_tool(
         _make_tool(ApplyPlan, run_plan),
         name="apply_plan",
         title="Apply planned changes",
-        description="Write a plan from plan_changes (or preview=true) to Live as one undo step. "
+        description="Write a plan from plan_song (or compose with preview=true) to Live as one undo step. "
         "Fails with CONFLICT if a target clip changed since planning.",
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     )
@@ -724,10 +512,3 @@ def read_references(name: str | None = None) -> dict[str, Any]:
     return {"references": [{**{k: r.get(k) for k in brief}, "sections": [section(s) for s in r.get("sections", [])]}
                            for r in found]}
 
-
-def _item_op(item: Any) -> str:
-    return item.op if hasattr(item, "op") else item.get("op", "")
-
-
-def _item_params(item: Any) -> dict[str, Any]:
-    return item.params if hasattr(item, "params") else item.get("params", {})

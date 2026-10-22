@@ -1,751 +1,201 @@
 # MidiBakery – Benutzerhandbuch
 
-Für Musikerinnen und Musiker, die mit Ableton Live 12 arbeiten und noch am Anfang der Musikproduktion stehen. Du musst nichts programmieren können. Alles, was hier steht, kannst du in Live und im Chat von MidiBakery nachmachen.
+MidiBakery baut in Ableton Live 12 EDM-Songskizzen zur Inspiration: Drums, Bass, Akkorde und eine Lead im Arrangement, nach einem Genre-Rezept oder nach einem Live Set, das dir gefällt. Danach hörst du, tauschst Sounds und behältst, was funktioniert.
 
 English version: [USER_GUIDE.md](USER_GUIDE.md)
 
 **Inhalt**
 
-1. [Was ist MidiBakery?](#1-was-ist-midibakery)
-2. [Was du brauchst](#2-was-du-brauchst)
-3. [Installieren und aktualisieren](#3-installieren-und-aktualisieren)
-4. [In Live einrichten](#4-in-live-einrichten)
-5. [Eine KI wählen](#5-eine-ki-wählen)
-6. [Der Chat: erste Schritte](#6-der-chat-erste-schritte)
-7. [Beispiele: was du fragen kannst](#7-beispiele-was-du-fragen-kannst)
-8. [Teile und ganze Songs komponieren](#8-teile-und-ganze-songs-komponieren)
-9. [Clips bearbeiten](#9-clips-bearbeiten)
-10. [Das Arrangement](#10-das-arrangement)
-11. [Der Reference Analyzer](#11-der-reference-analyzer) (und [eigene Sets importieren](#eigene-live-sets-importieren-set-importer))
-12. [Mixen und Klänge](#12-mixen-und-klänge)
-13. [Generator und Transform ohne Chat](#13-generator-und-transform-ohne-chat)
-14. [Probleme lösen](#14-probleme-lösen)
-15. [Häufige Fragen](#15-häufige-fragen)
-16. [Kleines Wörterbuch](#16-kleines-wörterbuch)
-17. [MidiBakery aus Claude Desktop oder Claude Code benutzen](#17-midibakery-aus-claude-desktop-oder-claude-code-benutzen)
+1. [Was du bekommst](#1-was-du-bekommst)
+2. [Installieren und aktualisieren](#2-installieren-und-aktualisieren)
+3. [In Live einrichten](#3-in-live-einrichten)
+4. [Eine KI wählen](#4-eine-ki-wählen)
+5. [Einen Song bauen](#5-einen-song-bauen)
+6. [Songs nach deinen eigenen Sets (Set Importer)](#6-songs-nach-deinen-eigenen-sets-set-importer)
+7. [Songs nach einer Audiodatei (Reference Analyzer)](#7-songs-nach-einer-audiodatei-reference-analyzer)
+8. [Das Ergebnis ändern](#8-das-ergebnis-ändern)
+9. [Fehlerbehebung](#9-fehlerbehebung)
+10. [FAQ](#10-faq)
 
 ---
 
-## 1. Was ist MidiBakery?
+## 1. Was du bekommst
 
-MidiBakery ist ein KI-Assistent, der **in** Ableton Live 12 sitzt. Du schreibst ihm in normalen Sätzen, was du möchtest, zum Beispiel „Mach mir vier Takte Deep-House-Drums auf Spur 1“, und er legt die Noten direkt in dein Live-Set. Er kann:
-
-- **Teile komponieren:** Drums, Bass, Akkorde und Melodien, passend zur Tonart und zum Takt deines Sets.
-- **Ganze Songs bauen:** Intro, Build, Drop, Break und Outro im Arrangement, nach Rezepten für fünf Genres (House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap).
-- **Vorhandene Clips verändern:** variieren, transponieren, vermenschlichen, nur die zweite Hälfte ändern.
-- **Live steuern:** Spuren, Clips, Tempo, Mixer, Effekte, Automation.
-- **Einen Referenzsong zerlegen:** Das Gerät *Reference Analyzer* zeigt, wie ein Song aufgebaut ist, und MidiBakery kann deinen Song danach aufbauen. Der *Set Importer* tut das für deine eigenen Live-Sets und sammelt zusätzlich ihre Loops.
-
-MidiBakery erzeugt **MIDI-Noten** (und lädt Klänge aus Lives Bibliothek). Es erzeugt kein Audio und lädt keine eigenen Samples.
-
-Alles, was MidiBakery tut, ist ein Schritt in Lives Rückgängig-Liste. Du kannst es immer zurücknehmen.
-
-MidiBakery besteht aus vier Teilen, die du in Live siehst:
-
-| Teil | Wofür |
+| Teil | Zweck |
 |---|---|
-| **Remote Script** „MidiBakery“ | die Verbindung zu Live (unsichtbar, einmal einstellen) |
-| **MidiBakery Chat** | das Chat-Gerät: hier sprichst du mit der KI |
-| **MidiBakery Generator** und **MidiBakery Transform** | zwei Werkzeuge in der Clip-Ansicht, ohne KI und ohne Chat |
-| **MidiBakery Reference Analyzer** | analysiert einen Referenzsong |
-| **MidiBakery Set Importer** | liest Live-Sets (.als) als Referenzen und Loops ein |
-| **MidiBakery Loudness Meter** | misst die Lautheit des Masters (LUFS) |
+| **Remote Script** „MidiBakery“ | die Verbindung zu Live (einmal in den Einstellungen setzen) |
+| **MidiBakery Chat** | hier bittest du in normalen Sätzen um Songs |
+| **MidiBakery Set Importer** | liest Live Sets (`.als`) als Referenzen und Loops ein |
+| **MidiBakery Reference Analyzer** | schätzt Abschnitte, Tonart und Tempo einer Audiodatei (z. B. MP3) |
 
-## 2. Was du brauchst
+MidiBakery schreibt **MIDI-Noten** und lädt Sounds aus Lives Core Library. Es erzeugt kein Audio und lädt keine Samples. Jede Änderung ist ein Schritt in Lives Undo-Liste.
 
-- **Ableton Live 12 Suite** (Live 12.3 oder neuer; die Take Lanes brauchen 12.2 oder neuer). In der Suite ist **Max for Live** enthalten, das die Geräte brauchen.
-- **macOS** (Apple Silicon oder Intel) oder **Windows**.
-- **Eine KI**, siehe [Kapitel 5](#5-eine-ki-wählen): entweder einen Schlüssel für die Claude-API (Internet nötig) oder ein lokales Modell auf deinem Rechner (kein Internet, keine Kosten pro Frage).
-- Das Installationsprogramm von MidiBakery (Kapitel 3).
+Du brauchst **Ableton Live 12 Suite** (12.3 oder neuer; Max for Live ist in Suite enthalten), macOS oder Windows und eine KI: einen Claude-API-Key oder ein lokales Modell (Kapitel 4).
 
-## 3. Installieren und aktualisieren
+## 2. Installieren und aktualisieren
 
-Beide Installationsprogramme installieren nur für dein Benutzerkonto. Du brauchst kein Administratorpasswort. Bevor du startest: **Schließe Live.**
+Schließe zuerst Live. Beide Installer installieren nur für dein Benutzerkonto, ohne Administrator-Passwort.
 
-### macOS
+- **macOS:** `MidiBakery-<version>-macos-arm64.pkg` (Apple Silicon) oder `-macos-x64.pkg` (Intel). Wenn macOS das Öffnen verweigert (noch nicht notarisiert): **Systemeinstellungen > Datenschutz & Sicherheit > Dennoch öffnen**.
+- **Windows:** `MidiBakery-<version>-windows-x64-setup.exe`. Wenn Windows warnt: **Weitere Informationen > Trotzdem ausführen**.
 
-1. Lade die Datei `MidiBakery-<Version>-macos-arm64.pkg` (Apple Silicon: alle Macs seit 2020 mit M1 oder neuer) bzw. `MidiBakery-<Version>-macos-x64.pkg` (Intel-Macs).
-2. Doppelklick auf die Datei und dem Installer folgen.
-3. **Wenn macOS die Datei nicht öffnen will** („kann nicht geöffnet werden, da sie nicht von einem verifizierten Entwickler stammt“): Die Installer sind noch nicht von Apple beglaubigt. Das ist bei dieser Version normal. Öffne **Systemeinstellungen > Datenschutz & Sicherheit**, scrolle nach unten und klicke bei der Meldung zu MidiBakery auf **Dennoch öffnen**. Alternativ: Rechtsklick auf die Datei > **Öffnen**.
-4. Am Ende zeigt der Installer, was zu tun ist (siehe Kapitel 4).
+**Updates:** Einmal am Tag fragt MidiBakery `updates.klirrwerk.com` nach einer neueren Version (gesendet: Version, Betriebssystem, Prozessortyp, Kanal). Das Chat-Device zeigt dann „MidiBakery … ist verfügbar“: **Install** lädt den Installer, prüft ihn und öffnet ihn. Danach Live neu starten. Aus: `midibakery update --disable`.
 
-Das Programm landet in `~/Library/Application Support/MidiBakery/`, das Remote Script und die Geräte in deiner Live-**User Library**.
+**Deinstallieren:** Windows **Einstellungen > Apps > MidiBakery**. macOS: `~/Library/Application Support/MidiBakery/runtime/<version>/midibakery uninstall` (`--purge` löscht auch Einstellungen und den gespeicherten Key). Deine Musik wird nie angefasst.
 
-### Windows
+## 3. In Live einrichten
 
-1. Lade `MidiBakery-<Version>-windows-x64-setup.exe`.
-2. Doppelklick und dem Setup folgen.
-3. **Wenn Windows warnt** („Der Computer wurde durch Windows geschützt“): Auch das Windows-Setup ist noch nicht signiert. Klicke auf **Weitere Informationen > Trotzdem ausführen**.
+1. **Live starten** (nach jeder Installation neu starten).
+2. **Einstellungen > Link, Tempo & MIDI > Control Surface:** wähle in einer freien Zeile **MidiBakery**. Input und Output bleiben auf *None*. Live startet damit auch die MidiBakery-API im Hintergrund.
+3. Im Browser unter **User Library** (oder Suche „MidiBakery“):
 
-Das Programm landet in `%LOCALAPPDATA%\Programs\MidiBakery\`. Das Setup kannst du später wie jedes Programm unter **Einstellungen > Apps** entfernen.
+| Device | Ordner |
+|---|---|
+| MidiBakery Chat | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
+| MidiBakery Set Importer | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
+| MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery |
 
-### Aktualisieren
+4. Zieh **MidiBakery Chat** auf eine beliebige MIDI-Spur (MIDI läuft unverändert durch). Tippe „Hallo“ in das **Eingabefeld rechts im Device** und drück Enter.
 
-MidiBakery fragt einmal am Tag bei `updates.klirrwerk.com`, ob es eine neue Version gibt. Dabei werden nur Version, Betriebssystem, Prozessor-Art und Update-Kanal gesendet.
+Live gibt keine Tastatureingaben an das Chatfenster selbst weiter: tippe nur ins Eingabefeld rechts, oder nutze mit **Pop out** den Chat im Browser. Jedes Device hat einen **About**-Knopf mit den Versionen von Device, API und Remote Script; sie sollten übereinstimmen.
 
-1. Gibt es ein Update, zeigt das **Chat-Gerät** oben eine Zeile „MidiBakery … is available“.
-2. Klicke **Install**. MidiBakery lädt den Installer herunter, prüft seine Signatur und öffnet ihn. Mit **Later** blendest du die Meldung aus.
-3. Folge dem Installer. Er aktualisiert die vorhandene Installation und behält deine Einstellungen.
-4. **Starte Live neu.**
+## 4. Eine KI wählen
 
-Die Update-Prüfung abschalten: im Terminal `midibakery update --disable` (wieder an: `--enable`). Nur prüfen, ohne zu installieren: `midibakery update --check`. Im Terminal findest du das Programm bei der Installation unter `~/Library/Application Support/MidiBakery/runtime/<Version>/midibakery` (macOS) bzw. `%LOCALAPPDATA%\Programs\MidiBakery\runtime\<Version>\` (Windows).
+Das **Modellmenü** des Chats listet die Claude-Modelle und gefundene lokale Modelle. Du kannst jederzeit wechseln.
 
-### Deinstallieren
-
-Windows: **Einstellungen > Apps > MidiBakery**. macOS: im Terminal `~/Library/Application Support/MidiBakery/runtime/<Version>/midibakery uninstall` (mit `--purge` löscht es auch Einstellungen und den gespeicherten Claude-Schlüssel). Das entfernt genau das, was die Installation geschrieben hat, und nichts von deiner Musik.
-
-## 4. In Live einrichten
-
-### Schritt 1: Remote Script einschalten (nur beim ersten Mal)
-
-1. **Starte Live** (nach der Installation immer neu starten).
-2. Öffne die Einstellungen: macOS **Live > Einstellungen** (⌘,), Windows **Optionen > Einstellungen** (Strg+,).
-3. Wähle den Bereich **Link, Tempo & MIDI**.
-4. Bei **Control Surface** wähle in einer freien Zeile **MidiBakery**. Input und Output kannst du auf *None* lassen.
-
-Damit startet Live auch die MidiBakery-API (das „Gehirn“ im Hintergrund). Sie läuft, solange Live läuft.
-
-### Schritt 2: Geräte finden
-
-Die Geräte liegen in der **User Library** im Live-Browser (links, oder mit der Suche oben: „MidiBakery“):
-
-| Gerät | Ordner | Typ |
-|---|---|---|
-| MidiBakery Chat | Presets > MIDI Effects > Max MIDI Effect > MidiBakery | MIDI-Effekt |
-| MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery | Audio-Effekt |
-| MidiBakery Set Importer | Presets > MIDI Effects > Max MIDI Effect > MidiBakery | MIDI-Effekt |
-| MidiBakery Loudness Meter | Presets > Audio Effects > Max Audio Effect > MidiBakery | Audio-Effekt |
-| MidiBakery Generator | MIDI Tools > Max Generators | MIDI Tool |
-| MidiBakery Transform | MIDI Tools > Max Transformations | MIDI Tool |
-
-### Schritt 3: Chat-Gerät auf eine Spur legen
-
-1. Lege eine **MIDI-Spur** an (⌘⇧T bzw. Strg+Shift+T).
-2. Ziehe **MidiBakery Chat** auf diese Spur. Du siehst jetzt ein Chat-Fenster in der Geräteansicht. Die MIDI-Noten auf der Spur laufen unverändert hindurch; das Gerät stört nichts.
-3. Oben im Fenster steht eine Statuszeile. Wenn dort „Connecting…“ lange stehen bleibt, schau in [Kapitel 14](#14-probleme-lösen).
-
-Du brauchst das Gerät nur **einmal** im Set, auf irgendeiner MIDI-Spur. Am besten legst du dir eine eigene Spur „Chat“ an.
-
-### Schritt 4: Prüfen
-
-Schreibe in das Eingabefeld rechts im Gerät „Hallo“ und drücke Enter. Antwortet die KI, ist alles bereit. Falls nach einem Schlüssel gefragt wird: weiter mit Kapitel 5.
-
-Jedes Gerät hat einen **About**-Knopf. Er zeigt die Versionen von Gerät, API und Remote Script. Sie sollten übereinstimmen.
-
-## 5. Eine KI wählen
-
-Das Chat-Gerät hat ein **Modell-Menü**. Dort stehen die Claude-Modelle und alle lokalen Modelle, die MidiBakery gefunden hat. Du kannst jederzeit wechseln.
-
-| | Claude (Anthropic) | Lokale Modelle (LM Studio oder Ollama) |
+| | Claude | LM Studio oder Ollama |
 |---|---|---|
 | Internet | nötig | nicht nötig |
-| Kosten | pro Nutzung, über dein Anthropic-Konto | keine, aber dein Rechner arbeitet |
-| Datenschutz | Spurnamen, Noten und Tempo deines Sets gehen an Anthropic | alles bleibt auf deinem Rechner |
-| Qualität | sehr verlässlich | hängt vom Modell und deinem Rechner ab; kleine Modelle machen mehr Fehler |
-| Einrichtung | API-Schlüssel eintragen | Programm installieren, Modell laden |
+| Kosten | pro Nutzung, auf deinem Anthropic-Konto | keine |
+| Datenschutz | Spurnamen, Noten und Tempo gehen an Anthropic | alles bleibt auf deinem Rechner |
+| Qualität | sehr zuverlässig | hängt vom Modell ab; kleine machen mehr Fehler |
 
-### Option A: Claude mit eigenem API-Schlüssel
+**Claude:** erstelle einen Key auf console.anthropic.com (beginnt mit `sk-ant-`; ein claude.ai-Abo reicht nicht). Wähle ein Claude-Modell, klick **Key**, gib den Key ins Eingabefeld rechts ein und drück Enter. Er wird im macOS-Schlüsselbund bzw. in der Windows-Anmeldeinformationsverwaltung gespeichert. `ANTHROPIC_API_KEY` und `midibakery auth set-key` gehen auch.
 
-Standardmäßig benutzt MidiBakery **Claude Sonnet 5.5**. Im Menü gibt es auch Claude Opus 5.5 und Claude Haiku 5.5.
+**LM Studio:** lade ein Modell mit Tool-Nutzung (z. B. Qwen oder Gemma), starte den lokalen Server (Tab **Developer** oder `lms server start`) und lade das Modell mit genug Kontext:
 
-1. Erstelle bei Anthropic (console.anthropic.com) ein Konto, hinterlege eine Zahlungsmethode und erzeuge unter **API Keys** einen Schlüssel. Er beginnt mit `sk-ant-`. Das Claude-Abo für den Chat auf claude.ai ist etwas anderes und reicht dafür nicht: die API wird getrennt abgerechnet.
-2. Wähle im Modell-Menü ein Claude-Modell. Rechts oben im Chat erscheint der Knopf **Key**.
-3. Klicke **Key**. Im Chat-Gerät gibst du den Schlüssel dann **in das Eingabefeld rechts** ein (nicht in das Chat-Fenster) und drückst Enter. Der Schlüssel wird dabei nicht angezeigt und nie an ein Modell geschickt. Im Browser-Fenster (*Pop out*) gibt es ein eigenes Feld.
-4. MidiBakery prüft den Schlüssel bei Anthropic und speichert ihn in der **macOS-Schlüsselbundverwaltung** (Dienst „MidiBakery“) bzw. der **Windows-Anmeldeinformationsverwaltung**. Danach steht auf dem Knopf „Key ✓“.
-5. Entfernen: **Key** > **Remove**.
+```bash
+lms load <modellname> -c 32768
+```
 
-Alternativ kennt MidiBakery auch die Umgebungsvariable `ANTHROPIC_API_KEY` und ein Profil von `ant auth login`; im Terminal geht auch `midibakery auth set-key`.
+**Ollama:** `ollama pull qwen3:8b`, Ollama laufen lassen, im Menü „Ollama · <Modell>“ wählen.
 
-### Option B: Lokale Modelle mit LM Studio
+Lokale Modelle bekommen dieselben Werkzeuge in kompakter Form. Nenne Spuren und Clips beim Namen, bitte um eine Sache nach der anderen, und drück **New**, wenn ein Gespräch entgleist.
 
-1. Installiere **LM Studio** (lmstudio.ai) und lade ein Modell herunter, das Werkzeuge („tool use“) kann. Beispiele sind Qwen- oder Gemma-Modelle. Probiere aus, welches auf deinem Rechner gut läuft.
-2. Starte den **lokalen Server**: in LM Studio im Tab **Developer** „Start Server“, oder im Terminal `lms server start`. MidiBakery erwartet ihn auf `127.0.0.1:1234` (Standard).
-3. **Wichtig: Lade das Modell mit großem Kontext.** MidiBakery schickt dem Modell die Beschreibung aller seiner Werkzeuge mit. Das braucht viel Platz („Kontext“). LM Studio lädt Modelle aber mit einem kleinen Standardwert, der dafür nicht reicht. Lade es so:
+## 5. Einen Song bauen
 
-   ```bash
-   lms load <modellname> -c 32768
-   ```
+Schreib zum Beispiel:
 
-   Zum Beispiel für ein Qwen-Modell: `lms load qwen/qwen3-8b -c 32768`. Den genauen Modellnamen zeigt `lms ls`. In der LM-Studio-Oberfläche geht dasselbe über **My Models** > Einstellungen des Modells > **Context Length** = mindestens 32768.
-   Reicht der Kontext nicht, sagt dir der Chat das in einer Fehlermeldung („… too small a context for MidiBakery’s tools. Load it with a context length of at least 32768 …“). Dann neu laden und die Nachricht noch einmal senden.
-4. Öffne im Chat das **Modell-Menü**: Dort steht jetzt „LM Studio · <Modellname>“. Wähle es.
+- „Bau mir einen House-Song mit zufälligem Seed, setze das Tempo passend zum Genre und lege die Spuren neu an.“
+- „Nochmal, anders.“ (neuer Seed: anderer Bass, andere Akkorde, anderer Drum-Groove und Hook)
+- „Nimm Seed 42.“ (dieselben Noten wieder)
+- „Melodic Techno, etwa 6 Minuten.“ / „Drum and Bass, Radio Edit, in a-Moll.“
+- „Nimm die Folge i - VI - III - VII.“ (römische Ziffern beziehen sich auf die Tonart des Sets; „Am F C G“ geht auch)
 
-### Option C: Lokale Modelle mit Ollama
+Du bekommst eine **Vorschau-Karte**: eine Zeitleiste der Abschnitte. In Live hat sich noch nichts geändert. **Apply** schreibt den Song ins Arrangement hinter den letzten Clip dort; bestehende Clips werden nie überschrieben.
 
-1. Installiere **Ollama** (ollama.com) und lade ein Modell, zum Beispiel `ollama pull qwen3:8b`. Ollama muss laufen (`ollama serve` oder die Ollama-App); MidiBakery erwartet es auf `127.0.0.1:11434`.
-2. Wähle im Modell-Menü „Ollama · <Modellname>“.
-3. Wenn das Modell ungenau arbeitet, kann Ollamas Standard-Kontext zu klein sein. Stelle ihn in Ollama höher ein.
+| Genre | Tempo | Abschnitte (Standardlänge) |
+|---|---|---|
+| **House** | 124 | Intro, Build, Drop, Break, Build 2, Drop 2, Outro |
+| **Melodic Techno** | 122 | Intro, Build, Drop, Breakdown, Build 2, Climax, Outro |
+| **Peak-Time Techno** | 128 | Intro, Groove, Lift, Peak, Breakdown, Peak 2, Lift 2, Peak 3, Stripped Outro |
+| **Drum & Bass** | 174 | Intro, Build, Drop, Breakdown, Build 2, Drop 2, Outro |
+| **Trap** | 145 | Intro, Build, Drop, Verse, Build 2, Drop 2, Outro |
 
-### Tipps für lokale Modelle
+**Länge:** Radio, Standard, Extended (DJ-freundlich) oder eine Zeit in Minuten.
 
-- Lokale Modelle bekommen **alle** Werkzeuge, aber in Kurzform. Sie machen eher Fehler als Claude. Du erkennst das, wenn das Modell etwas behauptet, aber nichts in Live passiert ist. MidiBakery bemerkt das oft selbst und hakt nach.
-- Nenne Spur und Abschnitt beim Namen („Drop Bass“). Kurze, klare Aufträge funktionieren besser als lange.
-- Eine Aufgabe nach der anderen.
-- Bei großen Aufträgen wie ganzen Songs ist ein größeres Modell (oder Claude) verlässlicher.
-- Wenn nichts mehr hilft: **New** drücken (vergisst das Gespräch) und neu formulieren.
+Was MidiBakery bei Apply tut:
 
-## 6. Der Chat: erste Schritte
+- **Spuren:** es nimmt Spuren mit Namen wie Drums (oder mit Drum Rack), Bass/Sub/808, Chords/Pad/Keys und Lead/Melody/Synth. Fehlende werden mit einem Kit und Presets aus der Core Library angelegt. Benenne deine Spuren so, wenn du deine eigenen Sounds behalten willst.
+- **Tempo:** das Tempo des Genres (oder der Referenz), je Seed etwas gestreut.
+- **Noten:** Drums mit Ghost Notes und Fills, ein Bass, der den Akkorden folgt, eine Hook, die sich entwickelt, Dynamik nach der Energie jedes Abschnitts. Der Seed wählt Bassmuster, Akkord-Loop und Drum-Groove.
+- **Arrangement:** Locators an den Abschnitten, ein Reverb- und ein Delay-Return, Sidechain-Pumpen auf Bass und Pads, Riser vor und Impacts auf den Drops.
 
-Das Fenster des Chat-Geräts:
+Apply kann einige Undo-Schritte brauchen (Spuren, Returns, Clips): drück **Undo**, bis alles weg ist.
 
-| Element | Bedeutung |
-|---|---|
-| **Punkt und Statuszeile** (oben) | Verbindung zur API; daneben, was Live gerade tut: Tempo, Tonart, was spielt |
-| **Modell-Menü** | welche KI antwortet |
-| **Stop** | bricht die laufende Antwort ab |
-| **Undo** | nimmt die letzte Änderung in Live zurück (dasselbe wie ⌘Z in Live) |
-| **Key** | Claude-Schlüssel (nur bei Claude-Modellen) |
-| **Copy** | kopiert das ganze Gespräch (Gedanken, Werkzeugaufrufe, Antworten) in die Zwischenablage |
-| **New** | vergisst das Gespräch und fängt neu an (dein Set bleibt, wie es ist) |
-| **Pop out** (rechts im Gerät) | öffnet denselben Chat im Browser, mit mehr Platz |
-| **Eingabefeld** (rechts im Gerät) | hier tippst du; Enter sendet, Umschalt+Enter macht einen Zeilenumbruch |
-| **Send** (unter dem Eingabefeld) | schickt deinen Text ab, wie Enter |
+**Grenzen:** nur 4/4. Keine Samples, Breaks oder Vocals. Ein Rezept klingt genretypisch; deins wird es durch Hören, Sounds tauschen und Arrangieren.
 
-**Wichtig:** Live reicht Tastatureingaben nicht an das Chat-Fenster weiter. Tippen kannst du deshalb nur in das **Eingabefeld rechts im Gerät**. Im Browser-Fenster (*Pop out*) hat die Seite ein eigenes Eingabefeld.
+## 6. Songs nach deinen eigenen Sets (Set Importer)
 
-**Kopieren:** In Live funktioniert ⌘C im Chat-Fenster nicht. Klicke stattdessen auf eine Antwort oder einen Gedankenblock, dann wird sie kopiert, oder nimm **Copy** für alles.
+Freie Beispiel-Live-Sets und deine eigenen Projekte sind die beste Inspiration. Der **Set Importer** liest `.als`-Dateien exakt (Noten und Clips, keine Audioanalyse) und speichert alles auf deinem Rechner.
 
-**Sprache:** Die KI antwortet in der Sprache deiner letzten Nachricht. Schreibe also einfach Deutsch oder Englisch.
+1. Zieh **MidiBakery Set Importer** auf eine beliebige MIDI-Spur.
+2. Drück **Folder...** (viele Sets; `Backup`-Ordner werden übersprungen) oder **Set...** (eine Datei). Die Sets erscheinen mit Tempo und Tonart.
+3. Klick ein Set an, um seine Abschnitte und die Rollen pro Abschnitt zu sehen. Klick den Genre-Chip, um das Genre zu setzen. Entferne Häkchen bei dem, was du nicht willst, und drück **Import**.
+4. Der Tab **Library** listet alles Importierte mit seinen Loops; **Delete** entfernt ein Set.
 
-### Ein erster Auftrag
+Ein Import liefert:
 
-1. Lege eine MIDI-Spur mit einem Drum Rack an (zum Beispiel ein Drum Rack aus dem Browser unter *Drums*).
-2. Schreibe: **„Mach vier Takte House-Drums auf Spur 2.“** (Spuren zählst du ab 1, so wie Live sie anzeigt.)
-3. Du siehst, wie die KI Werkzeuge aufruft („Running compose …“). Danach liegt ein neuer Clip im ersten freien Slot der Spur.
-4. Spiele den Clip ab. Gefällt er nicht: **Undo**.
-5. Schreibe: **„Nochmal, anders.“** – es entsteht eine neue Idee (anderer „Seed“).
+- **Eine Referenz:** Abschnitte, Tempo, Tonart und Besetzung des Sets (welche Rollen in welchem Abschnitt spielen).
+- **Loops:** Bass-, Lead- und Drumfiguren, die das Set wiederholt, und seine Akkordfolge, benannt wie `my_soundasapound_bass_1`. Sie folgen der Tonart deines Songs. Die Noten des Sets werden nie als Ganzes kopiert.
 
-### Vorschau, Apply und Bestätigung
+Dann frag:
 
-MidiBakery schreibt auf zwei Arten:
-
-- **Direkt:** Ein einzelner Teil („Mach eine Basslinie“) wird sofort geschrieben. Wenn dabei vorhandene Noten ersetzt würden, fragt dich der Chat vorher mit **Apply** und **Cancel**.
-- **Mit Vorschau:** Mehrere Teile zusammen, ganze Songs und alles, wo du „erst mal ansehen“ sagst, erscheinen als **Karte im Chat**: ein kleines Piano Roll mit dem, was hinzukommt, oder bei Songs eine Zeitleiste der Abschnitte. **In Live ist dann noch nichts verändert.** Mit **Apply** schreibst du es. Danach steht auf der Karte „✓ applied · Undo reverts it“. Willst du es nicht, lass die Karte einfach liegen.
-
-Du kannst die Vorschau auch ausdrücklich bestellen: „Zeig mir erst eine Vorschau von …“.
-
-**Apply ist ein einziger Undo-Schritt**, auch wenn viele Teile zusammen geschrieben werden. Für ganze Songs (die auch Spuren, Effekte und Returns anlegen) können es ein paar Undo-Schritte sein: Drücke Undo mehrmals, bis alles weg ist.
-
-Wenn sich ein Ziel-Clip zwischen Vorschau und Apply geändert hat, lehnt MidiBakery das ab (Meldung `CONFLICT`). Dann bitte eine neue Vorschau anfordern.
-
-**Sicherheitsfragen:** Vor dem **Löschen von Spuren oder Clips** und dem **Ersetzen von Noten** fragt MidiBakery immer mit Apply/Cancel nach. Lehnst du ab, passiert nichts, und die KI sagt es dir.
-
-### Undo
-
-- Der **Undo**-Knopf im Chat oder ⌘Z / Strg+Z in Live.
-- Jeder Schreibzugriff von MidiBakery ist ein eigener Schritt (ein Batch zählt als einer).
-- Ob die KI „zurück“ versteht: „Mach das rückgängig“ geht auch.
-
-## 7. Beispiele: was du fragen kannst
-
-Du kannst Deutsch und Englisch mischen. Spuren und Clips kannst du beim Namen nennen („Bass“, „Intro Kick“) oder mit Nummer („Spur 3“, gezählt wie in Live ab 1).
-
-### Fragen und Überblick
-
-- „Was ist in meinem Set?“ / *What is in my set?*
-- „Welches Tempo und welche Tonart hat der Song?“
-- „Zeig mir die Noten von dem Clip auf Spur 2.“
-- „Welche Clips liegen im Arrangement?“
-- „Was spielt der Bass im Drop?“
-
-### Drums, Bass, Akkorde, Melodie
-
-- „Mach vier Takte Deep-House-Drums auf Spur 1.“ / *Make 4 bars of house drums on track 1.*
-- „Schreib acht Takte Techno-Drums, dünner besetzt und mit etwas Swing.“
-- „Trap-Drums mit vielen Hi-Hats, 2 Takte.“
-- „Eine Basslinie, die der Kick folgt.“ / *A bassline that locks to the kick.*
-- „Bass, der der Kick ausweicht und nur zwischen den Schlägen spielt.“
-- „Eine ruhige, lange Basslinie mit gehaltenen Noten.“
-- „Vier Akkorde in der Tonart des Sets, immer ein Akkord pro Takt.“
-- „Akkorde i – VI – III – VII, als Stabs, mit Vierklängen.“ (Die Römischen Ziffern beziehen sich auf die Tonart des Sets; auch „Am F C G“ geht.)
-- „Eine Melodie über diese Akkorde.“ / *A melody over the chords.*
-- „Eine Melodie zwischen C4 und C6, nicht zu viele Noten.“
-- „Mach Bass, Akkorde und Melodie zusammen, passend zu den Drums auf Spur 1.“ (mehrere Teile: kommt als Vorschau)
-
-### Clips verändern
-
-- „Transponiere den Clip auf Spur 3 eine Oktave nach unten.“ / *Transpose it down an octave.*
-- „Um 3 Halbtöne nach oben.“ / *Up 3 semitones.*
-- „Zwei Stufen in der Tonart nach oben.“ (Skalenstufen, siehe Kapitel 9)
-- „Variiere den Bass ein bisschen.“ / *Give the bass a variation.*
-- „Variiere nur die zweite Hälfte.“ / *Vary only the second half.*
-- „Humanisiere die Drums, damit sie weniger starr klingen.“
-- „Quantisiere die Melodie auf Sechzehntel.“
-- „Spiele die Akkorde als Arpeggio, aufwärts, in Sechzehnteln.“
-- „Kehre die Melodie um.“ (diatonisch gespiegelt)
-
-### Das Arrangement
-
-- „Baue mir einen House-Song, standard-lang, in der Tonart des Sets.“ / *Build me a house song.*
-- „Ein Melodic-Techno-Track, etwa 6 Minuten, mit dem Tempo des Genres.“
-- „Ein Drum-&-Bass-Song als Radio-Edit.“
-- „Mach Vorschläge für den Bass im Drop: vier Varianten zum Zusammenschneiden.“ (Take Lanes, siehe Kapitel 10)
-- „Variiere den ‚Drop Bass‘.“
-- „Tausche ‚Intro Bass‘ und ‚Drop Bass‘.“ / *Swap Intro Bass and Drop Bass.*
-- „Verschiebe ‚Break Chords‘ auf Takt 41.“
-- „Lösche den Clip ‚Outro Hats‘.“
-- „Setze einen Marker ‚Drop‘ auf Takt 33.“ (Locator)
-
-### Ganze Songs: Genre, Länge, Varianten
-
-Genres: House, Melodic Techno, Peak-Time Techno, Drum & Bass, Trap. Nenne Genre und Länge im selben Satz; die Tonart des Sets bleibt, wenn du nichts anderes sagst.
-
-- „Bau mir einen Melodic-Techno-Song, 5 Minuten.“
-- „Peak-Time Techno, etwa 6 Minuten, setz das Tempo des Genres.“ (Das Tempo wird nur auf Wunsch gesetzt, mit etwas Streuung um das Genre-Tempo.)
-- „House-Track in Standardlänge, ohne Sidechain und ohne Effekte.“
-- „Ein Trap-Beat mit 808-Bass, kurz.“
-- „Drum & Bass, Radio-Edit, in A-Moll.“
-- „Zeig mir erst den Plan für den Song und schreib noch nichts.“ (Vorschau, dann Apply oder Undo)
-- „Mach den letzten Schritt rückgängig.“
-- „Nochmal, anders.“ (neuer Seed: anderer Bass, andere Akkordfolgen, anderer Drum-Groove, anderer Hook)
-- „Nimm Seed 42.“ (dieselben Noten wie damals)
-- „Gleicher Song, aber ein anderer Bass.“
-- „Die Akkorde in der zweiten Hälfte der Drops sollen anders sein: IV V iii vi.“ (`second_progression`; ohne Angabe wechselt ein langer Drop ab 16 Takten in der zweiten Hälfte zu einer anderen Genre-Folge, bei House, Drum & Bass und Trap; Melodic und Peak-Time Techno behalten ihren Loop)
-- Einen vorhandenen Clip ändern: „Im Clip ‚Drop Chords‘ sollen in der zweiten Hälfte andere Akkorde spielen.“ (die Akkorde dieses Clips werden neu geschrieben, ein Akkord pro Takt)
-
-### Eigene Akkorde vorgeben
-
-- „Nimm die Progression i – VI – III – VII.“ (Römische Ziffern; die Folge wird übernommen, nicht geraten)
-- „Akkorde Am – F – C – G, ein Akkord pro Takt.“
-- „Zwei Akkorde pro Takt, Vierklänge.“
-- „Setz die Tonart auf F-Moll und baue den Song neu.“
-
-### Songs nach einem importierten Set
-
-Voraussetzung: Das Set ist im Set Importer importiert (Kapitel 11). Die Namen müssen so stehen wie in der Bibliothek.
-
-- „Bau einen Song nach der Referenz ‚Sound as a Pound‘.“ (Aufbau und Tempo kommen vom Set)
-- „Nach ‚Sound as a Pound‘, mit dem Tempo und der Tonart des Sets.“
-- „Wie ‚Sound as a Pound‘, aber spiel auch die Rollen, die das Set nicht hat, aus dem Genre.“ (`fill_missing`)
-- „Nach ‚Sound as a Pound‘, aber mit den Akkorden von ‚Summer Funx‘.“
-- „Nach ‚Sound as a Pound‘, aber mit dem Bass von ‚Summer Funx‘.“
-- „Wie ‚X‘, aber mit den Drums von ‚Y‘ und dem Lead von ‚Z‘.“
+- „Bau einen Song nach 'Sound as a Pound'.“ (Struktur, Tempo und die Loops des Sets; ohne Genre nimmt MidiBakery das im Importer gesetzte)
+- „Nach 'Phantom', aber mit dem Bass von 'Sound as a Pound'.“ (`loops_from`: Drums, Bass, Lead oder Akkorde aus einem anderen Set)
+- „Ein House-Song mit meinen eigenen Loops.“ (`my_loops`: der Seed zieht Drums, Bass, Lead und Akkorde aus deinen importierten Sets; „Nochmal, anders“ zieht eine andere Mischung)
 - „Welche Sets habe ich importiert?“
-- „Zeig mir die Struktur von ‚Summer Funx‘.“
 
-Wenn ein kleines lokales Modell die Rollen ignoriert, schreib es ausdrücklich: „Nimm für den Song nach ‚Sound as a Pound‘ `loops_from` mit chords von ‚Summer Funx‘.“
+Rollen, die ein Set nie spielt, werden aus dem Genre ergänzt. Akkord-Loops von Sets, die du mit einem Genre markiert hast, kommen zu den Akkordfolgen dieses Genres dazu.
 
-### Eigene Loops einzeln benutzen
+**Grenzen:** nur 4/4-Sets. Drums als Audio ergeben keine Drum-Loops. Abschnitte sind eine Schätzung aus den Clips: prüf sie in der Library-Ansicht.
 
-- „Bau einen House-Song mit meinen eigenen Loops.“ (der Seed zieht sie aus deinen importierten Sets; „Nochmal, anders“ zieht eine andere Mischung)
+## 7. Songs nach einer Audiodatei (Reference Analyzer)
 
-- „Spiel einen Bass mit dem Muster `my_soundasapound_bass_1` auf Spur 2, 8 Takte.“
-- „Drums mit `my_summerfunx_drums_1` auf Spur 1.“
-- „Lead mit `my_soundasapound_lead_1` über die Akkorde auf Spur 3.“
-- „Welche eigenen Muster gibt es für Bass?“
+Für einen Song, den du nur als Audio hast (MP3, WAV): der Analyzer schätzt Abschnitte, Tonart, Tempo und die Energie pro Takt. Das ist eine grobe Orientierung, keine Wahrheit.
 
-### Bass und Lead nach Stil
+1. Zieh den Song auf eine **Audiospur** im **Arrangement**.
+2. Zieh **MidiBakery Reference Analyzer** auf diese Spur und drück **Analyze**. Alles läuft in Live.
+3. Du siehst Abschnitte, Tonart, Tempo und vier Spuren: **Kick, Lows, Mids, Hats**.
 
-- „Rollender Bass mit Oktav-Sprüngen, 8 Takte, Spur 2.“
-- „Bass im Stil ‚rolling_octaves‘ auf Spur 2.“
-- „Ein langsamer, melodischer Bass im Stil von Progressive.“
-- „Welche Bass-Muster kennst du?“ (die KI listet sie)
-- „Lead mit weichem Hook und Frage-und-Antwort, 8 Takte.“
+Unter Windows geht nur **WAV**. Ein ungewarpter Clip wird automatisch auf dein Raster gewarpt; klappt das nicht, warp ihn von Hand (1.1.1 auf den ersten Schlag) und analysiere erneut.
 
-### Zusammen auf einmal
+- **Genre** steuert Abschnittsnamen und Phrasenlängen.
+- **Sensitivity** (Kick, Lows, Mids, Hats): höher teilt den Song feiner; **Lock** bewegt alle vier gemeinsam.
+- **Set Locators** / **Remove Locators** setzen die Abschnitte ins Arrangement (Transport gestoppt).
 
-- „Bau mir einen House-Song nach ‚Summer Funx‘ in 6 Minuten, Akkorde von ‚Sound as a Pound‘, ohne Effekte, und zeig mir erst den Plan.“
-- „Neue Spuren anlegen für Bass, Akkorde und Lead, die Drums auf Spur 1 bleiben.“
+Dann: „Bau mir einen Peak-Time-Techno-Song nach der Referenz '<Teil des Namens>'.“ Übernommen wird nur die Struktur, nicht der Klang.
 
-### Live steuern
+## 8. Das Ergebnis ändern
 
-- „Setze das Tempo auf 126.“ / *Set the tempo to 126.*
-- „Stelle die Tonart auf A-Moll.“
-- „Benenne Spur 4 in ‚Lead‘ um und färbe sie rot.“
-- „Lege eine neue MIDI-Spur an.“
-- „Starte den Clip in Slot 2 auf Spur 1.“ / „Spiele den Song ab.“ / „Stopp.“
-- „Starte Szene 3.“
+- „Schreib den Bass in 'Drop 2' neu.“ (die Noten dieses Arrangement-Clips werden nach einer Rückfrage ersetzt)
+- „Mach 8 Takte Techno-Drums auf Spur 1.“ / „Eine Bassline, die auf die Kick einrastet.“ (ein neuer Session-Clip)
+- „Schieb 'Break Chords' auf Takt 41.“ / „Tausch 'Intro Bass' und 'Drop Bass'.“ / „Lösch 'Outro Hats'.“
+- „Setz einen Marker 'Drop' auf Takt 33.“ (Transport gestoppt)
+- „Setz das Tempo auf 126.“ / „Spiel ab.“ / „Stopp.“ / „Mach das rückgängig.“
 
-### Mixen und Klänge
+Feinschliff, Mixing und Sounddesign gehen in Live selbst schneller.
 
-- „Dreh die Lautstärke von Spur 2 um 3 dB runter.“ / *Pull track 2 down by 3 dB.*
-- „Pan die Hi-Hats leicht nach rechts.“
-- „Stumm schalten: Spur 5.“ / „Solo auf den Bass.“
-- „Lege einen Hall als Return an.“ / *Add a reverb return.*
-- „Schick die Melodie mit -12 dB in den Hall.“
-- „Lade ein 909-Kit auf Spur 1.“ / *Load a 909 kit.* (MidiBakery sucht im Live-Browser)
-- „Füge einen Auto Filter auf dem Bass ein.“
-- „Fahre den Filter-Cutoff der Akkorde über vier Takte von unten nach oben auf.“ (Clip-Automation)
-- „Zeig mir die Parameter des Compressors auf Spur 3.“
-- „Leg eine Master-Kette für Peak-Time Techno an.“ / *Set up a master chain for house.* (Vorschau, dann Apply; siehe Kapitel 12)
+## 9. Fehlerbehebung
 
-### Hilfe und Lernen
+**„Connecting…“ bleibt oder der Punkt ist rot:** Control Surface prüfen (Kapitel 3), `midibakery ping` im Terminal, Chat-Device entfernen und neu einfügen, Live neu starten.
 
-- „Warum klingt mein Bass matschig?“ — Die KI kann Hinweise geben und Mixer-Werte lesen, aber sie hört den Klang nicht. Entscheide mit deinen Ohren.
-- „Was ist ein Drop?“ — Sie erklärt gern.
+**NO_API_KEY / INVALID_KEY:** **Key** drücken und einen gültigen Claude-Key eingeben.
 
-### Gute Aufträge
+**„Cannot reach LM Studio / Ollama“:** Server starten (`lms server start`, `ollama serve`). Anderer Host oder Port: `LMSTUDIO_HOST`, `OLLAMA_HOST`.
 
-- **Konkret:** Spur, Länge, Stil. „4 Takte House-Drums auf Spur 1“ ist besser als „Mach was Cooles“.
-- **Ein Teil nach dem anderen**, wenn du es genau willst; **mehrere Teile oder einen Song**, wenn du schnell etwas zum Weiterarbeiten brauchst.
-- **Sag, was dir fehlt:** „Der Bass ist zu dicht“, „Mehr Luft in den Drums“ – die KI stellt Dichte, Swing oder Stil nach.
-- **Seed:** Jede Idee hat eine Nummer (Seed). „Nimm Seed 42“ bringt dieselben Noten zurück. Wenn dir eine Idee gefallen hat, frage nach ihrem Seed.
+**„… too small a context“:** Modell mit `lms load <modell> -c 32768` neu laden.
 
-## 8. Teile und ganze Songs komponieren
+**Die KI sagt „erledigt“, aber nichts hat sich geändert:** ein kleines lokales Modell. Jeder Tool-Aufruf steht im Chat; ohne einen ist nichts passiert. Frag „Mach es jetzt mit den Werkzeugen“ oder nimm ein größeres Modell oder Claude.
 
-### Einzelne Teile
+**„Stopped: … failed 3 times“ / „Stopped after 24 tool rounds“:** umformulieren, die Bitte verkleinern oder ein größeres Modell nehmen.
 
-Einen Teil schreibst du als **neuen Clip in den ersten freien Slot** einer Spur. Vorhandene Clips werden nicht überschrieben, außer du verlangst es (dann fragt MidiBakery nach). Eine MIDI-Spur ohne Instrument bekommt nach den Noten eins: ein 909-Kit, Analogue Bass, Analog Soft Pad oder Basic Pluck Keys aus der Core Library (sonst Lives Drum Rack, Drift, Wavetable oder Operator).
+**CONFLICT:** zwischen Vorschau und Apply hat sich etwas geändert. Frag erneut.
 
-| Teil | Wichtige Stellschrauben (alle in normalen Worten verlangbar) |
-|---|---|
-| **Drums** | Stil: house, techno, hiphop, trap, rock, breakbeat. Dichte, Swing, Fills am Ende jeder Viertaktphrase, „Chance“ (wie zufällig Ghost-Notes und manche Hi-Hats kommen). Die Noten gehen auf die Pads des **Drum Racks** der Spur; Pads ohne Sound werden ausgelassen. |
-| **Bass** | Stil: syncopated, sustained, pulse, offbeat, octave, walking. Oktave. Folgt den Akkorden und auf Wunsch der Kick eines Drum-Clips (einrasten oder ausweichen). |
-| **Akkorde** | Rhythmus: sustain, pulse, offbeat, stabs. 3 oder 4 Stimmen, Tonhöhenbereich, Vierklänge, eigene Akkordfolge. |
-| **Melodie** | Dichte, Tonhöhenbereich, folgt den Akkorden. Auch als [Gegenmelodie](#gegenmelodie) zu einem Lead. |
+**„plan_song needs 4/4“:** Taktart auf 4/4 stellen.
 
-Gemeinsam: **Länge** in Takten (Standard 4), **Swing** (Engine-Stärke 0 = gerade, 1 = triolisch; 0,6 entspricht einem MPC-Verhältnis von 60 %, nicht Lives Groove-Pool-Amount), **Seed** (reproduzierbar).
+**LICENSE_REQUIRED:** nur bei eingeschalteter Lizenzprüfung: **Start trial** oder **Enter key** im Chat.
 
-**Wie die Teile zusammenpassen:** Bass und Melodie richten sich nach den Akkorden eines Clips („passend zu den Akkorden auf Spur 3“). Der Bass richtet sich nach der Kick eines Drum-Clips. Bittest du um mehrere Teile in einem Auftrag, teilen sie sich dieselbe Akkordfolge.
+**Logs:** macOS `~/Library/Application Support/MidiBakery/`, Windows `%APPDATA%\MidiBakery\`: `api.log` (jede Nachricht und jeder Tool-Aufruf), `device-chat.log`, `device-importer.log`, `device-reference.log`; Lives `Log.txt` für das Remote Script. **Copy** im Chat kopiert das ganze Gespräch für eine Fehlermeldung.
 
-**Tonart und Takt deines Sets** sind der Standardkontext. Stelle also zuerst Tonart (*Scale* in Live) und Tempo ein. Benannte Patterns können bewusst eine andere Skala auf demselben Grundton oder chromatische Akkorde verwenden: `dreamy_indie` enthält eine Dur-II in Moll, `resolute_major` eine entlehnte bVII in Dur. Stimmungsnamen sind Anregungen, keine garantierten Gefühle. Siehe [Pattern-Konventionen und Ausnahmen](../PATTERNS.md) (Englisch).
+## 10. FAQ
 
-### Gegenmelodie
+**Ändert MidiBakery mein Projekt ungefragt?** Nur auf Bitte; ein Song kommt erst als Vorschau, Löschen und Ersetzen fragen nach, alles ist rückgängig zu machen.
 
-Eine zweite Melodie, die auf eine vorhandene Lead-Melodie antwortet. Frage: *„Schreib eine Gegenmelodie zum Lead in Slot 1 von Spur 2“*. Sie kommt in einen neuen Clip, der Lead bleibt unverändert. Ohne Akkorde werden diese aus den Noten des Leads abgeleitet. Der Lead darf auch ein Clip sein, der im selben Auftrag vorher geplant wurde.
+**Was kostet es?** Claude: API-Nutzung auf deinem Anthropic-Konto. Lokale Modelle: nichts. Die MidiBakery-Lizenzprüfung ist in dieser Version **aus**.
 
-Ein Lead im Arrangement, wie `plan_song` ihn schreibt: Frage *„Schreib eine Gegenmelodie zu den Breakdown-Lead-Clips auf einer neuen MIDI-Spur“*. Jeder Clip dieses Namens bekommt an denselben Takten und in derselben Länge einen Gegenclip auf der anderen Spur (*Breakdown Counter*), jeweils über den Akkorden des Akkord- oder Pad-Clips, der dort spielt. Die Lead-Spur allein beantwortet den ganzen Song. Nochmal fragen gibt diesen Clips neue Noten statt einer zweiten Lage.
+**Welche Daten verlassen meinen Rechner?** Mit Claude: was die KI liest (Spur- und Clipnamen, Noten, Tempo, Tonart). Mit lokalen Modellen: nichts. Die Update-Prüfung sendet Version, Betriebssystem, Prozessor und Kanal.
 
-Ohne Modus wählt der Lead ihn. Ein Lead mit langen Pausen (ein stiller Takt nach jeder Phrase) bekommt **call_and_response**, einer mit kurzen Pausen oder gehaltenen Noten **fill_the_gaps**, einer ohne Pause (ein Arp, eine Acid-Linie) **passive_over_active**, wenige lange Noten. Als Pause zählt nur, wenn der Lead einen Schlag oder länger schweigt: die winzigen Lücken zwischen den Staccato-Tönen eines Arps sind kein Platz für eine Antwort. Die Antwort sagt, welchen Modus es gewählt hat und warum.
+**Hört die KI meine Musik?** Nein. Sie arbeitet mit Noten. Entscheide mit deinen Ohren.
 
-Modi (in Worten sagen):
-
-- **fill_the_gaps**: spielt nur in den Pausen des Leads (ab einem Schlag) und in gehaltenen Noten.
-- **call_and_response**: antwortet in den Pausen des Leads, ab ihrer ersten 16tel.
-- **passive_over_active**: ruhige lange Noten über einem lebhaften Lead (mehr Noten über einem sparsamen).
-- **contrasting_rhythm**: sparsam, wo der Lead dicht ist, und umgekehrt.
-- **harmonic_notes**: geht im Rhythmus des Leads mit, auf einer passenden anderen Note.
-- **note_layering**: die Noten des Leads eine Oktave entfernt, gleichzeitig oder verzögert.
-
-Vier feste Figuren (der Lead bestimmt nur Lage und Reibungen; sie folgen nicht seinem Rhythmus):
-
-- **dotted_eighth_pulse**: sechs Einsätze auf den 16tel-Schritten 1, 4, 7, 10, 13, 16, auf einem Akkordton pro Takt. Die zyklischen Abstände sind 3-3-3-3-3-1: Die Figur startet jeden Takt neu, statt punktierte Achtel über Taktgrenzen fortzusetzen.
-- **scale_staircase**: derselbe Puls, der alle ein bis zwei Takte eine Tonleiterstufe steigt und vor dem Neustart eine Stufe zurückgeht.
-- **trance_dotted_eighth_staircase**: die 8-Takt-Figur aus dem Trance-Tutorial: der Puls auf den Stufen 1, 2, 3 und 5, je zwei Takte.
-- **echo_gap_answer**: in langen Noten des Leads (ab 1,25 Schlägen) drei bis vier kurze Noten in Schritten, dann eine längere Note, die beim Wiedereinsatz des Leads weiterklingt. Über einem Lead ohne lange Noten schreibt sie nichts.
-
-Lage (`counter_register`): **above** über dem Lead (Standard, eine Terz oder mehr über seinem höchsten Ton, nie über MIDI 96, in Live C6), **below** darunter (Standard, wenn darüber MIDI 96 überschritten würde) oder **same** (dann beginnt sie nie gleichzeitig mit dem Lead). Der gesamte Bereich ist MIDI 36–96 (Live C1–C6). Auf betonten Zählzeiten spielt sie Terzen, Quinten, Sexten oder Oktaven zum Lead. Eine dort reibende Figurennote rückt auf den nächsten passenden Tonleiterton. Das sind konservative Generatorregeln, keine allgemeinen Musikgesetze; gleicher Rhythmus oder bewusste Dissonanz können ebenfalls funktionieren.
-
-### Ganze Songs nach Genre
-
-Du sagst das Genre, MidiBakery plant den Song, zeigt dir eine **Vorschau** (Zeitleiste der Abschnitte) und schreibt ihn bei **Apply** ins **Arrangement**.
-
-| Genre | Tempo (mit „setze das Tempo des Genres“) | Abschnitte (Standardlänge) |
-|---|---|---|
-| **House** | 124 BPM | Intro, Build, Drop, Break, Build 2, Drop 2, Outro |
-| **Melodic Techno** | 122 BPM | Intro, Build, Drop, Breakdown, Build 2, Climax, Outro |
-| **Peak-Time Techno** | 128 BPM | Intro, Groove, Lift, Peak, Breakdown, Peak 2, Lift 2, Peak 3, Stripped Outro |
-| **Drum & Bass** | 174 BPM | Intro, Build, Drop, Breakdown, Build 2, Drop 2, Outro |
-| **Trap** | 145 BPM | Intro, Build, Drop, Verse, Build 2, Drop 2, Outro |
-
-**Länge:** *radio* (kurz: Intro, Break und Outro halbiert), *standard*, *extended* (Intro und Outro doppelt, DJ-freundlich) oder eine Zielzeit in Minuten („etwa 5 Minuten“).
-
-**Was MidiBakery dabei macht:**
-
-- **Spuren:** Es sucht vorhandene Spuren für Drums (Spur mit Drum Rack), Bass, Akkorde und Lead (an Namen wie „Bass/Sub/808“, „Chords/Pad/Keys“, „Lead/Melody/Synth“). Fehlende Spuren legt es an, mit passendem Kit und Presets aus der Core Library, benannt nach ihrer Rolle (Drums, Bass, Chords, Lead, Riser, Impact); die stumme Sidechain-Spur kommt ganz nach vorne. **Benenne deine Spuren also vorher passend**, wenn du eigene Klänge behalten willst. Mit „nimm Spur 3 als Bass“ weist du eine Rolle zu.
-- **Noten:** Aufbau und Muster folgen Rezepten pro Genre (siehe [GENRES.md](../GENRES.md), Englisch): Drums mit Ghost-Notes und Fills, wechselnder Bass, zweite Harmonie im Break, eine Hook, die sich entwickelt. Ein Lead, der eine 4-Takt-Phrase durchspielen würde, pausiert in ihrem 4. Takt: Platz für die Antwort einer Gegenmelodie. Dynamik steigt und fällt mit der Energie des Abschnitts.
-- **Marker:** Es setzt **Locators** (Marker) an die Abschnitte.
-- **Mix (an):** je ein Hall- und ein Delay-Return (vorhandene werden verwendet), Pegel und Sends für neue Spuren.
-- **Automation (an):** Filterfahrten, Delay-Würfe.
-- **Sidechain (an):** Standardmäßig pumpen Bass und Pads zum Genre-Kick-Muster einer stummen Hilfsspur, auch in Kick-Pausen (`sidechain_mode="pumping"`). Mit `sidechain_mode="follow_kick"` folgt der Trigger den geplanten Drum-MIDI-Kick-Einsätzen einschließlich Fills und Pausen. Das ist keine Audioerkennung und folgt keinen späteren Änderungen, Track-Mutes oder Filtern. Nötig ist ein benanntes Kick-Pad; kopierte Drum-Clips müssen bei 0 starten, Loop-Start 0 / Loop-Ende gleich Länge und deterministische Kick-Noten haben (andere Clips zuerst konsolidieren). Nicht unterstützte Quellen liefern einen Fehler statt eines Ersatzmusters. Feste Threshold-Werte garantieren keine bestimmte Absenkung.
-- **FX (an):** ein Riser vor jedem Drop und ein Impact auf der Eins des Drops.
-- **Start:** hinter dem letzten Clip im Arrangement, oder an einem Takt, den du nennst („ab Takt 17“). **Es überschreibt nie vorhandene Arrangement-Clips**; es nennt dir stattdessen den ersten freien Takt.
-
-Du kannst Teile abschalten: „ohne Sidechain“, „ohne Riser“, „keine neuen Spuren anlegen“, „ohne Mix-Returns“, „mit leeren Instrumenten statt Preset-Klängen“. Und einen dazunehmen: „mit Gegenmelodie“ legt eine Counter-Spur in den Song (Basic Pluck Keys, etwas leiser als der Lead), mit einem Gegenclip zu jedem Lead-Clip, der in dessen Pausen antwortet.
-
-Weitere Wünsche: „mit der Akkordfolge i VI III VII“, „setze das Tempo auf das des Genres“, „benutze meinen Drum-Clip aus Slot 1 für die Drums“ (ein Session-Clip wird in jeden passenden Abschnitt kopiert).
-
-**Grenzen:** Der Song muss im **4/4-Takt** sein (sonst sagt MidiBakery: stelle zuerst 4/4 ein). Breaks, Samples (Amen, Vocal Chops) und eigene Audioclips kann MidiBakery nicht erzeugen oder laden. Ein Song nach Rezept klingt genretypisch; **gut** wird er erst durch dein Hören und dein Arrangieren danach.
-
-Nach dem Apply bleibt alles normal bearbeitbar: Es sind gewöhnliche MIDI-Clips und Spuren.
-
-## 9. Clips bearbeiten
-
-MidiBakery ändert vorhandene Noten als **Unterschied** („Diff“): nur das, was sich ändert, wird angefasst. Der Rest behält Wahrscheinlichkeit, Velocity-Abweichung und Undo-Verlauf. Zum Bearbeiten gibt es sechs Operationen:
-
-| Operation | Was passiert | Beispiel |
-|---|---|---|
-| **Variation** | ein wenig Neues: Noten ändern, wegfallen oder hinzukommen. *Amount* bestimmt, wie viel. | „Variiere den Bass leicht.“ |
-| **Transponieren** | höher oder tiefer. **Halbtöne** (12 = eine Oktave) oder **Skalenstufen** in der Tonart (2 Stufen = eine Terz). | „Eine Oktave tiefer.“ / „Um 5 Halbtöne hoch.“ / „Zwei Stufen in der Tonart höher.“ |
-| **Humanize** | kleine Abweichungen in Timing und Velocity | „Mach die Hi-Hats lockerer.“ |
-| **Quantize** | Noten aufs Raster ziehen (Sechzehntel usw.), mit Stärke und Swing | „Quantisiere auf Achtel, 70 %.“ |
-| **Invert** | Melodie spiegeln, in der Tonart | „Spiegle die Melodie.“ |
-| **Arpeggiate** | Akkorde werden zu Läufen (aufwärts, abwärts, auf-ab, zufällig; Schrittlänge, 1–3 Oktaven) | „Arpeggio in Sechzehnteln, auf-ab.“ |
-
-**Nur ein Teil des Clips:** „die erste/zweite **Hälfte**“, oder nach Takten **des Clips**: „Takte 3 bis 4“. Der erste Takt des *Clips* ist Takt 1, nicht der Takt im Song. Beispiel: „Variiere nur die zweite Hälfte des Drop Bass.“
-
-**Welchen Clip?**
-
-- Ein **Session-Clip**: Spur und Slot nennen („Clip auf Spur 2, Slot 1“).
-- Ein **Arrangement-Clip**: den **Namen** des Clips, z. B. „Groove Bass“ oder „Drop Chords“. Teilnamen gehen, wenn sie eindeutig sind (Groß-/Kleinschreibung egal). Songs aus `plan_song` benennen ihre Clips nach Abschnitt und Teil. Du findest die Namen im Arrangement oder fragst „welche Clips liegen im Arrangement?“.
-
-**Neu schreiben statt ändern:** „Schreib den Bass im Drop neu“ ersetzt die Noten des Arrangement-Clips über seine ganze Länge (mit Nachfrage). Das Ergebnis liegt wieder im selben Clip.
-
-**Einzelne Noten:** „Lösche die Note auf Zählzeit 3“, „Mach die letzte Note länger“: möglich, aber mit Klick in Lives Piano Roll oft schneller.
-
-## 10. Das Arrangement
-
-**Clips verwalten** (alles per Chat, ein Undo-Schritt pro Auftrag; ein Clip landet nie auf einem anderen):
-
-- **Verschieben:** „Verschiebe ‚Break Chords‘ auf Takt 41.“ Ein Clip lässt sich nur verschieben, wenn er nicht gekürzt und kein Loop ist.
-- **Tauschen:** „Tausche ‚Intro Bass‘ und ‚Drop Bass‘.“ Beide Clips tauschen ihren Startpunkt.
-- **Löschen:** „Lösche ‚Outro Hats‘.“ (mit Nachfrage)
-- **Kopieren aus der Session:** „Kopiere den Clip aus Slot 2 auf Spur 3 ins Arrangement, ab Takt 9.“
-- **Neu anlegen:** MIDI-Clips mit Noten ins Arrangement.
-- **Marker (Locators):** „Setze einen Marker ‚Drop‘ auf Takt 33“, „lösche den Marker bei Takt 17“. Dafür muss der **Transport stehen**; MidiBakery stellt die Abspielposition danach wieder her.
-
-**Take Lanes zum Comping** (Live 12.2 oder neuer): Mehrere **Varianten eines Teils** (Hook, Melodie, Bass, Akkorde oder Drums) landen über denselben Akkorden jeweils in einer **eigenen Take Lane** einer Spur. Du hörst sie durch und wählst in Live die besten Stellen heraus.
-
-- Auftrag: „Gib mir 4 Takes für die Melodie in Takt 17 bis 24 auf Spur 3.“ Standard: 4 Takes, 8 Takte, Hook.
-- Die Lanes zeigt Live erst mit **Show Take Lanes** (⌘⌥U bzw. Strg+Alt+U) an.
-- Ein Undo entfernt alle Takes.
-
-## 11. Der Reference Analyzer
-
-Er analysiert einen **Referenzsong** und schätzt Abschnitte (Intro, Build, Drop, Break, Outro), Tonart, Tempo und Energie pro Takt. Die Kick-Bahn nutzt Heuristiken für Einsätze und tiefe Frequenzen; Tiefen, Mitten und Höhen sind Frequenzbänder, keine getrennten Instrumente. Die Tonarterkennung verwendet Dur-/Moll-Tonhöhenprofile und kann modales, chromatisches oder mehrdeutiges Material falsch einordnen. Abschnittsnamen sind genreabhängige Deutungen, keine gesicherten Fakten. Prüfe Bezeichnungen, Tempo und Taktraster beim Hören, bevor du **deinen Song nach diesem geschätzten Aufbau** bauen lässt. Eine Referenz beschreibt einen Track, nicht das ganze Genre.
-
-### Analysieren
-
-1. Lege eine **Audiospur** an und ziehe den Referenzsong ins **Arrangement** (nicht in die Session-Ansicht).
-2. Ziehe **MidiBakery Reference Analyzer** auf diese Spur.
-3. Drücke **Analyze**. Das Gerät rechnet in Live selbst (nichts wird hochgeladen).
-4. Du siehst die Abschnitte, die Tonart und das Tempo und darunter vier Bahnen: **Kick, Lows, Mids, Hats**.
-
-**Dateiformate:** Auf macOS liest das Gerät auch MP3, AAC u. ä. (über das Systemprogramm `afconvert`). Auf Windows geht nur **WAV**: Wandle den Song vorher in WAV.
-
-**Gewarpte und ungewarpte Clips:** Ist der Clip in Live *gewarpt*, nutzt das Gerät Lives Takte. Ein **ungewarpter** Clip läuft in seinem eigenen Tempo; das Gerät erkennt Tempo und ersten Schlag selbst, warpt den Clip auf dein Raster (Takt 1 auf einer Taktlinie, dein Set-Tempo bleibt) und analysiert nochmal. Schlägt das fehl, sagt es das: Dann warpe von Hand (1.1.1 auf den ersten Schlag) und drücke noch einmal **Analyze**.
-
-### Einstellungen
-
-- **Genre** (Auto oder eines der fünf Genres): steuert Abschnittsnamen (z. B. „Lift/Peak“ bei Peak-Time Techno), angenommene Phrasenlängen (16 Takte bei Drum & Bass) und die Deutung als halbes oder doppeltes Tempo. Prüfe diese Schätzungen nach Gehör.
-- **Sensitivity** (je 0–100, Standard 50, für Kick, Lows, Mids, Hats): wie fein der Song geteilt wird. Bei **100** wird jede gefundene Änderung ein Abschnitt. Bei **50** werden gleichartige Nachbarn zu einem Abschnitt (vier Breaks hintereinander sind ein langer Break). Niedriger: Ein Drop und sein Groove werden einer. Das **Verhältnis** der vier Felder bestimmt, was als Änderung zählt: „Hats 30, der Rest 100“ lässt Hi-Hat-Wechsel durch, „nur Kick hoch“ teilt den Song dort, wo die Kick aufhört und wiederkommt. Die Analyse läuft von selbst neu, sobald du ein Feld loslässt.
-- **Lock** (an): ändert sich ein Feld, bewegen sich die anderen um den gleichen Betrag.
-- **Set Locators:** setzt Marker an die Abschnitte im Arrangement. Der Transport muss stehen.
-- **Remove Locators:** entfernt alle Marker im Bereich des Clips.
-
-Ergebnisse speichert das Gerät im MidiBakery-Ordner unter `references/`. Der Chat liest sie von dort.
-
-### Im Chat nutzen
-
-- „Welche Referenzen habe ich analysiert?“ / „Was ist der Aufbau von meinem Referenzsong?“
-- „Bau mir einen Peak-Time-Techno-Song nach der Referenz ‚<Teil des Namens>‘.“ – Abschnittsfolge und -längen folgen dem Referenzsong, eingerastet auf das Raster des Genres. MidiBakery erzeugt dabei **nur den Aufbau**, nicht den Klang des Referenzsongs.
-- „… und nimm Tempo und Tonart der Referenz.“
-- Ein **ungewarpter** Referenzsong funktioniert nur, wenn dein Song im gleichen Tempo spielt (sonst Fehlermeldung).
-
-### Eigene Live-Sets importieren (Set Importer)
-
-Der **MidiBakery Set Importer** liest Ableton-Live-Sets (`.als`) von deiner Festplatte, z. B. eigene Projekte oder lizenzfreie Beispiel-Sets, und macht daraus Referenzen. Das ist exakt: Anders als der Analyzer hört er kein Audio, sondern liest die Noten und Clips im Set. Alles bleibt auf deinem Rechner.
-
-1. Ziehe **MidiBakery Set Importer** (User Library > Presets > MIDI Effects > Max MIDI Effect > MidiBakery) auf eine beliebige MIDI-Spur.
-2. Drücke **Folder...** (ein Ordner mit vielen Sets; `Backup`-Ordner werden übersprungen) oder **Set...** (eine Datei). Die Sets erscheinen in einer Liste mit Tempo und Tonart.
-3. Klicke ein Set an, um seine **Abschnitte**, die Bahnen der spielenden Rollen und die nicht zugeordneten Spuren zu sehen. Mit dem Genre-Chip setzt du ein Genre. Hake Sets ab, die du nicht willst, und drücke **Import**.
-4. Der Tab **Library** listet alles Importierte. Klicke ein Set an, um seine **Loops** zu sehen: kleine Pianoroll-Karten je Loop mit Name, dem Takt, in dem er zuerst spielt, und wie oft er sich wiederholt. **Delete loops** entfernt nur die Loops, **Delete** das Set samt Loops.
-
-**Was ein Import ergibt**
-
-- **Eine Referenz** mit den Abschnitten des Sets (Intro, Build, Drop, Break, Outro), Tempo, Tonart und den Rollen, die in jedem Abschnitt spielen. Sie wirkt wie eine analysierte Referenz: „Bau mir einen House-Song nach der Referenz ‚<Name>‘“ folgt Abschnittsfolge und -längen des Sets **und seiner Besetzung**: Ein Abschnitt ohne Drums bekommt keine Drums, Akkorde, die nie spielen, werden nicht ergänzt.
-- **Loops** (die *my*-Patterns): Bass-, Lead- und Drum-Figuren von 1, 2 oder 4 Takten, die das Set wiederholt, dazu die Akkordfolge seiner Akkordspur (`my_<set>_chords_1`, als römische Stufen der Set-Tonart gespeichert, passt sich also deiner Tonart an; Voicing und Rhythmus bleiben nicht erhalten; als `pattern` der Akkorde verwendbar). Sie heißen z. B. `my_<set>_bass_1` und funktionieren überall, wo ein eingebauter Patternname funktioniert: „Komponiere einen Bass mit dem Pattern my_soundasapound_bass_1“. Bass-Loops folgen deinen Akkorden und deiner Tonart, Leads sind als Stufen der Set-Tonart gespeichert, Drums als Schläge je Pad. Die Noten des Sets werden nie als Ganzes kopiert, nur Loops, die sich wiederholen.
-
-**Songs aus importierten Sets**
-
-- „Bau einen Song nach dem Set ‚Phantom‘“: Aufbau und Besetzung vom Set, dazu die eigenen Loops des Sets, wo es welche hat.
-- Ein Genre musst du nicht nennen: Ohne Angabe nimmt MidiBakery das Genre, das du im Importer am Set gesetzt hast, oder schätzt eines aus dem Tempo und sagt es dir.
-- Akkord-Loops deiner Sets kommen zu den Akkordfolgen des Genres dazu: Planst du einen Song in einem Genre, wählt der Seed aus den eingebauten Folgen **und** aus den Akkord-Loops der Sets, die du im Importer mit diesem Genre markiert hast (gleicher Modus, in die Tonart des Songs verschoben). Sets mit anderem Genre oder „other“ ändern nichts. Du musst dafür nichts Besonderes schreiben.
-- `loops_from`: Loops eines anderen Sets für eine Rolle nehmen: „Nimm den Aufbau von Phantom, aber den Bass-Loop von Sound as a Pound.“ Mögliche Rollen: drums, bass, lead, chords. Ohne `loops_from` spielt ein Song nach einem Set dessen Akkordfolge.
-- `fill_missing`: Rollen, die das Set nie spielt, bleiben standardmäßig weg. „… und ergänze, was fehlt“ fügt sie aus dem Genre hinzu.
-- `my_loops`: „… mit meinen eigenen Loops“ lässt den Seed Drums, Bass, Lead und Akkorde aus deinen importierten Sets ziehen (pro Seed eine andere Mischung; eine Rolle, die du mit `loops_from` nennst oder die das Referenz-Set selbst spielt, wird nicht gezogen). Die Antwort sagt, aus welchem Set jede Rolle kam. Nur auf Wunsch.
-
-**Grenzen:** nur 4/4-Sets. Viele Sets spielen Drums als Audio; dann gibt es keine Drum-Loops zu finden. Ein Set, dessen Tonart nicht erkannt wird, liefert Bass-Loops, aber keine Lead-Loops. Die Abschnitte sind eine gute Schätzung aus den Clips, keine gesicherte Tatsache: Prüfe sie in der Library-Ansicht. Loops sind Muster zum Weiterarbeiten, keine Kopie des Originalsongs.
-
-## 12. Mixen und Klänge
-
-MidiBakery kann Live-Parameter lesen und setzen. Es **hört nichts**. Zeitliche und klangliche Entscheidungen triffst du.
-
-- **Mixer:** Lautstärke und Sends in dB (so wie Live sie anzeigt), Pan, Mute, Solo, Crossfader, Routing (Ein- und Ausgänge, nach den Namen in Live). Für Spuren, Returns und Master.
-- **Returns:** Return-Spuren anlegen, auf Wunsch mit einem Live-Effekt („Hall-Return“).
-- **Geräte:** native Live-Geräte einfügen, ihre Parameter lesen und setzen (Namen und Wertebereiche stehen im Chat), auch in Racks. Macros und Ketten eines Racks lesen und ändern.
-- **Klänge laden:** „Lade ein 909-Kit“, „einen Pad-Sound“: MidiBakery sucht im Live-Browser (Core Library) nach Namen und lädt es auf die gewählte Spur. Ein Instrument oder Kit ersetzt das vorhandene Instrument, ein Effekt wird angehängt. Findet es nichts mit allen Wörtern, probiert es mit einem Teil.
-- **Drum-Pads lesen:** Welches Pad hat welche Note?
-- **Automation:** Clip-Automation für Geräteparameter und den Mixer der Spur (Lautstärke, Pan, Sends): Rampen, Sinus, Dreieck u. a. „Fahre den Cutoff über 8 Takte auf.“ Im Arrangement baut MidiBakery dafür den Clip neu auf; die Noten bleiben, vorhandene Hüllkurven dieses Clips werden dabei ersetzt.
-- **Sidechain, Hall, Delay und Filter für ganze Songs:** übernimmt `plan_song` (Kapitel 8).
-- **Master-Kette:** „Leg eine Master-Kette für House an“ setzt EQ Eight, Glue Compressor und Limiter mit den Werten des Genres ans Ende der Master-Spur. Das ist ein **Startpunkt, kein fertiges Mastering**. Was die Geräte tun:
-  - Mit `low_cut=false` oder `glue=false` die jeweilige Stufe weglassen; beide false erzeugen nur einen Limiter. Die Standards bleiben unverändert.
-  - Der EQ setzt einen Low Cut bei 30 Hz, bei Drum & Bass und Trap 20 Hz. Das kann Rumpeln entfernen, aber auch erwünschten Bass, Phase und Transienten ändern. Mit Bypass vergleichen, nicht pauschal als unhörbar ansehen.
-  - Der Glue Compressor startet mit 2:1, Attack 30 ms, Release Auto und Threshold -10 dB. Das garantiert keine sanfte Kompression. Wenn dezente Verdichtung gewünscht ist, stelle den **Threshold** in lauten Passagen auf etwa 1–2 dB Gain Reduction; überbrücke das Gerät, wenn es nicht hilft.
-  - Der Limiter startet mit -1 dB True-Peak-Ceiling und 0 dB Input Gain. Die Kette erhöht den Gain nicht absichtlich, kann Lautheit und Dynamik aber verändern. Für Spotify-Master über -14 LUFS empfiehlt Spotify unter -2 dBTP: einen niedrigeren `ceiling_db` anfordern und den Export mit einem True-Peak-Meter prüfen.
-  - Wie bei Songs siehst du erst eine Vorschau und schreibst mit **Apply**. Zweimal **Undo** entfernt die Kette wieder.
-  - Hat dein Master schon einen Limiter, EQ Eight oder Glue Compressor, lässt MidiBakery ihn in Ruhe.
-  - Woher die Werte stammen, steht in [GENRES.md](../GENRES.md#master-chain-plan_master) (Englisch).
-- **Lautheit messen:** Zieh das Gerät **MidiBakery Loudness Meter** (Browser: Audio Effects › Max Audio Effect › MidiBakery) als **letztes Gerät** auf die Master-Spur, nach dem Limiter. Während Live spielt, zeigt es:
-  - **Momentary** (die letzten 0,4 s), **Short-term** (die letzten 3 s) und **Integrated** (alles seit dem Start oder Reset) in LUFS, nach ITU-R BS.1770 / EBU R 128.
-  - **Peak**: die höchste Sample-Spitze seit dem Reset in dB. True Peak kann auch mehr als 0,5 dB darüber liegen; diese Anzeige kann keine True-Peak-Grenze nachweisen.
-  - **Reset** startet Integrated und Peak neu. Für den Vergleich mit integrierten Ganztrack-Werten: zurücksetzen und den ganzen Song einmal abspielen. Eine Drop-Messung beschreibt nur diesen Ausschnitt.
-  - Jede Messung enthält eine neue `measurement_id` nach Reset oder Sample-Rate-Wechsel. `reading_fresh` (und das bisherige `measuring`) bedeutet aktuelle Meter-Datei, nicht laufende Wiedergabe; `is_playing` ist Lives Transportstatus.
-  - Im Chat: „Wie laut ist der Song?“ MidiBakery liest das Gerät mit `measure_master`. Ohne das Gerät auf dem Master nennt MidiBakery keine LUFS-Zahl.
-  - Die Werte sind Näherungen, kein kalibriertes oder auf Normkonformität geprüftes Messgerät: Max liest die Blöcke im 100-ms-Takt seines Schedulers.
-- **Auf eine Ziel-Lautheit bringen:** „Mach den Song so laut wie House“ oder „auf -14 LUFS für Spotify“. Das braucht die Master-Kette und das Loudness Meter auf dem Master. Dann geht es in Runden:
-  1. Meter zurücksetzen und den **ganzen Song einmal** abspielen, dann ausdrücklich `scope="whole_song"` angeben. MidiBakery darf die Abdeckung nicht aus Dauer oder Lauter-Wunsch ableiten. Für Ausschnitte `scope="excerpt"` und einen eigenen `target_lufs` angeben, kein Genre-/Streaming-Ziel. Ausschnitte brauchen 30 s; erklärte kurze komplette Songs mindestens 0,4 s und einen endlichen Integrated-Wert.
-  2. MidiBakery schlägt vor, um wie viel dB es den **Input Gain** des Limiters ändert (höchstens 6 dB pro Runde), und schreibt es mit **Apply**. Ein Undo nimmt es zurück.
-  3. Das Meter fängt neu an: denselben vollständigen Durchlauf wiederholen und den Umfang vor jeder Runde erklären. Innerhalb von 0,5 LU bezieht sich `on_target` darauf; das Ergebnis sagt ausdrücklich: vom Nutzer erklärt, **nicht verifiziert**. Wiederholte Loops belegen keinen kompletten Song. Neue Messsitzungen, ersetzte Geräte oder geänderte Limiter-Parameter machen einen offenen Plan ungültig. Konvergenz und Mastering-Qualität sind nicht garantiert.
-  - Presets: House -8, Melodic Techno -8,8, Peak-Time Techno -7,7, Drum & Bass -6,3, Trap -8,4, Streaming -14 LUFS. House/Techno sind vom Anbieter berichtete Korpus-Mediane; Drum & Bass ist weniger vollständig dokumentiert, Trap eine schwache Schätzung statt eines belegten Medians. Spotifys -14 ist der Normal-Wiedergabepegel und eine Mastering-Empfehlung, keine allgemeine Auslieferungspflicht. Siehe [Quellen und Grenzen](../GENRES.md#loudness-targets-plan_loudness) (Englisch).
-  - Mehr Gain kann mehr Limiting bedeuten. Hör auf Pumpen, Verzerrungen und flache Drums; hör auf, wenn das Ergebnis schlechter wird. Die +12-dB-Grenze und Warnungen messen keine tatsächliche Gain Reduction und garantieren kein gutes Master.
-  - **Gemeinsam aktualisieren:** Core, Remote Script und Loudness Meter aktualisieren, dann Live neu starten bzw. das Gerät neu laden. Älteren Versionen fehlen die nötigen Identitäten; die Lautheitsplanung meldet dann einen ausdrücklichen Upgrade-Fehler.
-
-Bei Ohren-Fragen („klingt matschig“) bekommst du Hinweise, aber keine Messung. Für genaue Analysen von Audio benutze Lives eigene Analyzer.
-
-## 13. Generator und Transform ohne Chat
-
-Die beiden Geräte **MidiBakery Generator** und **MidiBakery Transform** brauchen keinen Chat und keine KI, nur die laufende API (also das Remote Script, Kapitel 4). Sie sind Live-**MIDI Tools** und erscheinen in der Clip-Ansicht eines MIDI-Clips in den Bereichen **Generate** bzw. **Transform**. Sie arbeiten auf dem **markierten Zeitbereich** des Clips, in der Tonart des Clips (Live 12.2 oder neuer).
-
-**Generator**
-
-| Regler | Bedeutung |
-|---|---|
-| **Part** | Drums, Bass, Chords, Melody |
-| **Style / Rhythm** (zweites Menü) | Stil des gewählten Teils (Drums: House, Techno, Hip-Hop, Trap, Rock, Breakbeat; Bass: Sustained, Pulse, Offbeat, Octave, Walking, Syncopated; Chords: Sustain, Pulse, Offbeat, Stabs) |
-| **Density**, **Swing**, **Chance** (nur Drums) | Dichte, Swing, Zufälligkeit der Ghost-Notes |
-| **Seed** und **Dice** | die Idee; Dice würfelt eine neue |
-| **Replace** (Standard: an) | leert den markierten Bereich, bevor die neuen Noten hineinkommen. Ein Generator kann in Live sonst nur hinzufügen. |
-
-**Transform:** **Operation** (Humanize, Quantize, Invert, Arpeggiate, Variation, Transpose), **Amount**, **Semis** (Halbtöne für Transpose), **Arp Rate** (1/32 bis 1/4), **Seed** und **Dice**. Ändert eine Operation nichts, steht der Grund in der Statuszeile des Geräts (zum Beispiel „No chords to arpeggiate“).
-
-Beim ersten Anwenden zeigt das Gerät kurz „Working …“. Das Ergebnis kommt einen Moment später im selben Zyklus.
-
-## 14. Probleme lösen
-
-### Der Chat bleibt bei „Connecting…“ oder der Punkt ist rot
-
-1. **Ist das Remote Script eingeschaltet?** Einstellungen > Link, Tempo & MIDI > Control Surface = **MidiBakery** (Kapitel 4). Live nach der Installation neu starten.
-2. **Läuft die API?** Prüfe im Terminal (Programm aus dem Installationsordner, Kapitel 3): `midibakery ping`. Es sollte die Verbindung zu Live bestätigen.
-3. **Gerät neu laden:** das Chat-Gerät von der Spur löschen und neu hineinziehen (die Chat-Seite lädt sich nach einem Update erst dadurch neu).
-4. **Ein anderes Programm hat Port 8766:** Beende es oder starte Live neu.
-5. **Zwei Versionen:** Läuft noch eine API einer älteren Version, tauscht MidiBakery sie beim Start aus. Gelingt das nicht, beende Live und starte es neu.
-
-### „No Claude key“ / NO_API_KEY
-
-Du hast ein Claude-Modell gewählt, aber noch keinen Schlüssel hinterlegt: **Key** drücken (Kapitel 5). Ist der Schlüssel falsch, sagt der Chat „INVALID_KEY“ („That does not look like a Claude API key“ bzw. von Anthropic abgelehnt).
-
-### „Cannot reach LM Studio“ / „Cannot reach Ollama“
-
-Der Server läuft nicht. LM Studio: Tab **Developer** > Server starten, oder `lms server start`. Ollama: `ollama serve` (oder Ollama-App starten). Läuft er auf einem anderen Rechner oder Port, gibt es die Umgebungsvariablen `LMSTUDIO_HOST` bzw. `OLLAMA_HOST`. Das Modell-Menü zeigt nur lokale Modelle, wenn der Server erreichbar ist.
-
-### „… too small a context for MidiBakery’s tools“
-
-LM Studio hat das Modell mit zu wenig Kontext geladen. Neu laden: `lms load <modell> -c 32768` (Kapitel 5).
-
-### Das Modell antwortet auf Englisch, Türkisch, Koreanisch …
-
-Lokale Modelle verlieren manchmal die Sprache. MidiBakery erinnert sie jede Nachricht daran. Hilft das nicht: kurz „Antworte auf Deutsch“ schreiben, oder **New** drücken.
-
-### Die KI sagt „erledigt“, aber in Live ist nichts passiert
-
-Das passiert gelegentlich bei kleinen lokalen Modellen. Schau in Lives Spuren und Clips nach (nicht nur in den Chat). Dann frage: „Hast du es wirklich geschrieben? Mach es jetzt mit den Werkzeugen.“ Der Chat zeigt jeden Werkzeugaufruf an („Running …“ und ein Haken oder ein Fehler); fehlt der, hat nichts stattgefunden.
-
-### „Stopped: … failed 3 times“ (STUCK)
-
-Das Modell hat denselben Fehler dreimal gemacht, oder alles schlug sechs Runden hintereinander fehl. MidiBakery bricht ab, bevor es weiter Schaden anrichtet. Nichts wurde weiter geändert. Formuliere um (Spur und Abschnitt nennen), mache den Auftrag kleiner oder nimm ein größeres Modell oder Claude.
-
-### „Stopped after 24 tool rounds“
-
-Der Auftrag war für das Modell zu groß. Teile ihn auf.
-
-### „CONFLICT“
-
-Etwas hat sich zwischen Vorschau und Apply geändert, oder ein Clip würde auf einen anderen fallen. Neue Vorschau anfordern, bzw. einen freien Ort nennen.
-
-### „LICENSE_REQUIRED“
-
-Betrifft nur Versionen, bei denen die Lizenzprüfung eingeschaltet ist (siehe Kapitel 15). Dann: **Start trial** oder **Enter key** im Chat.
-
-### Der Song-Plan weigert sich
-
-- „plan_song needs 4/4“: Stelle den Takt auf 4/4.
-- Er nennt „den ersten freien Takt“: Auf dieser Position liegen schon Clips; wähle einen späteren Start.
-- Referenz ungewarpt: nur im Tempo der Referenz möglich (Kapitel 11).
-
-### Marker lassen sich nicht setzen
-
-Der Transport muss stehen. Drücke Stopp und versuche es noch einmal.
-
-### Take Lanes fehlen
-
-Brauchen Live 12.2 oder neuer. Zeige sie mit **Show Take Lanes** (⌘⌥U bzw. Strg+Alt+U).
-
-### Das Gerät lässt sich nicht laden / „Max for Live nicht verfügbar“
-
-Geräte brauchen **Max for Live** (Teil der Live Suite). Prüfe Einstellungen > **Max for Live**, ob es aktiviert ist.
-
-### Wo schaue ich nach?
-
-Die Dateien liegen im MidiBakery-Ordner: macOS `~/Library/Application Support/MidiBakery/`, Windows `%APPDATA%\MidiBakery\`. Fürs Support-Gespräch sind diese nützlich (Schlüssel und Token sind darin geschwärzt oder nicht enthalten):
-
-| Datei | Inhalt |
-|---|---|
-| `api.log` | Zeitstempel, jede deiner Nachrichten und jeder Werkzeugaufruf mit Fehlern: hier steht, warum ein Chat danebenging |
-| `device-chat.log` | das Chat-Gerät |
-| `device-miditool.log` | Generator und Transform |
-| `device-reference.log` | Reference Analyzer |
-| Lives `Log.txt` | Meldungen des Remote Scripts (beginnen mit „MidiBakery:“) |
-
-Mit **Copy** im Chat bekommst du das ganze Gespräch inklusive Werkzeugaufrufe, praktisch für Fehlerberichte.
-
-## 15. Häufige Fragen
-
-**Verändert MidiBakery meine Projekte ohne zu fragen?**
-Nur auf deinen Auftrag. Jeder Schritt ist ein Undo-Schritt. Löschen und Ersetzen fragt vorher nach. Ein ganzer Song kommt erst als Vorschau.
-
-**Was kostet es?**
-Claude: Nutzung der API nach deinem Anthropic-Tarif (Eingabe und Ausgabe pro Token; ein kurzer Auftrag kostet wenig, Gespräche mit viel Set-Inhalt mehr). Lokale Modelle: nichts. Zur MidiBakery-Lizenz: Die Lizenzprüfung ist in dieser Version **ausgeschaltet**; alles funktioniert ohne Testphase und ohne Schlüssel. Sobald sie eingeschaltet wird, gelten **30 Tage Testphase**, danach ein Lizenzschlüssel (dauerhaft nutzbar, 12 Monate Updates, auf zwei Rechnern). Ohne gültige Lizenz liest MidiBakery weiter dein Set und macht Undo, erzeugt und ändert aber nichts. Dein Set wird nie angefasst. Den Schlüssel gibst du im Chat unter **Enter key** ein.
-
-**Welche Daten verlassen meinen Rechner?**
-Mit **Claude**: Alles, was die KI zum Arbeiten liest, also Spur- und Clipnamen, Noten, Tempo, Tonart, Geräte. Mit **LM Studio oder Ollama**: nichts, alles bleibt lokal. Die tägliche **Update-Prüfung** schickt Version, Betriebssystem, Prozessor-Art und Kanal (aus: `midibakery update --disable`). Die Analyse des Reference Analyzers läuft komplett in Live.
-
-**Funktioniert es mit Live Standard oder Intro?**
-Die Geräte brauchen Max for Live (Suite oder Standard mit Max-for-Live-Zusatz). Getestet ist es mit Live 12 Suite.
-
-**Kann MidiBakery Audio erzeugen oder Samples laden?**
-Nein, nur MIDI, und es lädt Klänge aus Lives Browser. Samples und Breaks kann es nicht laden.
-
-**Kann die KI meine Musik „hören“?**
-Nein. Sie arbeitet mit Noten und Parametern. Den Reference Analyzer analysiert rechnerisch, aber die KI hört nicht.
-
-**Warum lässt MidiBakery bei Songs Spuren und Returns anlegen?**
-Damit das Ergebnis sofort nach einem Song klingt: Kit, Bass, Pad, Lead, Hall, Delay, Sidechain. Mit „ohne neue Spuren“ und „ohne Mix“ schaltest du es ab.
-
-**Warum klingt der Song generisch?**
-Weil Rezepte Konventionen sind. Nutze sie als Gerüst: Tausche Klänge, ändere die Akkorde, variiere Clips, und höre. Ein Referenzsong, der dir gefällt, hilft beim Aufbau.
-
-**Ich habe mehrere Live-Sets offen.**
-MidiBakery steuert das Set, das gerade offen und aktiv ist.
-
-**Kann ich MidiBakery auch mit Claude Desktop oder Claude Code benutzen?**
-Ja: Der MCP-Server bringt dieselben 40 Werkzeuge dorthin, siehe [Kapitel 17](#17-midibakery-aus-claude-desktop-oder-claude-code-benutzen).
-
-**Wie entferne ich es?**
-Kapitel 3, „Deinstallieren“.
-
-## 16. Kleines Wörterbuch
-
-| Wort | Bedeutung |
-|---|---|
-| **API** | die Brücke im Hintergrund zwischen Live und der KI |
-| **Apply** | die Vorschau wirklich in Live schreiben |
-| **BPM** | Tempo, Schläge pro Minute |
-| **Build** | Aufbau vor dem Drop, Spannung steigt |
-| **Clip** | ein Baustein mit Noten (oder Audio), in der Session oder im Arrangement |
-| **Comping** | aus mehreren Aufnahmen (Takes) die besten Stellen zusammenschneiden |
-| **Control Surface** | in Live ein Gerät oder Skript, das Live steuert; MidiBakery ist eines |
-| **Drop** | der Höhepunkt: Kick und Bass setzen voll ein |
-| **Drum Rack** | Live-Instrument, das jedem Pad einen Drum-Klang gibt |
-| **Locator** | Marker im Arrangement, mit Namen |
-| **Max for Live** | Teil von Live, in dem die MidiBakery-Geräte laufen |
-| **Return** | Effekt-Spur (Hall, Delay), in die Spuren Signal schicken (Send) |
-| **Seed** | die „Nummer“ einer Idee; derselbe Seed ergibt dieselben Noten |
-| **Sidechain** | Ein Klang (Bass) wird leiser, wenn ein anderer (Kick) spielt |
-| **Slot** | ein Feld in der Session-Ansicht; Slots zählt der Chat ab 1 |
-| **Take Lane** | Zusatzspur unter einer Spur im Arrangement, für Varianten |
-| **Velocity** | Anschlagstärke einer Note |
-
-## 17. MidiBakery aus Claude Desktop oder Claude Code benutzen
-
-Der **MCP-Server** bringt dieselben 40 Werkzeuge in Claude Desktop, Claude Code und andere MCP-Programme. Du schreibst dann in deren Fenster statt im Chat-Gerät, und Claude steuert dein Live-Set. Einrichtung, eine Erklärung in einfachen Worten und die Referenz jedes einzelnen Werkzeugs stehen in **[MCP_SERVER.de.md](MCP_SERVER.de.md)** (English: [MCP_SERVER.md](MCP_SERVER.md)).
+**Claude Desktop oder Claude Code?** Der MCP-Server bietet dort dieselben 12 Werkzeuge: siehe [MCP_SERVER.de.md](MCP_SERVER.de.md).

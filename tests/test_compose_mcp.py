@@ -8,7 +8,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from fake_song import DrumRackDevice, RackDevice, Chain
 from midibakery.bridge import BridgeError
 from midibakery.compose import DrumsSpec, apply_plan, build_plan
-from midibakery.compose.theory import Scale
 from midibakery.mcp import build_server
 
 KIT = {"Kick 909": 36, "Clap": 39, "Snare": 40, "Closed HH": 44, "Open HH": 46}
@@ -99,13 +98,12 @@ async def test_apply_detects_conflicts(client, live):
 
 async def test_compose_tools_are_listed_and_annotated():
     tools = {t.name: t for t in await build_server().list_tools()}
-    assert len(tools) <= 40  # the real guard is the character budget in test_agent (local models)
-    for name in ("compose", "transform_notes", "apply_plan"):
+    assert len(tools) == 12  # the real guard is the character budget in test_agent (local models)
+    for name in ("compose", "apply_plan"):
         assert tools[name].annotations.read_only_hint is False
         assert tools[name].annotations.destructive_hint is True
-    assert tools["plan_changes"].annotations.read_only_hint is True
-    assert tools["get_drum_pads"].annotations.read_only_hint is True
-    assert "kind" in tools["compose"].input_schema["required"] and "kind" not in tools["transform_notes"].input_schema["properties"]
+    assert tools["plan_song"].annotations.read_only_hint is True
+    assert "kind" in tools["compose"].input_schema["required"]
     assert "preview" in tools["compose"].input_schema["properties"]
 
 
@@ -138,55 +136,6 @@ async def test_compose_with_named_patterns(client):
     assert "rolling_16" in str(exc.value)  # the error names the valid patterns
 
 
-async def test_plan_changes_schema_stays_small_but_steps_are_still_checked(client):
-    server = build_server(client)
-    tools = {t.name: t for t in await server.list_tools()}
-    assert len(json.dumps(tools["plan_changes"].input_schema)) < 1500  # kind + free fields, not every compose schema
-    with pytest.raises(ToolError) as exc:
-        await server.call_tool("plan_changes", {"steps": [{"kind": "bass", "track": 0, "slot": 0, "styel": "walking"}]})
-    assert "styel" in str(exc.value)
-
-
-async def test_full_song_sketch_via_plan_changes(client, live):
-    server = build_server(client)
-    await client.call("song.set", {"root_note": 9, "scale_name": "Minor"})
-    live.on_main(lambda: setattr(live.song, "scale_intervals", (0, 2, 3, 5, 7, 8, 10)))
-    _add_kit(live)
-
-    plan = _payload(await server.call_tool("plan_changes", {"steps": [
-        {"kind": "drums", "track": 0, "slot": 0, "bars": 4, "seed": 1},
-        {"kind": "chords", "track": 1, "slot": 0, "bars": 4, "seed": 2, "progression": "i VI III VII"},
-        {"kind": "bass", "track": 1, "slot": 1, "bars": 4, "seed": 3, "follow_kick": {"track": 0, "slot": 0}},
-        {"kind": "melody", "track": 1, "slot": 2, "bars": 4, "seed": 4},
-    ]}))
-    assert plan["scale"] == "A Minor"
-    assert [c["action"] for c in plan["changes"]] == ["create clip"] * 4
-    chords, bass, melody = plan["changes"][1:]
-    assert chords["chords"] == bass["chords"] == melody["chords"]  # later steps share the chords
-    assert bass["kick_pitch"] == 36 and bass["kick_hits"] >= 16
-    assert live.on_main(lambda: live.song.tracks[1].clip_slots[0].has_clip) is False
-
-    undo_before = live.on_main(lambda: live.song.undo_steps)
-    applied = _payload(await server.call_tool("apply_plan", {"plan_id": plan["plan_id"]}))
-    assert len(applied["applied"]) == 4
-    assert applied["instruments"] == {"1": "Wavetable"}  # track 1 had none: its first part, the chords, picks (no pad preset here)
-    steps = 1 + len(applied["instruments"])  # the notes in one step, the instrument in another
-    assert live.on_main(lambda: live.song.undo_steps) == undo_before + steps
-
-    scale = Scale(9, (0, 2, 3, 5, 7, 8, 10))
-    for slot in (0, 1, 2):
-        notes = _clip_notes(live, 1, slot)
-        assert notes and all(scale.contains(n["pitch"]) for n in notes)
-        assert all(0 <= n["start_time"] < 16 for n in notes)
-    kicks = {n["start_time"] for n in _clip_notes(live, 0, 0) if n["pitch"] == 36}
-    assert {n["start_time"] for n in _clip_notes(live, 1, 1)} <= kicks | {0.0, 4.0, 8.0, 12.0}
-
-    again = _payload(await server.call_tool("apply_plan", {"plan_id": plan["plan_id"]}))  # applied once only
-    assert again["already_applied"] and live.on_main(lambda: live.song.undo_steps) == undo_before + steps
-    with pytest.raises(ToolError, match="NOT_FOUND"):
-        await server.call_tool("apply_plan", {"plan_id": "unknown"})
-
-
 async def test_compose_preview_then_apply_and_if_exists(client, live):
     server = build_server(client)
     preview = _payload(await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 5, "preview": True}))
@@ -211,46 +160,6 @@ async def test_bass_follows_chords_from_existing_clip(client, live):
     assert bass["changes"][0]["chords_source"] == "clip"
     assert [c.split(" ")[0] for c in bass["changes"][0]["chords"]] == ["Am", "F", "C", "G"]
     assert [n["pitch"] % 12 for n in _clip_notes(live, 1, 1)] == [9, 5, 0, 7]
-
-
-async def test_transform_notes_is_a_diff(client, live):
-    server = build_server(client)
-    await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
-    ids = (await client.call("notes.apply", {"track": 1, "slot": 0, "add": [
-        {"pitch": 60, "start_time": 0.0, "duration": 1, "probability": 0.5},
-        {"pitch": 64, "start_time": 1.07, "duration": 1},
-        {"pitch": 67, "start_time": 2.0, "duration": 1},
-    ]}))["added"]
-
-    result = _payload(await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "quantize"}))
-    change = result["changes"][0]
-    assert (change["add"], change["modify"], change["remove"]) == (0, 1, 0)
-    notes = _clip_notes(live, 1, 0)
-    assert [n["start_time"] for n in notes] == [0.0, 1.0, 2.0]
-    assert notes[0]["probability"] == 0.5  # untouched note kept its data
-    assert set(live.on_main(lambda: live.song.tracks[1].clip_slots[0].clip.notes)) == set(ids)
-
-    await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "transpose", "steps": 1, "note_ids": [ids[2]]})
-    assert [n["pitch"] for n in _clip_notes(live, 1, 0)] == [60, 64, 69]
-
-    with pytest.raises(ToolError, match="NOT_FOUND"):
-        await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "invert", "note_ids": [9999]})
-
-
-async def test_transform_semitones_is_chromatic(client, live):
-    server = build_server(client)
-    await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
-    await client.call("notes.apply", {"track": 1, "slot": 0, "add": [
-        {"pitch": 60, "start_time": 0.0, "duration": 1}, {"pitch": 64, "start_time": 1.0, "duration": 1},
-    ]})
-    await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "transpose", "semitones": 2})
-    assert [n["pitch"] for n in _clip_notes(live, 1, 0)] == [62, 66]
-    plan = _payload(await server.call_tool("plan_changes", {"steps": [
-        {"kind": "transform", "track": 1, "slot": 0, "operation": "transpose", "semitones": -2},
-    ]}))
-    assert plan["changes"][0]["modify"] == 2
-    with pytest.raises(ToolError, match="semitones"):
-        await server.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "transpose"})
 
 
 async def test_chords_from_rejects_a_drum_track(client, live):
@@ -356,19 +265,6 @@ async def test_compose_merges_into_an_arrangement_clip_on_request(client, live):
     assert merged["changes"][0]["remove"] == 0 and len(_arrangement_notes(live, 1, 0)) > 1
 
 
-async def test_transform_notes_varies_an_arrangement_clip(client, live):
-    server = build_server(client)
-    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 16, "length": 16}]})
-    await client.call("notes.apply", {"track": 1, "arrangement_clip": 0, "add": [
-        {"pitch": 33 + (b % 3) * 7, "start_time": b * 0.5, "duration": 0.25} for b in range(32)]})
-    before = _arrangement_notes(live, 1, 0)
-    result = _payload(await server.call_tool("transform_notes", {"track": 1, "arrangement_clip": 0, "operation": "variation",
-                                                                 "amount": 0.8, "seed": 2}))
-    change = result["changes"][0]
-    assert change["arrangement_clip"] == 0 and change["add"] + change["modify"] + change["remove"] > 0
-    assert _arrangement_notes(live, 1, 0) != before
-
-
 async def test_an_arrangement_clip_by_name_and_a_plan_applied_twice(client, live):
     # the chat names the clip ("vary the Groove Bass"); the user applies the preview, then the model asks too
     server = build_server(client)
@@ -378,8 +274,8 @@ async def test_an_arrangement_clip_by_name_and_a_plan_applied_twice(client, live
     await client.call("notes.apply", {"track": 1, "arrangement_clip": 1, "add": [
         {"pitch": 33 + (b % 3) * 7, "start_time": b * 0.5, "duration": 0.25} for b in range(32)]})
     before = _arrangement_notes(live, 1, 1)
-    preview = _payload(await server.call_tool("transform_notes", {"track": 1, "arrangement_clip": "groove bass",
-                                                                  "operation": "variation", "amount": 0.8, "seed": 2, "preview": True}))
+    preview = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": "groove bass",
+                                                          "seed": 2, "preview": True}))
     assert preview["changes"][0]["arrangement_clip"] == 1
     assert _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))["applied"]
     again = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
@@ -394,40 +290,10 @@ async def test_an_arrangement_clip_by_name_and_a_plan_applied_twice(client, live
         await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": "Outro"})
 
 
-async def test_vary_the_second_half_and_hints_for_a_wrong_target(client, live):
-    server = build_server(client)
-    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 32, "name": "Break Bass"}]})
-    await client.call("notes.apply", {"track": 1, "arrangement_clip": 0, "add": [
-        {"pitch": 33 + (b % 3) * 7, "start_time": b * 0.5, "duration": 0.25} for b in range(64)]})
-    before = _arrangement_notes(live, 1, 0)
-    result = _payload(await server.call_tool("transform_notes", {"track": 1, "arrangement_clip": "Break Bass", "operation": "variation",
-                                                                 "amount": 1.0, "seed": 4, "from_bar": 5}))
-    assert result["changes"][0]["notes_considered"] == 32  # bars 5-8 of the 8 bar clip
-    after = _arrangement_notes(live, 1, 0)
-    assert [n for n in after if n["start_time"] < 16] == [n for n in before if n["start_time"] < 16] and after != before
-    with pytest.raises(ToolError, match="No notes start in bars 9-end"):
-        await server.call_tool("transform_notes", {"track": 1, "arrangement_clip": 0, "operation": "variation", "from_bar": 9})
-    # "vary the Break Bass" as a compose/bass step: the error points to transform_notes
-    with pytest.raises(ToolError, match="operation changes an existing clip: use transform_notes"):
-        await server.call_tool("plan_changes", {"steps": [{"kind": "bass", "track": 1, "arrangement_clip": 0, "operation": "variation"}]})
-    # a local model nested the step's fields in operation (and retried that until the chat stopped it)
-    nested = _payload(await server.call_tool("plan_changes", {"steps": [{"kind": "transform", "operation": {
-        "operation": "variation", "track": 1, "arrangement_clip": 0, "from_bar": 5, "to_bar": 8}}]}))
-    assert nested["changes"][0]["notes_considered"] == 32
-    # a new slot clip on a track with a song part says the Arrangement stays as it was
-    new = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "seed": 1, "preview": True}))
-    assert "arrangement clips ('Break Bass') stay unchanged" in new["changes"][0]["note"]
-
-
 async def test_arrangement_targets_are_checked(client, live):
     server = build_server(client)
     with pytest.raises(ToolError, match="either slot .* or arrangement_clip"):
         await server.call_tool("compose", {"kind": "bass", "track": 1, "slot": 0, "arrangement_clip": 0})
-    with pytest.raises(ToolError, match="give slot .* or arrangement_clip"):
-        await server.call_tool("transform_notes", {"track": 1, "operation": "humanize"})
-    # song bars without the clip (api.log: "the second half of the Break Bass" sent from_bar 65 alone)
-    with pytest.raises(ToolError, match="'Break Bass'.*bars of that clip .*not of the song"):
-        await server.call_tool("transform_notes", {"track": 1, "operation": "variation", "from_bar": 65})
     with pytest.raises(ToolError, match="No arrangement clip index 2 .*its clips: none.*get_arrangement"):
         await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": 2})
     # chords_from and follow_kick can name arrangement clips too
@@ -439,29 +305,10 @@ async def test_arrangement_targets_are_checked(client, live):
     assert bass["changes"][0]["chords_source"] == "clip"
 
 
-async def test_plan_changes_ignores_preview_in_a_step(client, live):
-    server = build_server(client)
-    plan = _payload(await server.call_tool("plan_changes", {"steps": [{"kind": "bass", "track": 1, "slot": 0, "preview": True}]}))
-    assert plan["changes"][0]["kind"] == "bass"
-
-
-async def test_transform_half_needs_no_bar_count(client, live):
-    # small models guessed from_bar 3 for "the second half" of an 8 bar clip
-    server = build_server(client)
-    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 32, "name": "Breakdown Bass"}]})
-    await client.call("notes.apply", {"track": 1, "arrangement_clip": 0, "add": [
-        {"pitch": 33, "start_time": float(b), "duration": 0.5} for b in range(32)]})
-    second = _payload(await server.call_tool("transform_notes", {"track": 1, "arrangement_clip": "Breakdown Bass", "operation": "transpose",
-                                                                 "semitones": 12, "half": "second", "preview": True}))
-    assert second["changes"][0]["notes_considered"] == 16
-    with pytest.raises(ToolError, match="either half or from_bar/to_bar"):
-        await server.call_tool("transform_notes", {"track": 1, "arrangement_clip": 0, "operation": "variation", "half": "second", "from_bar": 5})
-
-
 async def test_composing_over_an_arrangement_clip_says_it_replaces_it(client, live):
     # gemma "varied" the second half of 'Breakdown Bass' with a bass step that rewrote all of it
     server = build_server(client)
     await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 16, "name": "Breakdown Bass",
                                                         "notes": [{"pitch": 33, "start_time": float(b), "duration": 0.5} for b in range(16)]}]})
     plan = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": "Breakdown Bass", "seed": 1, "preview": True}))
-    assert plan["changes"][0]["note"].startswith("Replaces all 16 notes") and "transform_notes" in plan["changes"][0]["note"]
+    assert plan["changes"][0]["note"].startswith("Replaces all 16 notes")

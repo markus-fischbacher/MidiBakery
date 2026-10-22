@@ -1,6 +1,6 @@
 # MidiBakery
 
-By Klirrwerk. AI composition and session control for Ableton Live 12 Suite.
+By Klirrwerk. EDM song sketches for inspiration in Ableton Live 12 Suite: from genre recipes, from imported Live Sets and from analyzed reference songs.
 
 ## Documentation
 
@@ -8,8 +8,7 @@ By Klirrwerk. AI composition and session control for Ableton Live 12 Suite.
 |---|---|
 | Musicians (German): install, set up, use | [docs/user/BENUTZERHANDBUCH.md](docs/user/BENUTZERHANDBUCH.md) |
 | Musicians (English) | [docs/user/USER_GUIDE.md](docs/user/USER_GUIDE.md) |
-| MCP server for Claude Desktop / Claude Code: setup, all 40 tools, plain-language version (German: [MCP_SERVER.de.md](docs/user/MCP_SERVER.de.md)) | [docs/user/MCP_SERVER.md](docs/user/MCP_SERVER.md) |
-| Concept, roadmap and what is done | [docs/CONCEPT.md](docs/CONCEPT.md) |
+| MCP server for Claude Desktop / Claude Code: setup and the 12 tools (German: [MCP_SERVER.de.md](docs/user/MCP_SERVER.de.md)) | [docs/user/MCP_SERVER.md](docs/user/MCP_SERVER.md) |
 | How the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Genre recipes behind `plan_song` | [docs/GENRES.md](docs/GENRES.md) |
 | Named patterns for `compose` (bass, lead, techno drums, emotion progressions) | [docs/PATTERNS.md](docs/PATTERNS.md) |
@@ -19,9 +18,9 @@ By Klirrwerk. AI composition and session control for Ableton Live 12 Suite.
 
 | Path | What |
 |---|---|
-| `packages/core` | `midibakery` Python package: op catalog, bridge client, composition engine (`compose/`), agent loop (`agent/`), local API for Max for Live (`api/`), MCP server, CLI |
+| `packages/core` | `midibakery` Python package: op catalog, bridge client, composition engine (`compose/`), Live Set reader (`als/`), agent loop (`agent/`), local API for Max for Live (`api/`), MCP server, CLI |
 | `packages/remote_script/MidiBakery` | Remote Script loaded by Live (stdlib only, Python 3.11) |
-| `packages/m4l` | Max for Live devices: build script and sources (chat device, MIDI Tools, reference analysis) |
+| `packages/m4l` | Max for Live devices: build script and sources (Chat, Set Importer, Reference Analyzer) |
 | `packaging/` | Packaged app (PyInstaller), macOS .pkg, Windows setup, release tools (signed update manifest) |
 | `services/updates` | Update and license service: Cloudflare Worker + R2 + D1 on `updates.klirrwerk.com` |
 | `tests/` | Contract tests: real Remote Script + fake Live Object Model over a real socket |
@@ -86,12 +85,12 @@ public key is in `LICENSE_KEYS` (`midibakery/license.py`); see [services/updates
 ```bash
 uv run midibakery chat                                  # Claude (claude-sonnet-5-5) in the terminal
 uv run midibakery chat --model claude-opus-5-5
-uv run midibakery chat --provider ollama --model qwen3:8b  # local: all tools, compact schemas (--small for 8k context)
+uv run midibakery chat --provider ollama --model qwen3:8b  # local: all tools, compact schemas
 uv run midibakery chat --provider lmstudio --model google/gemma-4-e4b  # LM Studio server (LMSTUDIO_HOST, default 127.0.0.1:1234)
 uv run midibakery api                                   # HTTP/WebSocket API for the Max for Live devices
 ```
 
-Local models get all 40 tools too, in compact form (short schemas and results; `--small` for 8k context keeps 12 tools). LM Studio loads a model with its default context, which is too small for the tools: load it with at least 32768, `lms load <model> -c 32768`; the chat says so when the context is too small. The Chat device's model menu lists Claude and the local models it finds.
+Local models get all 12 tools too, in compact form (short schemas and results). LM Studio loads a model with its default context, which is too small for the tools: load it with at least 32768, `lms load <model> -c 32768`; the chat says so when the context is too small. The Chat device's model menu lists Claude and the local models it finds.
 
 Claude needs an API key: click **Key** in the chat (device or browser) or run `uv run midibakery auth set-key`. It is checked with the Claude API and stored in the macOS Keychain (service "MidiBakery") or the Windows Credential Manager, so the API that Live starts finds it too; `auth status` / `auth remove` show or delete it. `ANTHROPIC_API_KEY` and an `ant auth login` profile work as well. The API listens on
 127.0.0.1:8766 and writes its port and token to `api.json` in the MidiBakery config folder.
@@ -115,9 +114,10 @@ Each device's *About* button shows its version next to the API's and the Remote 
 
 - **MidiBakery Chat** (Max for Live > Max MIDI Effect > MidiBakery): chat with the agent in the device view;
   MIDI passes through. *Pop out* opens the same chat in the browser.
-- **MidiBakery Generator / Transform** (clip view, Generate / Transform panels, Live 12.2+): the composition
-  engine on the selected time range, in the clip's scale. MIDI Tools must answer synchronously, so the first
-  apply shows "Working..." and the result follows a moment later in the same apply cycle.
+- **MidiBakery Set Importer** (Max for Live > Max MIDI Effect > MidiBakery): reads Live Sets (`.als`, one file or a
+  folder) into references (sections, tempo, key, which roles play where) and loops (`my_<set>_<role>_<n>`), stored
+  in `references/` and `patterns/` of the MidiBakery folder. `plan_song` builds songs after them (`reference`,
+  `loops_from`, `my_loops`).
 - **MidiBakery Reference Analyzer** (Max for Live > Max Audio Effect > MidiBakery): put it on an audio track that holds a
   reference song in the Arrangement and press *Analyze*. A warped clip is analyzed on Live's bars. An unwarped one
   plays at its own tempo, so its bars drift away from the Set's: the device detects its tempo and first downbeat,

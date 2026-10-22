@@ -3,7 +3,6 @@
 import re
 from pathlib import Path
 
-from midibakery.agent.tools import REDUCED_TOOLS, SMALL_TOOLS
 from midibakery.mcp import build_server
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,7 +25,7 @@ async def test_tool_references_list_every_tool():
 
 
 async def test_tool_counts_in_docs_match_the_server():
-    allowed = {len(await _tool_names()), len(SMALL_TOOLS), len(REDUCED_TOOLS)}
+    allowed = {len(await _tool_names())}
     docs = [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
     wrong = [
         f"{doc.relative_to(ROOT)}: {match.group(0)}"

@@ -34,7 +34,7 @@ def _clips(plan, role):
 async def test_the_sets_line_up_decides_the_roles(client, live, home):
     _studio(live)
     _import(home)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, reference="Loops Demo")
     assert "chords" not in preview["tracks"]  # the Set has no chords: no track, no parts
     assert any("plays no chords" in w for w in preview["warnings"])
@@ -72,7 +72,7 @@ async def test_loops_from_takes_a_role_from_another_set(client, live, home):
 async def test_loops_from_errors_are_clear(client, live, home):
     _studio(live)
     _import(home)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     with pytest.raises(ToolError, match="no imported reference matches 'Nothing'"):
         await _plan(server, loops_from={"bass": "Nothing"})
     other = write_set(home / "Chordless.als", [track("MidiTrack", "Kick", four_on_the_floor(16))])
@@ -83,7 +83,7 @@ async def test_loops_from_errors_are_clear(client, live, home):
 
 async def test_without_a_set_nothing_changes(client, live, home):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server)
     assert "chords" in preview["tracks"] and not preview["warnings"]
 
@@ -112,7 +112,7 @@ async def test_loops_from_plays_a_role_the_structure_set_lacks(client, live, hom
 async def test_genre_is_optional_with_a_reference(client, live, home):
     _studio(live)
     _import(home)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     from test_song import _payload
     preview = _payload(await server.call_tool("plan_song", {"reference": "Loops Demo", "seed": 7}))  # no genre: guessed from the tempo
     assert any("No genre given" in w for w in preview["warnings"])
@@ -168,7 +168,7 @@ async def test_loops_from_chords_takes_the_chords_of_another_set(client, live, h
                                                          fx=False, sidechain=False))
     assert borrowed.harmony["main"] != plain.harmony["main"] and "chords" in borrowed.roles
     with pytest.raises(ToolError, match="has no chord loop.*Sets with one: Chord Demo"):
-        await _plan(build_server(client), reference="Loops Demo", loops_from={"chords": "Loops Demo"})
+        await _plan(build_server(client, all_song_options=True), reference="Loops Demo", loops_from={"chords": "Loops Demo"})
 
 
 async def test_a_left_out_role_leaves_no_gap_among_the_new_tracks(client, live, home):

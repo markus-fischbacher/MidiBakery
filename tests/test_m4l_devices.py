@@ -57,17 +57,6 @@ def test_parameters_are_unique_and_registered(devices):
         assert len(names) == len(set(names)), names
 
 
-def test_midi_tool_controls_fit_the_clip_view_panel(devices):
-    """Live gives MIDI Tools a small fixed panel; anything outside it is cut off."""
-    for name in ("MidiBakery Generator", "MidiBakery Transform"):
-        _, patcher = build.read_amxd(devices[name])
-        assert patcher["patcher"]["devicewidth"] == build.TOOL_WIDTH
-        rects = [b["presentation_rect"] for b in _boxes(patcher).values() if b.get("presentation")]
-        assert rects
-        for x, y, w, h in rects:
-            assert x >= 0 and y >= 0 and x + w <= build.TOOL_WIDTH and y + h <= build.TOOL_HEIGHT, (name, x, y, w, h)
-
-
 def test_int_parameters_fit_maxs_int_type(devices):
     """Max's Int parameter type only holds 0..255; wider ranges must use Float with an int unit style."""
     for path in devices.values():
@@ -125,12 +114,6 @@ def test_chat_device_passes_midi_through(devices):
     assert {"midiin", "midiout"} <= texts
 
 
-def test_style_menus_have_the_scripting_names_v8_uses(devices):
-    _, patcher = build.read_amxd(devices["MidiBakery Generator"])
-    varnames = {b.get("varname") for b in _boxes(patcher).values()}
-    assert {"style_drums", "style_bass", "style_chords"} <= varnames
-
-
 def test_node_scripts_ship_next_to_every_device(devices):
     """install.json (what `midibakery install` follows) puts every node file beside every device."""
     for path in devices.values():
@@ -144,16 +127,15 @@ def test_node_scripts_ship_next_to_every_device(devices):
         folder = build.INSTALL_DIRS[build.DEVICES[name][0]]
         assert (folder / path.name).as_posix() in targets
         assert {(folder / n).as_posix() for n in build.NODE_FILES} <= targets
-    assert "MIDI Tools/Max Generators/MidiBakery Generator.amxd" in targets
+    assert "Presets/MIDI Effects/Max MIDI Effect/MidiBakery/MidiBakery Chat.amxd" in targets
     for entry in listing["files"]:
         assert (out / entry["source"]).is_file()
 
 
 def test_each_device_starts_the_node_entry_for_its_mode(devices):
     """Node for Max does not pass script arguments in process.argv, so the mode comes from the entry file."""
-    expected = {"MidiBakery Chat": "midibakery-chat.js", "MidiBakery Set Importer": "midibakery-importer.js", "MidiBakery Generator": "midibakery-miditool.js",
-                "MidiBakery Transform": "midibakery-miditool.js", "MidiBakery Reference Analyzer": "midibakery-reference.js",
-                "MidiBakery Loudness Meter": "midibakery-meter.js"}
+    expected = {"MidiBakery Chat": "midibakery-chat.js", "MidiBakery Set Importer": "midibakery-importer.js",
+                "MidiBakery Reference Analyzer": "midibakery-reference.js"}
     for name, path in devices.items():
         _, patcher = build.read_amxd(path)
         scripts = [b.get("text", "") for b in _boxes(patcher).values() if b.get("text", "").startswith("node.script")]
@@ -163,11 +145,8 @@ def test_each_device_starts_the_node_entry_for_its_mode(devices):
 @pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
 def test_javascript_parses(devices, tmp_path):
     node = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
-    _, patcher = build.read_amxd(devices["MidiBakery Generator"])
-    code = next(b["code"] for b in _boxes(patcher).values() if b["maxclass"] == "v8.codebox")
-    (tmp_path / "miditool.js").write_text(code)
     sources = [build.SRC / n for n in (*build.NODE_FILES, "reference.js", "reference-view.js")]
-    for file in (tmp_path / "miditool.js", *sources):
+    for file in sources:
         result = subprocess.run([node, "--check", str(file)], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
 
@@ -227,8 +206,6 @@ def test_patcher_and_project_have_every_key_lives_templates_have(devices):
     templates = {
         "midi_effect": LIVE_TEMPLATES / "Max Devices/Max MIDI Effect.amxd",
         "audio_effect": LIVE_TEMPLATES / "Max Devices/Max Audio Effect.amxd",
-        "generator": LIVE_TEMPLATES / "Max MIDI Tools/Max MIDI Generator.amxd",
-        "transformation": LIVE_TEMPLATES / "Max MIDI Tools/Max MIDI Transformation.amxd",
     }
     for name, path in devices.items():
         kind = build.DEVICES[name][0]

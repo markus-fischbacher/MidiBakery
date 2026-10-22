@@ -5,7 +5,7 @@ import json
 import httpx2 as httpx
 from anthropic.types import Message, TextBlock, ToolUseBlock, Usage
 
-from midibakery.agent import LOCAL_HIDDEN, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost
+from midibakery.agent import SYSTEM_PROMPT, Agent, ToolHost
 from midibakery.agent.providers.anthropic import FALLBACK_BETA, AnthropicProvider
 from midibakery.agent.providers.base import Provider, ToolCall, Turn
 from midibakery.agent.providers import make_provider
@@ -53,7 +53,7 @@ def tool_turn(*calls):
     return Turn("tool_use", [ToolCall(f"t{i}", name, args) for i, (name, args) in enumerate(calls)])
 
 
-async def run(server, provider, text, confirm=None, allowed=None):
+async def run(server, provider, text, confirm=None):
     events = []
 
     async def emit(event):
@@ -63,7 +63,7 @@ async def run(server, provider, text, confirm=None, allowed=None):
         events.append({"type": "confirm", "message": message})
         return True
 
-    async with ToolHost(server, confirm or default_confirm, allowed) as host:
+    async with ToolHost(server, confirm or default_confirm) as host:
         await Agent(provider, host).send(text, emit)
     return events
 
@@ -92,7 +92,7 @@ async def test_loop_runs_tools_and_streams_events(client, live):
 
 async def test_tool_errors_go_back_to_the_model(client, live):
     provider = ScriptedProvider([
-        tool_turn(("no_such_tool", {}), ("delete_track", "not an object"), ("delete_track", {"track": 99})),
+        tool_turn(("no_such_tool", {}), ("delete_clip", "not an object"), ("delete_clip", {"track": 99, "slot": 0})),
         Turn("end_turn", text="Sorry."),
     ])
     await run(build_server(client), provider, "break things")
@@ -105,14 +105,12 @@ async def test_unknown_arguments_are_named_not_dropped(client, live):
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
     await client.call("notes.apply", {"track": 1, "slot": 0, "add": [{"pitch": 60, "start_time": 0.0, "duration": 1}]})
     provider = ScriptedProvider([
-        tool_turn(("transform_notes", {"track": 1, "slot": 0, "operation": "transpose", "sembitimes": 2})),
-        tool_turn(("transform_notes", {"track": 1, "slot": 0, "operation": "transpose"})),
+        tool_turn(("compose", {"kind": "chords", "track": 1, "slot": 0, "if_exists": "replace", "progresion": "I V vi IV"})),
         Turn("end_turn", text="Sorry."),
     ])
-    await run(build_server(client), provider, "2 semitones up")
-    typo, missing = provider.results[0][0], provider.results[1][0]
-    assert typo.is_error and "'sembitimes' (did you mean 'semitones'?)" in typo.content
-    assert missing.is_error and "transpose needs either semitones" in missing.content and "'input'" not in missing.content
+    await run(build_server(client), provider, "other chords")
+    typo = provider.results[0][0]
+    assert typo.is_error and "'progresion' (did you mean 'progression'?)" in typo.content
     assert live.on_main(lambda: [n["pitch"] for n in live.song.tracks[1].clip_slots[0].clip.notes.values()]) == [60]
 
 
@@ -123,14 +121,15 @@ async def test_confirmation_is_asked_through_the_frontend(client, live):
         asked.append(message)
         return False
 
-    provider = ScriptedProvider([tool_turn(("delete_track", {"track": 0})), Turn("end_turn", text="Kept it.")])
-    await run(build_server(client), provider, "delete track 1", confirm=decline)
-    assert asked == ["Delete track 1 '1-MIDI' with 0 clip(s)?"]
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 4})
+    provider = ScriptedProvider([tool_turn(("delete_clip", {"track": 0, "slot": 0})), Turn("end_turn", text="Kept it.")])
+    await run(build_server(client), provider, "delete the clip", confirm=decline)
+    assert len(asked) == 1 and asked[0].startswith("Delete clip") and "track 1 '1-MIDI'" in asked[0]
     assert provider.results[0][0].is_error and "CANCELLED" in provider.results[0][0].content
-    assert live.on_main(lambda: len(live.song.tracks)) == 2
+    assert live.on_main(lambda: live.song.tracks[0].clip_slots[0].has_clip)
 
 
-async def test_reduced_tool_set_and_step_limit(client, live):
+async def test_step_limit(client, live):
     provider = ScriptedProvider([tool_turn(("get_session", {}))] * 30)
     events = []
 
@@ -140,8 +139,7 @@ async def test_reduced_tool_set_and_step_limit(client, live):
     async def yes(message):
         return True
 
-    async with ToolHost(build_server(client), yes, REDUCED_TOOLS) as host:
-        assert host.names() == set(REDUCED_TOOLS)
+    async with ToolHost(build_server(client), yes) as host:
         await Agent(provider, host, max_steps=3).send("loop", emit)
     assert events[-1]["type"] == "error" and "3 tool rounds" in events[-1]["message"]
 
@@ -486,25 +484,6 @@ def test_compact_schema_drops_enum_listings_and_dangling_examples():
     }
 
 
-async def test_small_profile_fits_and_is_compact(client):
-    provider = ScriptedProvider([Turn("end_turn", text="ok")])
-
-    async def emit(e):
-        pass
-
-    async def no(message):
-        return False
-
-    async with ToolHost(build_server(client), no, SMALL_TOOLS) as host:
-        Agent(provider, host, SMALL_SYSTEM_PROMPT, compact=True)
-    assert "plan_changes" not in {t.name for t in provider.tools} and len(provider.tools) == len(SMALL_TOOLS)
-    assert "launch_clip" in {t.name for t in provider.tools}  # transport alone cannot play a clip
-    compact = json.dumps([t.input_schema for t in provider.tools])
-    assert "$ref" not in compact and '"title"' not in compact and "if_exists" not in compact
-    # Measured against Gemma 4 E4B in LM Studio: ~3.7k of 8192 tokens incl. descriptions. Keep it there.
-    assert len(compact) + len(SMALL_SYSTEM_PROMPT) < 14000
-
-
 SESSION = {
     "song": {"tempo": 120.0, "signature_numerator": 4, "signature_denominator": 4, "root_note": 9, "scale_name": "Minor",
              "scene_count": 8, "is_playing": False, "loop": True, "loop_start": 0.0, "loop_length": 16.0},
@@ -535,7 +514,7 @@ def test_compact_session():
     assert len(text) * 2 < len(json.dumps(SESSION))
 
 
-async def test_small_profile_shortens_get_session(client, live):
+async def test_compact_profile_shortens_get_session(client, live):
     async def yes(message):
         return True
 
@@ -545,38 +524,28 @@ async def test_small_profile_shortens_get_session(client, live):
     results = {}
     for compact in (False, True):
         provider = ScriptedProvider([tool_turn(("get_session", {})), Turn("end_turn", text="ok")])
-        async with ToolHost(build_server(client), yes, SMALL_TOOLS) as host:
-            await Agent(provider, host, SMALL_SYSTEM_PROMPT, compact=compact).send("what is in the set?", emit)
+        async with ToolHost(build_server(client), yes) as host:
+            await Agent(provider, host, SYSTEM_PROMPT, compact=compact).send("what is in the set?", emit)
         results[compact] = provider.results[0][0].content
     assert json.loads(results[False])["song"]["tempo"] == 120  # full JSON for Claude
     assert results[True].startswith("Song: 120 BPM, 4/4") and "0 '1-MIDI' [midi]; free slots 0-7; no clips" in results[True]
 
 
 async def test_full_tool_set_stays_within_the_local_budget(client):
-    # Local models get every tool (compact). With a 32k context the prompt must leave room for the
-    # conversation: ~33k characters for 30 tools was ~10k tokens with Gemma 4 E4B. Grow tools, not this.
+    # Local models get every tool (compact). The prompt must leave room for the conversation: ~33k characters
+    # for 30 tools was ~10k tokens with Gemma 4 E4B, too much for small models. Keep the tool set small.
     provider = ScriptedProvider([Turn("end_turn", text="ok")])
 
     async def no(message):
         return False
 
-    async with ToolHost(build_server(client), no, None, LOCAL_HIDDEN) as host:
+    async with ToolHost(build_server(client), no) as host:
         Agent(provider, host, SYSTEM_PROMPT, compact=True)
     payload = json.dumps([{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in provider.tools])
     names = {t.name for t in provider.tools}
-    assert {"get_mixer", "update_mixer", "create_return_track", "plan_song", "compose"} <= names
-    assert not LOCAL_HIDDEN & names
-    assert len(payload) + len(SYSTEM_PROMPT) < 32000  # was 36000 with every tool; the room is for the importer's patterns
-
-
-async def test_local_models_lack_the_hidden_tools_and_claude_keeps_them(client):
-    async def no(message):
-        return False
-
-    async with ToolHost(build_server(client), no, None) as everything:
-        async with ToolHost(build_server(client), no, None, LOCAL_HIDDEN) as local:
-            assert LOCAL_HIDDEN <= everything.names() and not LOCAL_HIDDEN & local.names()
-            assert everything.names() - local.names() == set(LOCAL_HIDDEN)
+    assert names == {"get_session", "get_clip", "get_arrangement", "get_reference", "plan_song", "apply_plan", "compose",
+                     "edit_arrangement", "set_song", "transport", "delete_clip", "undo"}
+    assert len(payload) + len(SYSTEM_PROMPT) < 16000  # ~13k with 12 tools; was ~32k with 41
 
 
 async def test_a_model_repeating_a_failing_call_is_stopped(client, live):
@@ -632,11 +601,11 @@ def test_invented_sub_objects_are_lifted():
 
 
 async def test_a_model_claiming_a_failed_write_is_asked_to_fix_it(client, live):
-    # gemma: transform_notes failed, then "I transposed the Lead Riff an octave down"
-    bad = ("transform_notes", {"track": 1, "slot": 0, "operation": "transpose", "semitones": 99})
-    provider = ScriptedProvider([tool_turn(bad), Turn("end_turn", text="Done, an octave down."), Turn("end_turn", text="That did not work.")])
-    events = await run(build_server(client), provider, "play the lead an octave lower")
-    assert provider.users[-1].startswith("[Check: transform_notes failed") and "changed nothing" in provider.users[-1]
+    # gemma: a write failed, then "I wrote the bass"
+    bad = ("compose", {"kind": "bass", "track": 99})
+    provider = ScriptedProvider([tool_turn(bad), Turn("end_turn", text="Done, a new bass."), Turn("end_turn", text="That did not work.")])
+    events = await run(build_server(client), provider, "write a bass")
+    assert provider.users[-1].startswith("[Check: compose failed") and "changed nothing" in provider.users[-1]
     assert events[-1]["type"] == "done" and not provider.turns  # asked once, then the model's answer stands
 
 
@@ -715,7 +684,7 @@ async def test_a_vague_wish_changes_the_clip_instead_of_composing_a_new_one(clie
     # gemma: "Mach den Bass spannender" -> compose into a free slot, every time
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 8.0, "name": "Bass Loop"})
     compose = ("compose", {"kind": "bass", "track": 1})
-    provider = ScriptedProvider([tool_turn(compose), tool_turn(("transform_notes", {"track": 1, "slot": 0, "operation": "variation"})),
+    provider = ScriptedProvider([tool_turn(compose), tool_turn(("compose", {"kind": "bass", "track": 1, "slot": 0, "if_exists": "replace"})),
                                  Turn("end_turn", text="Variiert.")])
     events = await _compact_send(client, provider, "Mach den Bass spannender.")
     refusal = next(e for e in events if e["type"] == "tool_result" and e["name"] == "compose")
@@ -756,21 +725,6 @@ async def test_deleting_an_arrangement_clip_by_name_asks_with_its_name(client, l
     assert [c["name"] for c in (await client.call("arrangement.get", {}))["tracks"][0]["clips"]] == ["Drop Kick"]
 
 
-async def test_deleting_a_clip_is_not_answered_with_delete_track(client, live):
-    # gemma: "Delete the clip 'Intro Kick'" -> delete_track {"track": 0}
-    provider = ScriptedProvider([tool_turn(("delete_track", {"track": 0})), Turn("end_turn", text="Could not.")])
-    before = live.on_main(lambda: len(live.song.tracks))
-    events = await _compact_send(client, provider, "Delete the clip 'Intro Kick'.")
-    refusal = next(e for e in events if e["type"] == "tool_result")
-    assert refusal["is_error"] and "not a track" in refusal["result"]
-    assert live.on_main(lambda: len(live.song.tracks)) == before
-    # naming the track as well keeps delete_track available
-    from midibakery.agent.loop import deletes_wrong_thing
-
-    assert not deletes_wrong_thing("Lösch die Spur und den Clip", "delete_track")
-    assert deletes_wrong_thing("Lösch den Clip 'Intro Kick'", "delete_track")
-
-
 async def test_a_request_answered_with_talk_only_is_nudged_once(client, live):
     # gemma: "Tausche ... tausche ich gegeneinander." / "wird nun mit dem Sound versehen" and no tool call
     provider = ScriptedProvider([Turn("end_turn", text="Die Chords-Spur wird nun mit dem Sound versehen."),
@@ -795,16 +749,6 @@ async def test_the_new_clip_guard_covers_a_free_slot_on_a_track_with_clips(clien
 SET_WITH_HATS = {"tracks": [{"index": 0, "name": "Drums", "volume": 0.85}, {"index": 1, "name": "Hats", "volume": 0.7}]}
 
 
-def test_a_relative_volume_wish_must_change_the_value():
-    from midibakery.agent.loop import unchanged_volume
-
-    # gemma: "mach die Hats leiser" -> volume 0.85 on a track already at 0.85
-    assert "nothing would change" in unchanged_volume("Mach die Drums leiser.", SET_WITH_HATS, "update_track", {"track": 0, "volume": 0.85})
-    assert unchanged_volume("Mach die Hats leiser.", SET_WITH_HATS, "update_track", {"track": "Hats", "volume": 0.6}) is None
-    assert "not 'quieter'" in unchanged_volume("Mach die Hats leiser.", SET_WITH_HATS, "update_track", {"track": 1, "mute": True})
-    assert unchanged_volume("Setz die Hats auf 0.7.", SET_WITH_HATS, "update_track", {"track": 1, "volume": 0.7}) is None  # absolute wish
-
-
 def test_update_track_says_how_to_change_volume_relatively():
     from midibakery.catalog.ops import TrackSet
 
@@ -815,37 +759,27 @@ def test_mastering_and_a_missing_vocal_track_are_refused():
     from midibakery.agent.loop import NO_MASTERING, NO_VOCALS, missing_thing
 
     assert missing_thing("Master den Song auf -14 LUFS.", SET_WITH_HATS) == NO_MASTERING
-    # plan_master's chain is the way to master: its apply_plan goes through
-    assert missing_thing("Master den Song.", SET_WITH_HATS, "apply_plan") is None
-    assert missing_thing("Wie viele LUFS hat der Song?", SET_WITH_HATS, "measure_master") is None
     assert missing_thing("Make the vocals louder.", SET_WITH_HATS) == NO_VOCALS
     assert missing_thing("Make the vocals louder.", {"tracks": [{"name": "Lead Vocals"}]}) is None
     assert missing_thing("Mach die Hats leiser.", SET_WITH_HATS) is None
 
 
 async def test_the_agent_refuses_a_write_for_a_missing_vocal_track(client, live):
-    provider = ScriptedProvider([tool_turn(("update_track", {"track": 3, "volume": 0.95})),
+    provider = ScriptedProvider([tool_turn(("compose", {"kind": "melody", "track": 0})),
                                  Turn("end_turn", text="Es gibt keine Gesangsspur.")])
-    events = await _compact_send(client, provider, "Make the vocals louder.")
-    result = next(e for e in events if e["type"] == "tool_result" and e["name"] == "update_track")
+    events = await _compact_send(client, provider, "Write a melody for the vocals.")
+    result = next(e for e in events if e["type"] == "tool_result" and e["name"] == "compose")
     assert result["is_error"] and "no vocal track" in result["result"]
 
 
 async def test_a_plan_waits_for_apply_without_a_nudge(client, live):
     # gemma: plan_song, "You can apply this plan with apply_plan(...)", then the nudge made it apply the song unasked
     provider = ScriptedProvider([
-        Turn("tool_use", tool_calls=[ToolCall("t1", "plan_master", {"genre": "house"})]),
-        Turn("end_turn", text="Here is the master chain. Apply it when you like."),
+        Turn("tool_use", tool_calls=[ToolCall("t1", "plan_song", {"genre": "house"})]),
+        Turn("end_turn", text="Here is the song plan. Apply it when you like."),
     ])
-    await _compact_send(client, provider, "Leg eine Master-Kette für House an.")
+    before = live.on_main(lambda: len(live.song.tracks))
+    await _compact_send(client, provider, "Bau einen House-Song.")
     assert not provider.turns and not any(u.startswith("[No tool ran") for u in provider.users)
-    assert live.on_main(lambda: len(live.song.master_track.devices)) == 0
+    assert live.on_main(lambda: len(live.song.tracks)) == before
 
-
-def test_the_prompt_for_local_models_does_not_name_tools_they_lack():
-    from midibakery.agent import without_tools
-
-    local = without_tools(SYSTEM_PROMPT, LOCAL_HIDDEN)
-    assert "compose_takes" in SYSTEM_PROMPT and "compose_takes" not in local
-    assert all(name not in local for name in LOCAL_HIDDEN)
-    assert "plan_song" in local and without_tools(SYSTEM_PROMPT, frozenset()) == SYSTEM_PROMPT

@@ -39,7 +39,7 @@ async def _plan(server, **args):
 
 async def test_house_song_on_found_and_new_tracks(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server)
     assert preview["genre"] == "House" and preview["from_bar"] == 1 and preview["bars"] == 128
     assert [s["name"] for s in preview["sections"]] == ["Intro", "Build", "Drop", "Break", "Build 2", "Drop 2", "Outro"]
@@ -68,7 +68,7 @@ async def test_house_song_on_found_and_new_tracks(client, live):
 
 
 async def test_new_drum_track_gets_the_genre_kit_and_its_pads(client, live):
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server)
     assert preview["tracks"]["drums"]["device"] == "909 Core Kit" and not preview["warnings"]
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
@@ -81,7 +81,7 @@ async def test_new_drum_track_gets_the_genre_kit_and_its_pads(client, live):
 
 
 async def test_sounds_off_or_missing_keep_native_devices(client, live):
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, sounds=False)
     assert preview["tracks"]["chords"]["device"] == "Wavetable" and "empty Drum Rack" in preview["warnings"][0]
     trap = _payload(await server.call_tool("plan_song", {"genre": "trap", "seed": 1}))  # its sounds are not in the fake browser
@@ -92,7 +92,7 @@ async def test_sounds_off_or_missing_keep_native_devices(client, live):
 
 async def test_mix_scaffold_returns_sends_and_levels(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server)
     assert preview["mix"]["returns"] == {
         "reverb": "return index 0 'Reverb' (new, 1.8 s)",
@@ -133,7 +133,7 @@ def test_live_closes_the_undo_step_at_a_new_return():
 async def test_the_sets_own_reverb_is_used_and_left_as_it_is(client, live):
     _studio(live)
     await client.call("return.create", {"name": "Hall", "device": "Reverb"})
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server)
     assert preview["mix"]["returns"]["reverb"] == "return index 0 'Hall' (the Set's)"
     assert preview["mix"]["returns"]["delay"] == "return index 1 'Delay' (new, 3/16, feedback 35 %)"
@@ -149,7 +149,7 @@ async def test_the_sets_own_reverb_is_used_and_left_as_it_is(client, live):
 
 async def test_fx_riser_before_each_drop_and_an_impact_on_it(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, fx=True)
     plays = {s["name"]: s["plays"] for s in preview["sections"]}
     assert plays["Build"]["riser"] == plays["Build 2"]["riser"] == "last 8 bars" and "riser" not in plays["Break"]
@@ -178,7 +178,7 @@ async def test_fx_riser_before_each_drop_and_an_impact_on_it(client, live):
 
 
 async def test_fx_need_their_presets(client, live):
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     melodic = _payload(await server.call_tool("plan_song", {"genre": "melodic_techno", "seed": 2}))  # Hyper Riser: not in the fake browser
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": melodic["plan_id"]}))
     assert any("Hyper Riser could not be loaded" in w and "stays empty" in w for w in applied["warnings"])
@@ -190,7 +190,7 @@ async def test_fx_need_their_presets(client, live):
 
 async def test_fx_on_the_riser_track_of_an_earlier_song(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     first = await _plan(server, fx=True)
     await server.call_tool("apply_plan", {"plan_id": first["plan_id"]})
     second = await _plan(server, fx=True, seed=8)
@@ -207,7 +207,7 @@ async def test_fx_on_the_riser_track_of_an_earlier_song(client, live):
 async def test_fx_on_a_track_called_riser(client, live):
     _studio(live)
     await client.call("track.create", {"kind": "midi", "name": "Riser"})
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, fx=True)
     assert preview["tracks"]["riser"] == {"track": 2, "name": "Riser"}
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
@@ -225,7 +225,7 @@ async def test_fx_on_a_track_called_riser(client, live):
 
 async def test_same_seed_same_song_and_variation_for_the_second_drop(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     first, second = await _plan(server), await _plan(server)
     assert first["notes"] == second["notes"]
     other = await _plan(server, seed=8)
@@ -235,7 +235,7 @@ async def test_same_seed_same_song_and_variation_for_the_second_drop(client, liv
 async def test_never_on_top_of_existing_clips(client, live):
     _studio(live)
     await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 0, "start": 0, "length": 32, "name": "Mine"}]})
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     with pytest.raises(ToolError) as exc:
         await _plan(server, start_bar=1)
     assert "Mine" in str(exc.value) and "bar 9" in str(exc.value)
@@ -245,7 +245,7 @@ async def test_never_on_top_of_existing_clips(client, live):
 
 async def test_lengths(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     radio = await _plan(server, length="radio")
     extended = await _plan(server, length="extended")
     standard = await _plan(server)
@@ -257,7 +257,7 @@ async def test_lengths(client, live):
 async def test_own_session_clip_for_a_role(client, live):
     _studio(live)
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 16, "name": "My Bass"})
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     bass = (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"]
@@ -284,7 +284,7 @@ async def test_copied_chord_clip_sets_the_harmony_in_every_section_including_bre
     _studio(live)
     # D major, Bb major, F major, A major: nothing like the genre's loops; D and A are outside C major
     await _clip_with(client, 16, _chord_clip(16, [(50, 54, 57), (46, 50, 53), (53, 57, 60), (57, 61, 64)]))
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, roles={"chords": 1}, clips=[{"role": "chords", "track": 1, "slot": 0}])
     assert preview["harmony"]["main"][:4] == ["D", "Bb", "F (IV)", "A"] or preview["harmony"]["main"][:4] == ["D", "A#", "F (IV)", "A"]
     assert preview["harmony"]["break"] == preview["harmony"]["main"]  # the break follows the copied chords too
@@ -294,7 +294,7 @@ async def test_copied_chord_clip_sets_the_harmony_in_every_section_including_bre
 async def test_given_progression_wins_over_a_copied_chord_clip_and_says_so(client, live):
     _studio(live)
     await _clip_with(client, 16, _chord_clip(16, [(50, 54, 57), (46, 50, 53), (53, 57, 60), (57, 61, 64)]))
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, roles={"chords": 1}, progression="C G Am F", clips=[{"role": "chords", "track": 1, "slot": 0}])
     assert preview["harmony"]["main"][:4] == ["C (I)", "G (V)", "Am (vi)", "F (IV)"]
     assert any("progression wins" in w for w in preview["warnings"])
@@ -303,7 +303,7 @@ async def test_given_progression_wins_over_a_copied_chord_clip_and_says_so(clien
 async def test_silent_copied_chord_clip_is_reported_not_guessed(client, live):
     _studio(live)
     await _clip_with(client, 16, [])
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, roles={"chords": 1}, clips=[{"role": "chords", "track": 1, "slot": 0}])
     assert any("no confident chord" in w for w in preview["warnings"])
 
@@ -311,7 +311,7 @@ async def test_silent_copied_chord_clip_is_reported_not_guessed(client, live):
 async def test_silent_bar_in_a_copied_chord_clip_is_listed(client, live):
     _studio(live)
     await _clip_with(client, 16, _chord_clip(16, [(48, 52, 55), (), (53, 57, 60), (55, 59, 62)]))
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, roles={"chords": 1}, clips=[{"role": "chords", "track": 1, "slot": 0}])
     assert any("no confident chord in segment(s) 2" in w for w in preview["warnings"])
     assert preview["harmony"]["main"][:2] == ["C (I)", "C (I)"]
@@ -320,7 +320,7 @@ async def test_silent_bar_in_a_copied_chord_clip_is_listed(client, live):
 async def test_reused_clip_on_another_track_than_the_role_is_refused(client, live):
     _studio(live)
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 16})
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     with pytest.raises(ToolError) as exc:
         await _plan(server, roles={"bass": 0}, clips=[{"role": "bass", "track": 1, "slot": 0}])
     assert "roles.bass" in str(exc.value)
@@ -331,7 +331,7 @@ async def test_reused_clip_is_cut_to_fill_the_last_span_without_changing_the_sou
     _studio(live)
     notes = [{"pitch": 40 + i, "start_time": float(i), "duration": 1.0, "velocity": 100} for i in range(20)]
     await _clip_with(client, 20, notes)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
     assert preview["reuse"]["bass"]["clip_beats"] == 20 and preview["reuse"]["bass"]["uncovered_beats"] == 0
     assert preview["reuse"]["bass"]["fragments"] > 0
@@ -352,7 +352,7 @@ async def test_reused_clip_longer_than_a_part_is_cut_to_it(client, live):
     _studio(live)
     notes = [{"pitch": 40, "start_time": float(i * 8), "duration": 2.0, "velocity": 100} for i in range(32)]
     await _clip_with(client, 256, notes)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
     assert preview["reuse"]["bass"]["copies"] >= 0 and preview["reuse"]["bass"]["uncovered_beats"] == 0
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
@@ -367,7 +367,7 @@ async def test_reused_clip_loop_window_sets_the_cut_notes(client, live):
     await client.call("clip.set", {"track": 1, "slot": 0, "loop_end": 24.0})
     await client.call("clip.set", {"track": 1, "slot": 0, "loop_start": 4.0})  # a 20-beat window
     live.on_main(lambda: setattr(live.song.tracks[1].clip_slots[0].clip, "start_marker", 4.0))
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
     assert preview["reuse"]["bass"]["clip_beats"] == 20 and preview["reuse"]["bass"]["fragments"] > 0
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
@@ -379,7 +379,7 @@ async def test_reused_clip_playing_from_inside_its_loop_is_refused_when_it_needs
     _studio(live)
     await _clip_with(client, 20, [{"pitch": 40, "start_time": 0.0, "duration": 1.0, "velocity": 100}])
     live.on_main(lambda: setattr(live.song.tracks[1].clip_slots[0].clip, "start_marker", 4.0))
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     with pytest.raises(ToolError) as exc:
         await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
     assert "away from its loop start" in str(exc.value)
@@ -390,7 +390,7 @@ async def test_reused_clip_with_envelopes_is_refused_when_it_needs_a_cut(client,
     _studio(live)
     await _clip_with(client, 20, [{"pitch": 40, "start_time": 0.0, "duration": 1.0, "velocity": 100}])
     live.on_main(lambda: live.song.tracks[1].clip_slots[0].clip.envelopes.update({1: object()}))
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     with pytest.raises(ToolError) as exc:
         await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
     assert "envelopes" in str(exc.value)
@@ -404,7 +404,7 @@ async def test_reused_clip_with_envelopes_is_refused_when_it_needs_a_cut(client,
 async def test_reused_clip_notes_changed_after_planning(client, live):
     _studio(live)
     await _clip_with(client, 16, [{"pitch": 40, "start_time": 0.0, "duration": 1.0, "velocity": 100}])
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
     await client.call("notes.apply", {"track": 1, "slot": 0, "add": [{"pitch": 43, "start_time": 2.0, "duration": 1.0}]})
     with pytest.raises(ToolError) as exc:
@@ -416,7 +416,7 @@ async def test_reused_clip_notes_changed_after_planning(client, live):
 async def test_reused_clip_changed_after_planning(client, live):
     _studio(live)
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 16})
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, clips=[{"role": "bass", "track": 1, "slot": 0}])
     await client.call("clip.delete", {"track": 1, "slot": 0})
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 12})
@@ -434,7 +434,7 @@ async def test_named_progression_keeps_its_chord_quality_under_genre_sevenths(cl
         live.song.scale_intervals = (0, 2, 3, 5, 7, 8, 10)
 
     live.on_main(minor)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, progression="Am F E G")
     assert preview["harmony"]["main"][:4] == ["Am (i)", "F (VI)", "E (V)", "G (VII)"]  # what plays: no Em7, no Fmaj7
     chords = await client.call("arrangement.get", {})
@@ -443,14 +443,14 @@ async def test_named_progression_keeps_its_chord_quality_under_genre_sevenths(cl
 
 async def test_without_creating_tracks_parts_are_left_out(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, create_missing=False)
     assert set(preview["tracks"]) == {"drums", "bass"} and preview["warnings"]
 
 
 async def test_tracks_changed_after_planning(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server)
     await client.call("track.create", {"name": "Surprise"})
     with pytest.raises(ToolError) as exc:
@@ -476,7 +476,7 @@ def test_every_template_is_whole_bars_and_uses_known_parts():
 
 async def test_genre_loops_in_the_songs_key(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     major = await _plan(server)
     loops = {("Am", "F", "C", "G"), ("C", "G", "Am", "F"), ("C", "Am", "F", "G"), ("Dm", "G", "C", "Am")}
     main = tuple(c.split(" ")[0] for c in major["harmony"]["main"][:4])
@@ -492,7 +492,7 @@ async def test_genre_loops_in_the_songs_key(client, live):
 
 async def test_house_follows_the_recipe(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server)
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     arrangement = await client.call("arrangement.get", {})
@@ -543,7 +543,7 @@ def _minor(live):
 async def test_peak_time_techno_follows_the_recipe(client, live):
     _studio(live)
     _minor(live)
-    preview, clips = await _song_notes(client, build_server(client), "peak_time_techno")
+    preview, clips = await _song_notes(client, build_server(client, all_song_options=True), "peak_time_techno")
     assert [s["name"] for s in preview["sections"]][:5] == ["Intro", "Groove", "Lift", "Peak", "Breakdown"]
     kick = [n for n in clips["Peak Drums"][1] if n["pitch"] == 36 and n["velocity"] > 100]
     assert all(abs(n["start_time"] % 1) < 1e-6 for n in kick)  # straight kick, no swing
@@ -586,7 +586,7 @@ async def test_peak_time_techno_follows_the_recipe(client, live):
 async def test_melodic_techno_has_an_arp_over_pads(client, live):
     _studio(live)
     _minor(live)
-    _, clips = await _song_notes(client, build_server(client), "melodic_techno")
+    _, clips = await _song_notes(client, build_server(client, all_song_options=True), "melodic_techno")
     pads = clips["Drop Chords"][1]
     assert min(n["duration"] for n in pads) >= 7.9  # one held chord per 2 bars
     arp = clips["Drop Lead"][1]
@@ -598,7 +598,7 @@ async def test_melodic_techno_has_an_arp_over_pads(client, live):
 async def test_drum_and_bass_two_step_and_long_drops(client, live):
     _studio(live)
     _minor(live)
-    preview, clips = await _song_notes(client, build_server(client), "drum_and_bass")
+    preview, clips = await _song_notes(client, build_server(client, all_song_options=True), "drum_and_bass")
     assert {s["name"]: s["bars"] for s in preview["sections"]}["Drop"] == 64
     drop = [n for n in clips["Drop Drums"][1] if int(n["start_time"] // 4) % 8 != 7]  # leave out the fill bars
     kicks = sorted({round(n["start_time"] % 4, 2) for n in drop if n["pitch"] == 36})
@@ -613,7 +613,7 @@ async def test_drum_and_bass_two_step_and_long_drops(client, live):
 async def test_trap_half_time_rolls_and_808(client, live):
     _studio(live)
     _minor(live)
-    _, clips = await _song_notes(client, build_server(client), "trap")
+    _, clips = await _song_notes(client, build_server(client, all_song_options=True), "trap")
     drop = clips["Drop Drums"][1]
     snares = {round(n["start_time"] % 4, 2) for n in drop if n["pitch"] == 38 and int(n["start_time"] // 4) % 8 != 7}
     assert 2.0 in snares and 1.0 not in snares and 3.0 not in snares  # half time: beat 3 only
@@ -634,7 +634,7 @@ async def test_a_lane_without_its_pad_does_not_double_another(client, live):
         live.song.tracks[0].devices.append(rack)
 
     live.on_main(hats_only)
-    _, clips = await _song_notes(client, build_server(client), "peak_time_techno", create_missing=False)
+    _, clips = await _song_notes(client, build_server(client, all_song_options=True), "peak_time_techno", create_missing=False)
     peak = clips["Peak Drums"][1]
     hats = [n["start_time"] for n in peak if n["pitch"] == 42]
     assert len(hats) == len(set(hats))  # the ride (no pad) did not land on the closed hat
@@ -644,7 +644,7 @@ async def test_a_new_song_starts_after_every_track_not_just_its_own(client, live
     _studio(live)
     other = (await client.call("track.create", {"name": "Vocals"}))["track"]
     await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": other, "start": 0, "length": 64}]})
-    preview = await _plan(build_server(client), create_missing=False)
+    preview = await _plan(build_server(client, all_song_options=True), create_missing=False)
     assert preview["from_bar"] == 17  # after the Vocals clip, though plan_song does not use that track
 
 
@@ -656,7 +656,7 @@ async def test_no_ride_on_a_crash_when_the_kit_has_no_ride(client, live):
         live.song.tracks[0].devices.append(rack)
 
     live.on_main(kit_808)
-    _, clips = await _song_notes(client, build_server(client), "peak_time_techno", create_missing=False)
+    _, clips = await _song_notes(client, build_server(client, all_song_options=True), "peak_time_techno", create_missing=False)
     cymbal = [n for n in clips["Peak Drums"][1] if n["pitch"] == 49]
     assert len(cymbal) <= 1  # at most the crash accent on bar 1, never a ride pattern on the crash
 
@@ -664,7 +664,7 @@ async def test_no_ride_on_a_crash_when_the_kit_has_no_ride(client, live):
 async def test_peak_time_sweeps_auto_filters_clip_by_clip(client, live):
     _studio(live)
     _minor(live)
-    preview, clips = await _song_notes(client, build_server(client), "peak_time_techno")
+    preview, clips = await _song_notes(client, build_server(client, all_song_options=True), "peak_time_techno")
     assert preview["tracks"]["drums"]["automation"] == "Auto Filter High-pass cutoff (new device)"
     assert preview["tracks"]["lead"]["automation"] == "Auto Filter Low-pass cutoff and resonance"
 
@@ -692,7 +692,7 @@ async def test_peak_time_sweeps_auto_filters_clip_by_clip(client, live):
 async def test_an_existing_auto_filter_is_reused(client, live):
     _studio(live)
     live.on_main(lambda: live.song.tracks[0].insert_device("Auto Filter", 1))
-    preview = await _plan(build_server(client), genre="peak_time_techno", create_missing=False)
+    preview = await _plan(build_server(client, all_song_options=True), genre="peak_time_techno", create_missing=False)
     assert preview["tracks"]["drums"]["automation"] == "Auto Filter High-pass cutoff"
     assert any("Auto Filter is set to High-pass" in w for w in preview["warnings"])
 
@@ -700,7 +700,7 @@ async def test_an_existing_auto_filter_is_reused(client, live):
 async def test_an_unswept_role_keeps_an_earlier_songs_filter_open(client, live):
     _studio(live)
     live.on_main(lambda: live.song.tracks[1].insert_device("Auto Filter", 0))  # e.g. left by a Peak-Time song
-    preview = await _plan(build_server(client), create_missing=False)  # House sweeps no bass
+    preview = await _plan(build_server(client, all_song_options=True), create_missing=False)  # House sweeps no bass
     assert preview["tracks"]["bass"]["automation"] == "Auto Filter Low-pass cutoff"
 
 
@@ -721,7 +721,7 @@ class _FailingEdit:
 
 async def test_a_failed_apply_takes_back_tracks_and_clips(client, live):
     _studio(live)
-    server = build_server(_FailingEdit(client))
+    server = build_server(_FailingEdit(client), all_song_options=True)
     preview = await _plan(server, set_tempo=True)
     before = live.on_main(lambda: live.song.undo_calls)
     with pytest.raises(ToolError) as exc:
@@ -739,7 +739,7 @@ class _FailingLocators(_FailingEdit):
 
 async def test_failing_locators_keep_the_song_and_none_of_the_locators(client, live):
     _studio(live)
-    server = build_server(_FailingLocators(client))
+    server = build_server(_FailingLocators(client), all_song_options=True)
     preview = await _plan(server)
     result = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
     assert result["locators"].startswith("not set: No locator at beat 9999")
@@ -750,7 +750,7 @@ async def test_songs_need_four_four(client, live):
     _studio(live)
     live.on_main(lambda: setattr(live.song, "signature_numerator", 3))
     with pytest.raises(ToolError) as exc:
-        await _plan(build_server(client))
+        await _plan(build_server(client, all_song_options=True))
     assert "needs 4/4" in str(exc.value)
 
 
@@ -779,7 +779,7 @@ def test_throw_points_hit_the_last_beat_of_every_phrase():
 async def test_throws_and_resonance_ride_on_their_sections(client, live):
     _studio(live)
     _minor(live)
-    preview, _ = await _song_notes(client, build_server(client), "peak_time_techno")
+    preview, _ = await _song_notes(client, build_server(client, all_song_options=True), "peak_time_techno")
     chords = preview["tracks"]["chords"]
     assert "groove, break" in chords["throws"] and preview["tracks"]["lead"]["automation"].endswith("and resonance")
 
@@ -806,7 +806,7 @@ async def test_a_kit_with_only_a_kick_gets_no_snare_fills(client, live):
         live.song.tracks[0].devices.append(kit)
 
     live.on_main(setup)
-    preview = await _plan(build_server(client), genre="drum_and_bass", seed=3, create_missing=False)
+    preview = await _plan(build_server(client, all_song_options=True), genre="drum_and_bass", seed=3, create_missing=False)
     assert preview["tracks"]["drums"]["track"] == 0
 
 
@@ -846,7 +846,7 @@ def test_reference_sections_snap_to_the_genre_grid():
 
 async def test_plan_song_follows_a_reference(client, live, references):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, genre="peak_time_techno", reference="signal", minutes=3)
     assert preview["reference"] == "Katoff - The Signal"
     assert [(s["name"], s["bar"], s["bars"]) for s in preview["sections"]] == [
@@ -860,7 +860,7 @@ async def test_plan_song_follows_a_reference(client, live, references):
 
 async def test_a_reference_sets_tempo_and_key_with_set_tempo(client, live, references):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, genre="peak_time_techno", reference="katoff", set_tempo=True)
     assert preview["tempo"] == 124 and preview["bpm"] == 124 and preview["scale"].startswith("D# Minor")
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
@@ -873,7 +873,7 @@ async def test_an_unwarped_reference_needs_its_own_tempo(client, live, reference
     # analyzed unwarped: bars of the song's own 124 BPM, the Set plays 120
     unwarped = {**REFERENCE, "bar_grid": "song", "warped": False}
     (tmp_path / "references" / "katoff.json").write_text(json.dumps(unwarped))
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     with pytest.raises(ToolError, match="is not warped: it plays at its own 124 BPM while the song would play at 120 BPM"):
         await _plan(server, genre="peak_time_techno", reference="katoff")
     # at the reference's tempo the bars line up; the plan still says how to make it tempo-proof
@@ -887,7 +887,7 @@ async def test_a_reference_song_starts_under_the_reference_clip(client, live, re
     (tmp_path / "references" / "katoff.json").write_text(json.dumps(reference))  # the clip starts at bar 9
     audio = (await client.call("track.create", {"name": "Katoff"}))["track"]
     await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": audio, "start": 32, "length": 152 * 4}]})
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, genre="peak_time_techno", reference="katoff")
     assert preview["from_bar"] == 9 and preview["sections"][1]["bar"] == 25
 
@@ -898,31 +898,13 @@ async def test_a_reference_song_starts_under_the_reference_clip(client, live, re
     assert (await _plan(server, genre="peak_time_techno", reference="katoff", start_bar=200))["from_bar"] == 200
 
 
-async def test_a_song_with_a_counter_melody(client, live):
-    # "Create a melodic techno track ... apply a counter melody track as well": one plan_song call
-    _studio(live)
-    _minor(live)
-    preview, clips = await _song_notes(client, build_server(client), "melodic_techno", counter=True)
-    counter = preview["tracks"]["counter"]
-    assert counter["name"] == "Counter" and counter["new"] and counter["device"] == "Basic Pluck Keys"
-    assert preview["mix"]["levels"]["counter"].startswith("fader ")
-    leads = {name.removesuffix(" Lead"): clip for name, (clip, notes) in clips.items() if name.endswith(" Lead") and notes}
-    counters = {name.removesuffix(" Counter"): (clip, notes) for name, (clip, notes) in clips.items() if name.endswith(" Counter")}
-    assert set(counters) == set(leads)  # a counter clip for every lead clip, at its place
-    for section, (clip, notes) in counters.items():
-        assert (clip["start"], clip["end"]) == (leads[section]["start"], leads[section]["end"]) and notes
-        assert max(n["pitch"] for n in notes) <= 96
-    drop = counters["Drop"][1]
-    assert drop and len(drop) < len(clips["Drop Lead"][1]) / 2  # sparser than the arp it answers
-
-
 async def test_a_track_of_an_unapplied_song_plan_says_apply_first(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _plan(server, genre="melodic_techno")
     lead = preview["tracks"]["lead"]["track"]
     with pytest.raises(ToolError, match=rf"comes from song plan {preview['plan_id']}, which is not applied yet: apply_plan"):
-        await server.call_tool("compose", {"kind": "melody", "track": 1, "counter_to": {"track": lead}})
+        await server.call_tool("compose", {"kind": "melody", "track": lead})
 
 
 def test_the_seed_picks_the_bass_among_the_templates_that_suit_the_genre():
@@ -956,7 +938,7 @@ def test_the_seed_picks_a_drum_groove_variant_and_keeps_the_kick():
 @pytest.mark.asyncio
 async def test_set_tempo_varies_a_little_with_the_seed(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     tempos = {_payload(await server.call_tool("plan_song", {"genre": "house", "seed": seed, "set_tempo": True, "fx": False,
                                                              "sidechain": False, "create_missing": False}))["tempo"] for seed in range(8)}
     assert len(tempos) >= 2 and all(121 <= t <= 127 for t in tempos), tempos
@@ -972,14 +954,7 @@ def _drop_chords(clips):
 
 async def test_a_long_drop_turns_to_other_chords_in_its_second_half(client, live):
     _studio(live)
-    _, clips = await _song_notes(client, build_server(client), "house", seed=7)
+    _, clips = await _song_notes(client, build_server(client, all_song_options=True), "house", seed=7)
     first, second = _drop_chords(clips)
     assert first and second and first != second
 
-
-async def test_second_progression_sets_the_chords_of_the_drops_second_half(client, live):
-    _studio(live)
-    _, clips = await _song_notes(client, build_server(client), "house", seed=7, progression="I I I I", second_progression="V V V V")
-    first, second = _drop_chords(clips)
-    assert all(0 in bar for bar in first) and not any(0 in bar for bar in second)  # C chords, then G chords (no C in them)
-    assert all(2 in bar for bar in second)

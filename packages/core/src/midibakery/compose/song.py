@@ -47,7 +47,6 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from midibakery.bridge.client import BridgeError
 from midibakery.compose import harmony as harmony_mod
-from midibakery.compose.counter import generate_counter, phrase_rests
 from midibakery.compose.drums import DrumMap, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
@@ -64,7 +63,7 @@ from midibakery.compose.techno_templates import generate_techno_drums
 from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, from_reference, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
-NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "counter": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator"}
+NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator"}
 ROLE_WORDS = {
     "bass": ("bass", "sub", "808"),
     "chords": ("chord", "pad", "keys", "piano", "stab"),
@@ -72,10 +71,7 @@ ROLE_WORDS = {
     "riser": ("riser", "uplift"),
     "impact": ("impact", "boom"),
     "sidechain": ("sidechain", "trigger"),
-    "counter": ("counter",),
 }
-COUNTER_SOUND = ("sounds", "Synth Keys", "Basic Pluck Keys.adg")  # a pluck apart from every genre's lead
-COUNTER_DB = 4.0  # the counter melody's fader under the lead's
 TRIGGER_PITCH = 48  # the sidechain track's notes: a short Operator sine nobody hears
 PHRASE = 8  # bars
 FILTER_TYPES = {"Low-pass": 0, "High-pass": 1}  # Auto Filter (Live 12) "Filter Type" values
@@ -118,13 +114,11 @@ class SongRequest(BaseModel):
     sidechain: bool = Field(True, description="Enable silent-trigger ducking; default pumps through kick rests")
     sidechain_mode: Literal["pumping", "follow_kick"] = Field("pumping", description="Continuous genre pulse or planned drum MIDI kick onsets")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
-    counter: bool = Field(False, description="Also a counter melody: a Counter track answering every lead clip in its rests")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174); with a reference its tempo and key")
     reference: str | None = Field(None, description="Follow the sections of a song from get_reference (part of its name); overrides length")
     loops_from: dict[Literal["drums", "bass", "lead", "chords"], str] = Field(
         default_factory=dict, description="Take a role's loops from another imported Set (part of its name), e.g. {\"bass\": \"Sound as a Pound\"}")
     fill_missing: bool = Field(False, description="With an imported Set: also play roles the Set lacks, from the genre")
-    second_progression: str | None = Field(None, description="Chords of each drop's second half, e.g. 'IV V iii vi'")
     my_loops: bool = Field(False, description="The seed draws loops for the roles from the user's imported Sets")
     seed: Annotated[int, Field(ge=0)] | None = None
     _genre_note: str = PrivateAttr("")
@@ -227,23 +221,18 @@ class SongPlan:
         return {"mix": {"returns": returns, "levels": levels}}
 
     def _volume(self, role: str) -> float | None:
-        """A new track's fader: the genre's level for its role; the counter melody a little under the lead."""
+        """A new track's fader: the genre's level for its role."""
         assert self.mix is not None
-        if role == "counter":
-            lead = self.mix.volume.get("lead")
-            return None if lead is None else lead - COUNTER_DB
         return self.mix.volume.get(role)
 
     def _sends(self, role: str, t: RoleTrack) -> list[tuple[str, float]]:
-        """(return kind, dB) a role's track sends: a new track to both returns, an existing one only to new returns.
-        The counter melody sends like the lead."""
+        """(return kind, dB) a role's track sends: a new track to both returns, an existing one only to new returns."""
         assert self.mix is not None
         sends = []
         for kind, levels in (("reverb", self.mix.reverb), ("delay", self.mix.delay)):
             r = self.returns.get(kind)
-            key = "lead" if role == "counter" else role
-            if r is not None and key in levels and (t.new or r.new):
-                sends.append((kind, levels[key]))
+            if r is not None and role in levels and (t.new or r.new):
+                sends.append((kind, levels[role]))
         return sends
 
     def mix_ops(self) -> list[dict[str, Any]]:
@@ -542,8 +531,6 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
             wanted += FX_ROLES
         else:
             warnings.append("No riser or impact: they need the genre's presets (sounds=false)")
-    if request.counter:
-        wanted += ("counter",)
     if request.sidechain and template.style.mix.duck:
         wanted += ("sidechain",)
     for role in wanted:
@@ -564,19 +551,39 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
         return roles, warnings
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     for offset, role in enumerate(missing):
-        sound = (COUNTER_SOUND if role == "counter" else template.style.sounds.get(role)) if request.sounds else None
+        sound = template.style.sounds.get(role) if request.sounds else None
         roles[role] = RoleTrack(role, len(tracks) + offset, role.title(), new=True, device=devices[role], sound=sound)
         if role == "drums" and sound is None:
             warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it")
     return roles, warnings
 
 
-ANSWER_BEATS = 2.0  # the shortest rest per 4-bar lead phrase a counter melody can answer in
+ANSWER_BEATS = 2.0  # the shortest rest per 4-bar lead phrase that counts as an answer
+REST = 1.0  # beats of silence that make a phrase rest
+
+
+def phrase_rests(notes: list[Note], length: float, min_gap: float = REST) -> list[tuple[float, float]]:
+    """Spans of `min_gap` beats or more in which no note sounds and none is about to: the staccato gaps of a
+    riff (shorter than `min_gap`) belong to its phrase."""
+    spans: list[list[float]] = []
+    for n in sorted(notes, key=lambda n: n.start_time):
+        if spans and n.start_time - spans[-1][1] < min_gap - EPSILON:
+            spans[-1][1] = max(spans[-1][1], n.end_time)
+        else:
+            spans.append([n.start_time, n.end_time])
+    rests, cursor = [], 0.0
+    for start, end in spans:
+        if start - cursor >= min_gap - EPSILON:
+            rests.append((cursor, start))
+        cursor = max(cursor, end)
+    if length - cursor >= min_gap - EPSILON:
+        rests.append((cursor, length))
+    return rests
 
 
 def _answer_space(notes: list[Note], meter: Meter, bars: int, offset_bars: int) -> list[Note]:
-    """A lead that plays through a 4-bar phrase (an arp, an acid line) rests in its last bar: room for a
-    counter melody to answer, and a call-and-response the ear follows. Phrases that already rest stay."""
+    """A lead that plays through a 4-bar phrase (an arp, an acid line) rests in its last bar: a
+    call-and-response the ear follows. Phrases that already rest stay."""
     bpb = meter.beats_per_bar
     for last in range(3, bars):
         if (offset_bars + last) % 4 != 3:
@@ -759,11 +766,6 @@ def _harmonies(request: SongRequest, style, scale: Scale, meter, r: random.Rando
         mode = Scale(scale.root, (0, 2, 4, 5, 7, 9, 11) if chord_loop.get("scale") == "major" else (0, 2, 3, 5, 7, 8, 10), "")
         loops[0] = replace(harmony_mod.from_progression(chord_loop["progression"], mode, meter, 8, float(chord_loop.get("chords_per_bar", 1.0))),
                            explicit=True)
-    if request.second_progression:
-        try:
-            turn = replace(harmony_mod.from_progression(request.second_progression, scale, meter, 8, style.chords_per_bar), explicit=True)
-        except ValueError as exc:
-            raise BridgeError("INVALID_PARAMS", str(exc)) from None
     return loops[0], loops[1], turn
 
 
@@ -1210,8 +1212,6 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 action.setdefault("envelopes", []).append(
                     {"parameter": send, "unit": "display", "points": _throw_points(section.bars, first, until, bpb, base)})
             actions.append(action)
-    if "counter" in roles and "lead" in roles:
-        actions += _counter_clips(actions, roles, sections, starts, section_harmonies, scale, meter, counts, rng)
     riser = roles.get("riser")
     preset = style.sounds.get("riser")
     riser_macro = riser is not None and preset is not None and (
@@ -1248,30 +1248,6 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
 
 
 RISER_BARS = 8
-
-
-def _counter_clips(actions: list[dict[str, Any]], roles: dict[str, RoleTrack], sections: tuple[Section, ...], starts: list[float],
-                   harmonies: list[Harmony], scale: Scale, meter: Meter, counts: dict[str, int],
-                   rng: Callable[..., random.Random]) -> list[dict[str, Any]]:
-    """A counter melody clip for every lead clip, at its beat and length over the same chords: it answers in the
-    lead's rests (the 4th bar of a phrase it would play through, the empty bars of a tease)."""
-    lead, counter = roles["lead"].index, roles["counter"].index
-    bpb = meter.beats_per_bar
-    clips = []
-    for action in [a for a in actions if a.get("action") == "add_clip" and a.get("track") == lead and a.get("notes")]:
-        i = max(k for k, at in enumerate(starts) if at <= action["start"] + EPSILON)
-        section, at = sections[i], starts[i]
-        length = action["length"]
-        bars = max(1, math.ceil(length / bpb - EPSILON))
-        harmony = _from(harmonies[i], action["start"] - at, length)
-        lead_notes = [Note(n["pitch"], n["start_time"], n["duration"], n.get("velocity", 100)) for n in action["notes"]]
-        notes = fit_to_length(generate_counter(lead_notes, harmony.for_length(meter, bars), scale, meter, bars,
-                                               rng("counter", section.name, action["start"]), source_length=length), length)
-        if notes:
-            counts["counter"] += len(notes)
-            clips.append({"action": "add_clip", "track": counter, "start": action["start"], "length": length,
-                          "name": f"{section.name} Counter", "notes": [n.to_spec() for n in notes]})
-    return clips
 
 
 def _fx(actions: list[dict[str, Any]], counts: dict[str, int], roles: dict[str, RoleTrack], sections: tuple[Section, ...],

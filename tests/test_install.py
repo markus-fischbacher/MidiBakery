@@ -67,7 +67,7 @@ def test_install_puts_the_remote_script_and_every_device_in_place(bridge_env, tm
     listed = json.loads((payload.devices / "install.json").read_text())["files"]
     for entry in listed:
         assert (library / entry["target"]).read_bytes() == (payload.devices / entry["source"]).read_bytes()
-    assert (library / "MIDI Tools/Max Generators/MidiBakery Generator.amxd").exists()
+    assert (library / "Presets/MIDI Effects/Max MIDI Effect/MidiBakery/MidiBakery Chat.amxd").exists()
     assert (library / "Presets/Audio Effects/Max Audio Effect/MidiBakery/midibakery-about.js").exists()
     assert record["version"] == __version__
     assert json.loads((bridge_env / "installed.json").read_text()) == record

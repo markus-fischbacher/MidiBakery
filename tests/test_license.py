@@ -193,12 +193,12 @@ def test_weekly_refresh_brings_renewals_and_revocations(signer):
 async def test_mcp_tools_need_a_license_but_reading_and_undo_do_not(signer, client, live):
     server = build_server(client)
     with pytest.raises(ToolError, match="LICENSE_REQUIRED"):
-        await server.call_tool("create_clip", {"track": 1, "slot": 0, "length": 4})
+        await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 1})
     await server.call_tool("get_session", {})
     with pytest.raises(ToolError, match="Nothing to undo"):  # reached Live: undo needs no license
         await server.call_tool("undo", {"action": "undo"})
     license._store(token=signer.token(kind="trial", expires=days(3), updates_until=days(3)))
-    await server.call_tool("create_clip", {"track": 1, "slot": 0, "length": 4})
+    await server.call_tool("compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 1})
 
 
 def test_api_license_endpoints_and_gate(signer, monkeypatch):
@@ -212,9 +212,6 @@ def test_api_license_endpoints_and_gate(signer, monkeypatch):
     with TestClient(build_app(BridgeClient(), lambda options: provider, "t")) as client:
         assert client.get("/license", headers=auth).json()["state"] == "none"
         assert client.get("/health", headers=auth).json()["license"]["state"] == "none"
-        body = {"length": 4, "kind": "drums"}
-        response = client.post("/miditool/generate", json=body, headers=auth)
-        assert response.status_code == 402 and response.json()["error"] == "LICENSE_REQUIRED"
         with client.websocket_connect("/chat?token=t") as ws:
             ws.receive_json()  # ready
             ws.send_json({"type": "user", "text": "make a beat"})

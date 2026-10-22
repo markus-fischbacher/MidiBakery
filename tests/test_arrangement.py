@@ -146,7 +146,6 @@ async def test_edit_arrangement_keeps_the_play_position(client, live):
     assert (await client.call("song.get"))["current_song_time"] == 12.0  # Live moved it to 72; the tool put it back
 
 
-
 def _with_filter(song, full=False):
     track = song.tracks[0]
     track.insert_device("Auto Filter", 0)
@@ -237,25 +236,8 @@ def test_delete_clip_takes_arrangement_clip_like_every_other_tool():
     assert edit.model_dump()["actions"][0]["clip"] == 1
 
 
-async def test_run_batch_takes_arrangement_actions(client, live):
-    # gemma sent {"action": "move_clip", ...} as run_batch ops five times in a row
-    from midibakery.mcp.server import build_server
-
-    await client.call("arrangement.edit", {"actions": [
-        {"action": "add_clip", "track": 0, "start": 0, "length": 16, "name": "Intro Bass"},
-        {"action": "add_clip", "track": 0, "start": 32, "length": 16, "name": "Drop Bass"},
-    ]})
-    await build_server(client).call_tool("run_batch", {"ops": [
-        {"action": "move_clip", "track": 0, "clip": 1, "start": 64},
-        {"action": "move_clip", "track": 0, "arrangement_clip": 0, "start": 32},
-        {"action": "move_clip", "track": 0, "clip": 1, "start": 0},
-    ]})
-    clips = (await client.call("arrangement.get", {}))["tracks"][0]["clips"]
-    assert [(c["name"], c["start"]) for c in clips] == [("Drop Bass", 0.0), ("Intro Bass", 32.0)]
-
-
 async def test_clip_ops_take_arrangement_clips_by_name(client):
-    # qwen: get_clip {"arrangement_clip": "Breakdown Bass"}, like compose and transform_notes take it
+    # qwen: get_clip {"arrangement_clip": "Breakdown Bass"}, like compose takes it
     await client.call("arrangement.edit", {"actions": [
         {"action": "add_clip", "track": 0, "start": 0, "length": 4, "name": "Intro Bass"},
         {"action": "add_clip", "track": 0, "start": 8, "length": 4, "name": "Drop Bass"},
@@ -266,19 +248,6 @@ async def test_clip_ops_take_arrangement_clips_by_name(client):
     assert [c["name"] for c in (await client.call("arrangement.get", {}))["tracks"][0]["clips"]] == ["Main Bass"]
     with pytest.raises(BridgeError, match="No arrangement clip named 'Outro'.*0 'Main Bass'"):
         await client.call("clip.get", {"track": 0, "arrangement_clip": "Outro"})
-
-
-async def test_a_failed_run_batch_is_undone(client, live):
-    from midibakery.mcp import build_server
-
-    before = live.on_main(lambda: live.song.undo_calls)
-    with pytest.raises(Exception) as exc:
-        await build_server(client).call_tool("run_batch", {"ops": [
-            {"op": "song.set", "params": {"tempo": 99}},
-            {"op": "clip.delete", "params": {"track": 0, "slot": 5}},  # no clip there
-        ]})
-    assert "were undone" in str(exc.value)
-    assert live.on_main(lambda: live.song.undo_calls) == before + 1
 
 
 async def test_a_failed_edit_arrangement_takes_back_clips_and_locators(client, live):

@@ -79,7 +79,7 @@ def _compressors(live):
 
 async def test_sidechain_ducks_bass_and_chords_under_a_trigger_track(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _house(server)
     trigger = preview["tracks"]["sidechain"]
     assert trigger["new"] and trigger["device"] == "Operator" and trigger["name"] == "Sidechain" and "fader -inf" in trigger["plays"]
@@ -113,7 +113,7 @@ async def test_sidechain_ducks_bass_and_chords_under_a_trigger_track(client, liv
 
 async def test_no_sidechain_no_trigger_track(client, live):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _house(server, sidechain=False)
     assert "sidechain" not in preview["tracks"] and "sidechain" not in preview["tracks"]["bass"]
 
@@ -127,7 +127,7 @@ async def test_an_existing_trigger_track_and_compressor_are_reused(client, live)
         live.song.tracks[-1].name = "Sidechain"  # empty: it gets an instrument to sound
 
     live.on_main(setup)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _house(server, create_missing=False)
     assert preview["tracks"]["sidechain"]["track"] == 2
     assert preview["tracks"]["bass"]["sidechain"] == "Compressor keyed from the sidechain track, threshold -24 dB"
@@ -151,7 +151,7 @@ def _kick_and_trigger_times(live, kick):
 @pytest.mark.parametrize("genre", ["house", "peak_time_techno", "drum_and_bass", "trap", "melodic_techno"])
 async def test_kick_following_matches_generated_drums_including_rests_and_variations(client, live, genre):
     _studio(live)
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = _payload(await server.call_tool("plan_song", {"genre": genre, "seed": 7, "fx": False,
                                                           "sidechain_mode": "follow_kick", "start_bar": 5}))
     assert preview["sidechain_mode"] == "follow_kick"
@@ -161,7 +161,7 @@ async def test_kick_following_matches_generated_drums_including_rests_and_variat
 
 
 async def test_follow_kick_works_after_new_kit_remaps_pitches(client, live):
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _house(server, sidechain_mode="follow_kick")
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
     track = next(t["track"] for t in applied["new_tracks"] if t["name"] == "Drums")
@@ -180,7 +180,7 @@ async def _copied_kick_plan(client, live, **note_values):
         {"pitch": 36, "start_time": 1.5, "duration": 0.25, "mute": True},
         {"pitch": 42, "start_time": 2, "duration": 0.25},
     ]})
-    server = build_server(client)
+    server = build_server(client, all_song_options=True)
     preview = await _house(server, clips=[{"role": "drums", "track": 0, "slot": 0}], sidechain_mode="follow_kick")
     return server, preview
 
@@ -216,4 +216,4 @@ async def test_follow_kick_needs_a_known_kick_pad(client, live):
     _studio(live)
     live.on_main(lambda: live.song.tracks[0].devices.__setitem__(0, DrumRackDevice()))
     with pytest.raises(ToolError, match="identifiable kick"):
-        await _house(build_server(client), sidechain_mode="follow_kick")
+        await _house(build_server(client, all_song_options=True), sidechain_mode="follow_kick")

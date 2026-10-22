@@ -14,48 +14,14 @@ from midibakery.agent.tools import COMPACT_RESULTS, ToolHost, ToolOutcome, compa
 from midibakery.mcp.server import INSTRUCTIONS
 
 SYSTEM_PROMPT = (
-    "You are MidiBakery, a music production assistant inside Ableton Live 12. "
-    "You compose and edit MIDI and control the Live session through tools. "
+    "You are MidiBakery, a music production assistant inside Ableton Live 12 that builds EDM song sketches for inspiration. "
     "Always answer in the language of the user's latest message and keep replies short: say what you changed or propose, "
     "with names of tracks, clips, chords and seeds where useful.\n\n"
     "Find named tracks and clips in get_session; never ask for indices. Meet a vague wish with a sensible choice. "
-    "A vague wish about an existing part ('more exciting') changes that clip (transform_notes), never adds one. "
-    "A track or clip the set lacks (no typo): say so, use no other.\n\n"
-    "Work like a producer: keep parts in the song's scale and "
-    "time signature and fitting together (bass follows kick and chords, melody follows the chords). For more than one part, or when the user wants to hear options first, "
-    "use plan_changes and let them apply the preview; otherwise write directly with the compose "
-    "tools. If a tool fails, fix the call instead of repeating it.\n\n"
+    "A vague wish about an existing part ('more exciting') rewrites that clip with compose, never adds one. "
+    "A track or clip the set lacks (no typo): say so, use no other. If a tool fails, fix the call instead of repeating it. "
+    "Call plan_song once per request; never claim a change you did not make.\n\n"
     "Tool guide:\n" + INSTRUCTIONS
-)
-
-def without_tools(prompt: str, hidden: frozenset[str]) -> str:
-    """The prompt without the lines that talk about tools the model does not get."""
-    if not hidden:
-        return prompt
-    names = re.compile(r"\b(" + "|".join(sorted(hidden)) + r")\b")
-    return "\n".join(line for line in prompt.split("\n") if not names.search(line))
-
-
-# For local models with a small context (e.g. 8k): the essentials of SYSTEM_PROMPT and INSTRUCTIONS.
-SMALL_SYSTEM_PROMPT = (
-    "You are MidiBakery, a music assistant controlling the open Ableton Live 12 set through tools. "
-    "Always answer in the language of the user's latest message, briefly.\n"
-    "- Call get_session first and find the tracks and clips the user names there; never ask for indices. Tracks and clip slots are zero-based indices; "
-    "users count from 1, so \"track 1\" is index 0.\n"
-    "- Times are in beats (quarter notes); pitch 60 = C3. Stay in the song scale.\n"
-    "- compose (kind drums/bass/chords/melody) writes a new clip into a free slot (omit slot for the first free one). "
-    "Give bass and melody chords_from = the chord clip (never a drums track), the bass follow_kick = the drum clip. "
-    "A counter melody = compose kind melody with counter_to = the lead's clip. "
-    "Never overwrite a clip unless the user asks for it.\n"
-    "- A song in the Arrangement: get_arrangement lists each track's clips (arrangement_clip index, start beat, name). "
-    "To change one part of it, give compose or transform_notes arrangement_clip (its index or its name, "
-    "e.g. 'Groove Bass') instead of slot. To vary a part of a clip, transform_notes with operation 'variation' "
-    "and half 'second' (or from_bar/to_bar: bars of the clip, 1 = its first bar).\n"
-    "- edit_notes and transform_notes change existing notes by note_id from get_clip. "
-    "Transpose by half steps/semitones/octaves with semitones (12 = octave); steps means scale steps.\n"
-    "- To play a clip, launch it with launch_clip; transport only starts or stops the whole song.\n"
-    "- Every write can be undone with undo. If a tool fails, read the error, fix the call and retry it yourself. "
-    "If the user declined a change (CANCELLED), nothing was written: say so, never claim it was done."
 )
 
 log = logging.getLogger("midibakery.agent")
@@ -93,52 +59,24 @@ _TRACK_WORD = re.compile(r"\b(tracks?|spur(en)?|kanal|channel)\b", re.I)
 _CLIP_WORD = re.compile(r"\b(clips?)\b", re.I)
 
 
-def deletes_wrong_thing(user_text: str, tool: str) -> bool:
-    """gemma answered "Delete the clip 'Intro Kick'" with delete_track track 0."""
-    return tool == "delete_track" and bool(_CLIP_WORD.search(user_text)) and not _TRACK_WORD.search(user_text)
-
-
 # Things the tools cannot do. gemma lowered the master fader and reported "-14 LUFS"; models took the Lead
 # track for "the vocals".
 _MASTERING = re.compile(r"\b(lufs|mastern|mastering|master(e)? (den|die|das|the|my|this|diesen|dein\w*)\b)", re.I)
 _VOCALS = re.compile(r"\b(vocals?|gesang|stimme|sänger\w*|singer|vox)\b", re.I)
-_LESS = re.compile(r"\b(leiser|quieter|softer|lower|decrease|reduce|senk\w*|runter)\b", re.I)
-_MUTE = re.compile(r"\b(stumm\w*|mute\w*|silen\w*)\b", re.I)
-_MORE = re.compile(r"\b(lauter|louder|higher|increase|erhöh\w*|hoch)\b", re.I)
-NO_MASTERING = ("NOT DONE: do not touch the master fader. plan_master puts a chain (EQ Eight, Glue Compressor, "
-                "Limiter) on the Master; measure_master reads the Loudness Meter on it; plan_loudness + apply_plan "
-                "move the Limiter toward a LUFS target.")
+NO_MASTERING = ("NOT DONE: MidiBakery does not master or measure loudness. Tell the user; change nothing, "
+                "not the master fader either.")
 NO_VOCALS = ("NOT DONE: this set has no vocal track, and no other track is the vocals. "
              "Tell the user there is no vocal track; change nothing.")
 
 
-def missing_thing(user_text: str, session: dict[str, Any], tool: str = "") -> str | None:
+def missing_thing(user_text: str, session: dict[str, Any]) -> str | None:
     """The refusal for a write when the user asks for mastering or for a vocal track the set lacks."""
-    if _MASTERING.search(user_text) and tool not in ("apply_plan", "measure_master"):  # plan_master's chain, the meter
+    if _MASTERING.search(user_text):
         return NO_MASTERING
     if _VOCALS.search(user_text) and not any(
             re.search(_VOCALS, str(t.get("name", ""))) for t in session.get("tracks", [])):
         return NO_VOCALS
     return None
-
-
-def unchanged_volume(user_text: str, session: dict[str, Any], tool: str, args: dict[str, Any]) -> str | None:
-    """gemma: "mach die Hats leiser" -> update_track volume 0.85, the value the track already had."""
-    volume, track = args.get("volume"), args.get("track")
-    relative = _LESS.search(user_text) or _MORE.search(user_text)
-    if tool == "update_track" and relative and args.get("mute") is True and not _MUTE.search(user_text):
-        return "NOT DONE: muting is not 'quieter'. Change volume to a value about 0.1 below the current one; do not mute."
-    if tool != "update_track" or not isinstance(volume, (int, float)) or not relative:
-        return None
-    tracks = session.get("tracks", [])
-    found = tracks[track] if isinstance(track, int) and 0 <= track < len(tracks) else next(
-        (t for t in tracks if str(t.get("name", "")).lower() == str(track).lower()), None)
-    current = ((found or {}).get("mixer") or {}).get("volume", (found or {}).get("volume"))
-    if not isinstance(current, (int, float)) or abs(current - volume) > 0.005:
-        return None
-    direction = "lower" if _LESS.search(user_text) else "higher"
-    return (f"NOT DONE: volume {volume} is what the track already has, so nothing would change. "
-            f"A relative change needs a value {direction} than the current one (about 0.1 {direction}).")
 
 
 _PART_KINDS = frozenset({"drums", "bass", "chords", "melody"})
@@ -150,7 +88,7 @@ def asks_for_new_clip(text: str) -> bool:
 
 def existing_clip_hint(session: dict[str, Any], track: Any, slot: Any = None) -> str | None:
     """The clips a part-writing call would leave next to: names for the error that sends the model to
-    transform_notes. None when the track has no clip (a new one is then the only way) or is unknown."""
+    compose on an existing clip. None when the track has no clip (a new one is then the only way) or is unknown."""
     tracks = session.get("tracks", [])
     found = None
     if isinstance(track, int) and 0 <= track < len(tracks):
@@ -219,32 +157,26 @@ class Agent:
         return "\n\n[The Live set now (get_session):\n" + COMPACT_RESULTS["get_session"](outcome.structured) + "]"
 
     async def _refuse(self, user_text: str, call: ToolCall) -> str | None:
-        """A write the set or the tools cannot back up (see missing_thing, unchanged_volume)."""
-        if not (_MASTERING.search(user_text) or _VOCALS.search(user_text) or _LESS.search(user_text) or _MORE.search(user_text)):
+        """A write the set or the tools cannot back up (see missing_thing)."""
+        if not (_MASTERING.search(user_text) or _VOCALS.search(user_text)):
             return None
         if "get_session" not in self.host.names():
             return None
         outcome = await self.host.call("get_session", {})
         if not outcome.structured:
             return None
-        return missing_thing(user_text, outcome.structured, call.name) or unchanged_volume(user_text, outcome.structured, call.name, call.input)
+        return missing_thing(user_text, outcome.structured)
 
     async def _new_clip_hint(self, call: ToolCall) -> str | None:
-        """compose (or a plan_changes part step) that would add a clip without slot or arrangement_clip
-        to a track that has clips, while the user did not ask for a new one."""
-        steps = [call.input] if call.name == "compose" else (
-            [x for x in call.input.get("steps", []) if isinstance(x, dict)] if call.name == "plan_changes" else [])
-        for step in steps:
-            kind = step.get("kind") if call.name == "plan_changes" else call.input.get("kind")
-            if kind not in _PART_KINDS or step.get("arrangement_clip") is not None:
-                continue
-            outcome = await self.host.call("get_session", {})
-            if not outcome.structured:
-                return None
-            hint = existing_clip_hint(outcome.structured, step.get("track"), step.get("slot"))
-            if hint:
-                return hint
-        return None
+        """compose that would add a clip without slot or arrangement_clip to a track that has clips,
+        while the user did not ask for a new one."""
+        step = call.input
+        if call.name != "compose" or step.get("kind") not in _PART_KINDS or step.get("arrangement_clip") is not None:
+            return None
+        outcome = await self.host.call("get_session", {})
+        if not outcome.structured:
+            return None
+        return existing_clip_hint(outcome.structured, step.get("track"), step.get("slot"))
 
     async def run_tool(self, name: str, arguments: dict[str, Any], emit: Emit) -> None:
         """A tool the user started from the UI (Apply, Undo): the same events as a model's call,
@@ -314,7 +246,7 @@ class Agent:
                                                "now with the tools; if it cannot be done with them, say so plainly.]")
                         continue
                     if unresolved and not nudged:
-                        # gemma: transform_notes failed, then "transposed it an octave down"; once per message
+                        # gemma: a write failed, then "transposed it an octave down"; once per message
                         nudged = True
                         name, error = next(iter(unresolved.items()))
                         self.provider.add_user(
@@ -327,12 +259,6 @@ class Agent:
                 stuck = None
                 # Sequential on purpose: Live ops depend on each other's order (create, then fill).
                 for call in turn.tool_calls:
-                    if self.compact and deletes_wrong_thing(text_in, call.name):
-                        refusal = "NOT DONE: the user asked to delete a clip, not a track. Delete the clip (delete_clip, or edit_arrangement delete_clip for an arrangement clip)."
-                        await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": "model"})
-                        await emit({"type": "tool_result", "id": call.id, "name": call.name, "source": "model", "is_error": True, "result": refusal})
-                        results.append(ToolResult(call.id, call.name, refusal, True))
-                        continue
                     if self.compact and not self.host.read_only(call.name) and (refusal := await self._refuse(text_in, call)):
                         await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": "model"})
                         await emit({"type": "tool_result", "id": call.id, "name": call.name, "source": "model", "is_error": True, "result": refusal})
@@ -343,9 +269,8 @@ class Agent:
                         guards += 1
                         await emit({"type": "tool_call", "id": call.id, "name": call.name, "input": call.input, "source": "model"})
                         refusal = (f"NOT DONE: the user did not ask for a new clip, and this track already has {hint}. "
-                                   "Change an existing clip instead: transform_notes with slot or arrangement_clip "
-                                   "(operation variation for something more lively, humanize, ...), "
-                                   "or compose with arrangement_clip to replace an arrangement clip. "
+                                   "Rewrite an existing clip instead: compose with its slot (if_exists replace) "
+                                   "or with arrangement_clip. "
                                    "Only if a new clip is really wanted, repeat this call.")
                         await emit({"type": "tool_result", "id": call.id, "name": call.name, "source": "model", "is_error": True, "result": refusal})
                         results.append(ToolResult(call.id, call.name, refusal, True))

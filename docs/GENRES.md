@@ -438,7 +438,7 @@ Delay throws: the lead throws in the drop, the chords in the verse, each on the 
 
 `clips` copies a clip you made into a role instead of generating it. It must be a MIDI clip on the same track as that role (`roles`); a clip on another track is refused when planning. Its playing window is its loop (or start to end marker when not looping). Whole copies fill each playing span; a remainder, or a clip longer than the span, becomes a note-based cut that ends exactly where the span ends (the source is never changed). A cut carries notes only, so planning refuses (`UNSUPPORTED`, nothing written) when a cut is needed and the clip has envelopes/automation, the Remote Script cannot say whether it has any, or the looping clip starts playing away from its loop start. A clip whose length divides every span is still copied whole in those cases. Section gaps, pauses (`rest_beats`) and kept silence are respected. If the clip's notes, loop or markers change between plan and apply, apply stops with a conflict. `reuse` reports `copies`, `fragments`, `uncovered_beats` and a `fingerprint` of the source.
 
-**Copied chords set the harmony.** With `clips.chords` and no `progression`, the generated bass and lead (and counter melody) follow the chords the clip plays, in every section where it is copied, including breaks. Chords are read per `chords_per_bar` segment of the copied span and keep their quality (a D major chord stays D major in C major); the copies restart the chords at each part's first bar. Silent or unclear segments are never guessed into new chords: they repeat the previous chord and are listed in `warnings` (when no chord can be read at all the genre's loops stay and a warning says so). An explicit `progression` wins over the clip, and a warning names where the two disagree. A `progression` is used exactly as written (genre sevenths are not added). Song bars are 4/4 bars of the plan; a clip's own bars are its length. Not verified in real Live: how Live plays arrangement copies of clips with unusual markers.
+**Copied chords set the harmony.** With `clips.chords` and no `progression`, the generated bass and lead follow the chords the clip plays, in every section where it is copied, including breaks. Chords are read per `chords_per_bar` segment of the copied span and keep their quality (a D major chord stays D major in C major); the copies restart the chords at each part's first bar. Silent or unclear segments are never guessed into new chords: they repeat the previous chord and are listed in `warnings` (when no chord can be read at all the genre's loops stay and a warning says so). An explicit `progression` wins over the clip, and a warning names where the two disagree. A `progression` is used exactly as written (genre sevenths are not added). Song bars are 4/4 bars of the plan; a clip's own bars are its length. Not verified in real Live: how Live plays arrangement copies of clips with unusual markers.
 
 ## What the engine implements and what it doesn't
 
@@ -470,108 +470,6 @@ State after the rework to follow the recipes (`compose/grooves.py`, `compose/hoo
 
 All cutoff frequencies, resonance values, sends, dynamics settings and section timings above are preset choices. They do not establish optimal settings for arbitrary instruments, samples or mixes. A genre label does not substitute for listening.
 
-## Master chain (`plan_master`)
-
-`plan_master` defaults to three native devices at the end of the master track: EQ Eight, Glue Compressor, Limiter. Set `low_cut=false` or `glue=false` to omit those stages; both false produces a Limiter-only chain. The defaults remain unchanged. This is a preset to audition, not finished mastering, because MidiBakery does not hear the song. It adds no Limiter input gain, but filtering, compression and limiting can still change level, timbre and transients. It does not measure loudness (LUFS). The table describes preset settings, not settings every mix needs.
-
-| Device | Setting | House, Melodic Techno, Peak-Time Techno | Drum & Bass, Trap |
-|---|---|---|---|
-| EQ Eight | Low Cut (band 1) | 30 Hz, 12 dB/octave | 20 Hz, 48 dB/octave |
-| Glue Compressor | Ratio, Attack, Release | 2:1, 30 ms, Auto | same |
-| Glue Compressor | Threshold | -10 dB as a starting value | same |
-| Glue Compressor | Sidechain EQ | High Pass 150 Hz | same |
-| Limiter | Ceiling, mode | -1 dB, True Peak (adjustable -3 to -0.1 dB) | same |
-| Limiter | Input Gain | 0 dB | same |
-
-- **Professional guidance:** Spotify recommends below -1 dBTP and below -2 dBTP for masters louder than -14 LUFS. The current -1 dB default is therefore not the recommended Spotify ceiling for the louder genre presets. Set `ceiling_db` to -2 dB or lower for that use and verify the rendered file with a true-peak meter.
-- **Preset choice:** Glue at 2:1, attack 30 ms, release Auto. A slower attack may preserve more transient energy, but the result depends on the signal. If subtle bus compression is wanted, audition around 1–2 dB gain reduction in loud passages; bypassing compression is valid.
-- **Preset choice:** a 150 Hz high-pass in the Glue detector reduces its sensitivity to low frequencies. It does not guarantee the absence of pumping.
-- **Professional guidance:** filter the master only when the result helps. A 20–30 Hz low cut can remove unwanted subsonic energy but can also attenuate wanted bass and change phase and transients; a 30 Hz cut is not inherently inaudible. A 48 dB/octave slope is not automatically preferable for sub-heavy music. Compare level-matched with bypass, and consider a gentler cut, a shelf or no filter.
-- **Implemented control:** low cut and Glue are included by default but can each be omitted. No automatic analysis establishes whether either is needed.
-- **○** Glue threshold -10 dB is an uncalibrated starting value. Input level determines gain reduction; the threshold alone cannot predict it. Adjust while listening or bypass the compressor.
-- **○** Limiter Input Gain 0 dB is intentional: making it louder without measuring would be guesswork.
-
-Measured in Live 12.4:
-- The parameter names of the three devices.
-- Glue Attack, Ratio and Release are steps (raw 0–6, 0–2, 0–6).
-- A batch that inserts devices and then sets their parameters leaves two undo steps. `apply_plan` therefore writes the chain in two batches; two undo steps remove it.
-
-`plan_master` does not add a chain to a master that already has a Limiter, an EQ Eight or a Glue Compressor. Other devices there stay before the chain; the MidiBakery Loudness Meter stays after it.
-
-**Sources:**
-- Violet Recording (bus compressors, mastering compressors)
-- MusicHub (compressor settings)
-- Ableton forum (Glue Compressor on the master)
-- Production Advice (Spotify true peak)
-- Flux (true peak limiting)
-- AES TD1008, only via summaries
-- Soundbridge (sub bass)
-- Richie ZXY (mastering drum & bass)
-- Gearspace, weaker sourcing (808, high-pass filters, master bus compression)
-
-
-## Measuring loudness (`measure_master`)
-
-The Max for Live device **MidiBakery Loudness Meter** sits as the last device on the master and approximates the ITU-R BS.1770-4 loudness algorithm. `measure_master` reads its values; compliance with the full meter specification has not been established.
-
-- **Identity and status:** every reset and sample-rate change creates a distinct `measurement_id`; readings include `since` and `sample_rate`. `reading_fresh` (and the compatibility alias `measuring`) indicates recent file updates, not playback; `is_playing` comes from Live's transport. A raw reading has unknown scope and `coverage_verified=false`.
-- **K-filter:** two biquad~ per channel (pre-filter as high shelf, then RLB high-pass). `loudness.js` computes the coefficients for the current sample rate using the libebur128 formulas; at 48 kHz they are the table values from BS.1770 (a test checks this).
-- **Blocks:** average~ rms over 100 ms per channel, read every 100 ms. Momentary = the last 4 blocks (400 ms), short-term = the last 30 (3 s), as EBU Tech 3341 defines them.
-- **Integrated:** every 400 ms block (75 % overlap) since the reset; gates at -70 LUFS absolute and 10 LU below the mean of the blocks that pass the absolute gate.
-- **Analytical check:** a 997 Hz sine at 0 dBFS in one channel gives -3.01 LUFS (test with the same filter chain in Node).
-- **Checked in Live (Live 12.4, 48 kHz):** a mastered reference song (5 min, MP3) showed -11.3 LUFS integrated; pyloudnorm measures the same file offline at -11.34 LUFS.
-- **Limits:** sample peak instead of true peak. Intersample peaks can exceed sample peaks by more than 0.5 dB; this meter cannot verify a true-peak ceiling. Max reads the blocks at the scheduler rate, not sample-accurately: an approximation, not a calibrated or independently certified meter. One reference-file comparison is not a conformance test.
-
-## Loudness targets (`plan_loudness`)
-
-`plan_loudness` proposes Limiter gain adjustments toward a selected loudness reference. This is not an assessment of mastering quality. One round:
-1. Reset the meter and play the **whole song once** for comparison with whole-track integrated references, then explicitly declare `scope="whole_song"` in `plan_loudness`. Coverage remains **user-declared, not verified**: elapsed time and repeated loops cannot prove complete playback. Omitted/unknown scope is rejected. An excerpt requires `scope="excerpt"` and an explicit `target_lufs`; named genre/streaming targets cannot be used for excerpts. Excerpts need at least 30 s; a declared complete song can be shorter but needs at least 0.4 s and a finite integrated reading.
-2. It proposes adding the difference to the target to the Limiter's **Input Gain**, at most 6 dB per round and no increases beyond +12 dB total input gain. A pre-existing gain above +12 dB can still be reduced without exceeding the 6 dB step limit. Above +6 dB it warns about possible heavy limiting; this is an input-gain heuristic, not a gain-reduction measurement.
-3. `apply_plan` sets the value (one undo step) and resets the meter; then you play the song again.
-
-Limiting may absorb part of an input gain increase, so the loudness response is signal-dependent. After each change, reset and measure the same complete playback again. `on_target` means the reading is within ±0.5 LU for the declared scope; results include `measurement_scope`, `scope_source="user_declared"` and `coverage_verified=false`. It does not guarantee convergence or acceptable dynamics. Planning rejects stale readings and a meter that is not last. Apply rejects a changed measurement identity/sample rate/reset time, pending reset, replaced meter/Limiter, changed Master device list or changed Limiter parameters. New readings from the same session are allowed. The ceiling setting is unchanged, but the sample-peak meter does not independently verify true peak. Stop if transients, distortion or pumping worsen, even if the number is below the reference.
-
-**Upgrade:** update the core, Remote Script and Loudness Meter together and restart Live/reload the device. Older meters lack measurement IDs and older scripts lack device identities; loudness planning reports an explicit upgrade error rather than silently weakening its guards.
-
-**Kick-following limits:** `follow_kick` needs an identifiable named kick pad (including the loaded kit on a new drum track). Copied Session drum clips must be MIDI, start at 0 and have loop start 0 / loop end equal to length; consolidate other clips first. Probabilistic kick notes are rejected because independent trigger probability would not reliably match them. Copied drum notes/timing are rechecked before apply. Use `pumping` for unsupported sources; there is no silent fallback.
-
-The genre presets below are published reference figures, not industry standards. The House and Techno values reproduce a vendor's reported stereo measurements of a selected corpus; the Drum & Bass figure has only partly described methodology, and Trap has no open dataset. The figures have not been independently reproduced here. An excerpt measurement is not interchangeable with their full-track integrated values.
-
-| Target | LUFS | Range | Basis | Rating |
-|---|---|---|---|---|
-| House | -8.0 | -9.0 to -7.1 (middle 50 %) | TrackSensei, 54 tracks | vendor-reported corpus; selection bias, not a standard |
-| Melodic Techno | -8.8 | -9.9 to -8.0 (middle 50 %) | TrackSensei, 56 tracks | vendor-reported corpus; selection bias, not a standard |
-| Peak-Time Techno | -7.7 | – | TrackSensei, 308 tracks | vendor-reported corpus; selection bias, not a standard |
-| Drum & Bass | -6.3 | -9.0 to -4.0 (middle 80 %) | WeFoundDNB, 101 tracks | reported reference; method only partly described |
-| Trap | -8.4 | -9.4 to -7.3 | blog measurements and mastering guides | weak: no open dataset or verified median |
-| Streaming | -14.0 | – | Spotify for Artists | official Normal playback level and mastering recommendation; not a universal streaming requirement |
-
-TrackSensei explicitly notes that its own scale (mono sum) sits about 3.3 LU lower for its corpus. The table uses its published stereo values; 3.3 LU is not a universal mono-to-stereo conversion. Choose a musically appropriate range with level-matched references, not the median at any cost. Spotify's -14 LUFS is its Normal playback normalization level and also its published mastering recommendation, not a requirement shared by all streaming services. For Spotify masters louder than -14 LUFS, its recommendation is true peak below -2 dB; `plan_master` currently defaults to -1 dB, configurable via `ceiling_db`.
-
-A check of our own: Katoff – The Signal (Extended, VANDIT Alternative), a melodic track, measures -11.3 LUFS, i.e. quieter than the median, but within the spread of released tracks.
-
-Checked in Live 12.4, the same song with the House chain on the master, target Melodic Techno (-8.8 LUFS):
-
-| Round | Input Gain | Integrated |
-|---|---|---|
-| before (chain, gain 0) | 0.0 dB | -13.9 LUFS |
-| 1 | +5.1 dB | -9.4 LUFS |
-| 2 | +5.7 dB | -9.0 LUFS, on target |
-
-In this reported example the chain reduced integrated loudness by 2.6 LU. The first +5.1 dB input-gain change increased the reading by 4.5 LU, consistent with nonlinear dynamics processing; this difference is not a measurement of Limiter gain reduction. The reported peak stayed at -1.0 dB, which does not independently establish a true-peak ceiling. This single example does not establish behavior for other songs.
-
-**Sources:**
-- [TrackSensei, "563 Techno & House Tracks: Real LUFS Data"](https://tracksensei.com/blog/we-analyzed-563-techno-house-tracks) (vendor methodology and selection limits)
-- WeFoundDNB, "How Loud Should Drum & Bass Be? LUFS From the Pros and 101 Measured Tracks"; [reference library](https://wefounddnb.com/tools/reference-tracks) (the numerical summary still needs a reproducible dataset/method reference)
-- Violet Recording (hip-hop mastering), TrackScore (genre bands)
-- [Spotify for Artists, "Loudness normalization"](https://support.spotify.com/us/artists/article/loudness-normalization/)
-
-## Loudness measurement sources
-
-- ITU-R BS.1770-4 (K-filter, gating, calibration)
-- EBU R 128 and EBU Tech 3341 (momentary, short-term, integrated)
-- libebur128 (coefficients for arbitrary sample rates)
-
 ## Gaps
 
 - **Lead density and stab length** are hardly given in numbers by the sources. The values above are conventions (○) and should be adjusted by ear.
@@ -581,29 +479,18 @@ In this reported example the chain reduced integrated loudness by 2.6 LU. The fi
 
 ## Assessment and implementation impact
 
-The October 2026 review supports the engine as a controllable musical sketching assistant, not an autonomous professional composer or mastering engineer. The follow-up implementation preserves default musical notes, target values and processing presets, adds opt-in controls, and intentionally requires explicit scope for loudness planning.
+The October 2026 review supports the engine as a controllable musical sketching assistant, not an autonomous professional composer. The follow-up implementation preserves default musical notes and presets and adds opt-in controls.
 
 | Finding | Current implementation | Follow-up |
 |---|---|---|
-| Excerpt versus full-track loudness | Explicit declared scope, scope-labelled results and measurement/device guards; no duration-based coverage inference | **Implemented.** Automatic transport/range-based verification remains a separate extension, not claimed here |
-| True peak | The meter reports sample peaks; the Limiter has a configurable true-peak ceiling | **Measurement work needed** to verify dBTP: use a validated true-peak meter or implement and validate oversampling. Until then, do not claim ceiling compliance from the meter |
-| Limiting safeguards | Gain changes remain capped at 6 dB per round and +12 dB total; runtime warnings now identify input gain as a heuristic | **Guidance corrected.** Signal-based gain-reduction assessment and listening remain needed |
-| Master filtering and compression | `low_cut` and `glue` can omit stages; existing defaults preserved | **Implemented.** Explicit ceiling control remains; runtime guidance warns about Spotify's louder-master recommendation rather than silently changing settings |
 | Sidechain | Default continuous pumping plus opt-in `follow_kick` from planned MIDI | **Implemented.** This follows planned notes, not actual audio or subsequent edits |
-| Counter melodies and harmony | Conservative register/consonance constraints and named chromatic progressions are intentional | No correction to notes is required by this review; less restrictive counterpoint would be an optional mode, not a silent replacement |
 | Swing, pitch labels and pulse descriptions | The current timing and MIDI numbers are consistent with the corrected explanations | Documentation corrections only; extending swing beyond a triplet feel would be a separate feature |
 | Reference analysis | Section, key and kick-presence labels are estimates, not source separation or musical ground truth | Validate against manually annotated tracks and let producers verify the result before using it as structure |
-| Professional-quality claims | Functional tests and a few listening/measurement examples do not establish release quality | Use level-matched references, producer listening evaluations across substyles and EBU meter tests before stronger claims. Synthetic DSP tests cover 44.1, 48, 88.2, 96 and 192 kHz; the EBU ZIP download returned HTTP 403 during this implementation, so no EBU conformance pass is claimed. Actual Live scheduler/device verification remains outstanding |
+| Professional-quality claims | Functional tests and a few listening examples do not establish release quality | Use level-matched references and producer listening evaluations across substyles before stronger claims |
 
 ## Review sources
 
 Public sources checked for the assessment (October 2026); these support the distinctions above, not every older genre-specific recipe:
 
 - [Ableton Live manual: Using Grooves](https://www.ableton.com/en/live-manual/12/using-grooves/) — Timing and Global Amount scale the selected groove, rather than defining a universal swing ratio.
-- [Open Music Theory: First-species counterpoint](https://openmusictheory.github.io/firstSpecies.html) — independent lines can share rhythm; these classical exercise rules are not mandatory for electronic music.
 - [Eerola et al. (2013): Emotional expression in music](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2013.00487/full) — emotion depends on multiple musical cues, not a progression alone.
-- [Sound On Sound: How steep should I make a high-pass filter?](https://www.soundonsound.com/sound-advice/q-how-steep-should-make-high-pass-filter) — filtering affects phase, transients and note balance as well as spectrum.
-- [Sound On Sound: What mastering can and can't do](https://www.soundonsound.com/techniques/what-mastering-can-cant-do) — intervention should serve the material, not a mandatory processing chain.
-- [iZotope: What is a true peak limiter?](https://www.izotope.com/community/blog/true-peak-limiter) — true-peak behavior and delivery tradeoffs.
-- [ITU-R BS.1770](https://www.itu.int/rec/R-REC-BS.1770/en), [EBU Tech 3341](https://tech.ebu.ch/publications/tech3341) and the [EBU loudness test set](https://tech.ebu.ch/publications/ebu_loudness_test_set) — loudness algorithms, meter behavior and validation material.
-- [Spotify loudness normalization](https://support.spotify.com/us/artists/article/loudness-normalization/) and [TrackSensei corpus/methodology](https://tracksensei.com/blog/we-analyzed-563-techno-house-tracks) — official playback guidance versus descriptive vendor measurements.

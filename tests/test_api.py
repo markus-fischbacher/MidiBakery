@@ -1,4 +1,4 @@
-"""Local API for the Max for Live devices: auth, MIDI tool endpoints, chat WebSocket."""
+"""Local API for the Max for Live devices: auth, chat WebSocket."""
 
 import json
 import stat
@@ -8,11 +8,9 @@ from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from midibakery import __version__, credentials
-from midibakery.agent import LOCAL_HIDDEN, REDUCED_TOOLS
 from midibakery.agent.providers.base import ToolCall, Turn
 from midibakery.api.server import api_info_path, build_app, write_api_info
 from midibakery.bridge import BridgeClient
-from midibakery.compose.theory import Scale
 from test_agent import ScriptedProvider
 
 TOKEN = "test-token"
@@ -39,7 +37,7 @@ def test_requests_need_the_token(app_factory):
     api, _ = app_factory()
     assert api.get("/health").status_code == 401
     assert api.get("/health", headers={"Authorization": "Bearer wrong"}).status_code == 401
-    assert api.post("/miditool/generate", json={"kind": "drums"}).status_code == 401
+    assert api.get("/import/library").status_code == 401
     with pytest.raises(WebSocketDisconnect) as exc:
         with api.websocket_connect("/chat?token=wrong") as ws:
             ws.receive_json()
@@ -64,76 +62,6 @@ def test_health_reports_live(app_factory, live):
 # --------------------------------------------------------------------------
 
 
-def test_generate_is_seeded_in_scale_and_inside_the_selection(app_factory):
-    api, _ = app_factory()
-    request = {
-        "kind": "melody",
-        "context": {"scale": A_MINOR, "start": 8.0, "length": 8.0, "seed": 5, "numerator": 4, "denominator": 4},
-        "params": {"progression": "i VI III VII", "density": 0.6},
-    }
-    first = api.post("/miditool/generate", json=request, headers=AUTH).json()
-    second = api.post("/miditool/generate", json=request, headers=AUTH).json()
-    assert first == second and first["seed"] == 5
-    assert first["chords"][:2] == ["Am (i)", "F (VI)"]
-    scale = Scale(9, (0, 2, 3, 5, 7, 8, 10))
-    assert first["notes"] and all(scale.contains(n["pitch"]) for n in first["notes"])
-    assert all(8.0 <= n["start_time"] < 16.0 and n["start_time"] + n["duration"] <= 16.0 + 1e-6 for n in first["notes"])
-
-
-def test_generate_drums_uses_given_pads(app_factory):
-    api, _ = app_factory()
-    pads = [{"note": 36, "name": "Kick"}, {"note": 37, "name": "Snare"}, {"note": 38, "name": "Closed HH"}]
-    body = api.post("/miditool/generate", headers=AUTH, json={
-        "kind": "drums", "context": {"length": 4, "seed": 1, "pads": pads}, "params": {"style": "rock"},
-    }).json()
-    assert body["drum_map"] == "drum_rack"
-    assert {n["pitch"] for n in body["notes"]} <= {36, 37, 38}
-
-
-def test_generate_rejects_set_only_and_unknown_params(app_factory):
-    api, _ = app_factory()
-    for params in ({"track": 1}, {"follow_kick": {"track": 0, "slot": 0}}, {"style": "polka"}):
-        response = api.post("/miditool/generate", headers=AUTH, json={"kind": "bass", "params": params})
-        assert response.status_code == 422, params
-
-
-def test_transform_returns_the_full_note_list(app_factory):
-    api, _ = app_factory()
-    notes = [
-        {"note_id": 10, "pitch": 60, "start_time": 4.1, "duration": 0.5, "probability": 0.5},
-        {"note_id": 11, "pitch": 64, "start_time": 5.0, "duration": 0.5},
-    ]
-    body = api.post("/miditool/transform", headers=AUTH, json={
-        "notes": notes, "operation": "quantize", "context": {"start": 4.0, "length": 4.0},
-    }).json()
-    assert body["diff"] == {"added": 0, "modified": 1, "removed": 0}
-    assert [(n["note_id"], n["start_time"], n["probability"]) for n in body["notes"]] == [(10, 4.0, 0.5), (11, 5.0, 1.0)]
-
-    chord = [{"pitch": p, "start_time": 0, "duration": 1} for p in (60, 64, 67)]
-    arp = api.post("/miditool/transform", headers=AUTH, json={
-        "notes": chord, "operation": "arpeggiate", "params": {"rate": 0.25}, "context": {"length": 4, "seed": 2},
-    }).json()
-    assert arp["diff"] == {"added": 4, "modified": 0, "removed": 3}
-    assert [n["pitch"] for n in arp["notes"]] == [60, 64, 67, 60]
-    assert all("note_id" not in n for n in arp["notes"])
-
-    up = api.post("/miditool/transform", headers=AUTH, json={
-        "notes": notes, "operation": "transpose", "params": {"semitones": 2}, "context": {"start": 4.0, "length": 4.0},
-    }).json()
-    assert [n["pitch"] for n in up["notes"]] == [62, 66]
-
-
-def test_transform_rejects_duplicate_ids(app_factory):
-    api, _ = app_factory()
-    notes = [{"note_id": 1, "pitch": 60, "start_time": 0, "duration": 1}] * 2
-    assert api.post("/miditool/transform", headers=AUTH, json={"notes": notes, "operation": "invert"}).status_code == 422
-
-
-# --------------------------------------------------------------------------
-# Chat WebSocket
-# --------------------------------------------------------------------------
-
-
 def _until(ws, kind):
     events = []
     while True:
@@ -151,7 +79,7 @@ def test_chat_streams_agent_events(app_factory, live):
     api, providers = app_factory(provider)
     with api.websocket_connect(f"/chat?token={TOKEN}&provider=anthropic&model=claude-opus-5-5&ignored=1") as ws:
         ready = ws.receive_json()
-        assert ready["type"] == "ready" and ready["tools"] == 40
+        assert ready["type"] == "ready" and ready["tools"] == 12
         ws.send_json({"type": "user", "text": "Chords please"})
         events = _until(ws, "done")
     assert providers[0][0] == {"provider": "anthropic", "model": "claude-opus-5-5"}
@@ -163,7 +91,7 @@ def test_chat_streams_agent_events(app_factory, live):
 def test_plan_preview_is_applied_and_undone_from_the_page(app_factory, live):
     """The page's Apply and Undo buttons run apply_plan and undo through the same tool host."""
     provider = ScriptedProvider([
-        Turn("tool_use", [ToolCall("t1", "plan_changes", {"steps": [{"kind": "chords", "track": 1, "slot": 0, "seed": 4}]})]),
+        Turn("tool_use", [ToolCall("t1", "compose", {"kind": "chords", "track": 1, "slot": 0, "seed": 4, "preview": True})]),
         Turn("end_turn", text="Here is a preview."),
         Turn("end_turn", text="ok"),
     ])
@@ -214,50 +142,22 @@ def test_page_tools_are_limited_and_wait_for_the_model(app_factory, live):
     assert live.on_main(lambda: len(live.song.tracks)) == 2
 
 
-def test_local_models_get_every_tool_but_the_hidden_ones(app_factory):
-    provider = ScriptedProvider([Turn("end_turn", text="hi")])
-    provider.name = "lmstudio"
-    api, _ = app_factory(provider)
-    with api.websocket_connect(f"/chat?token={TOKEN}") as ws:
-        ready = ws.receive_json()
-    assert ready["tools"] > len(REDUCED_TOOLS)
-    names = {t.name for t in provider.tools}
-    assert {"update_track", "plan_song", "compose"} <= names and not LOCAL_HIDDEN & names
-    # tools=small keeps its own subset, launch_clip included
-    provider.tools = []
-    with api.websocket_connect(f"/chat?token={TOKEN}&tools=small") as ws:
-        ws.receive_json()
-    assert "launch_clip" in {t.name for t in provider.tools}
-
-
 def test_chat_confirmation_round_trip(app_factory, live):
     provider = ScriptedProvider([
-        Turn("tool_use", [ToolCall("t1", "delete_track", {"track": 1})]),
-        Turn("end_turn", text="Deleted."),
-        Turn("end_turn", text="I cannot delete tracks here."),  # after "[Check: delete_track failed ...]"
-    ])
-    api, _ = app_factory(provider)
-    with api.websocket_connect(f"/chat?token={TOKEN}&tools=reduced") as ws:
-        assert ws.receive_json()["tools"] == len(REDUCED_TOOLS)
-        ws.send_json({"type": "user", "text": "delete track 2"})
-        # delete_track is not in the reduced set: the model gets an error, nothing is asked.
-        events = _until(ws, "done")
-    assert events[1]["is_error"] and "Unknown tool" in events[1]["result"]
-
-    provider = ScriptedProvider([
-        Turn("tool_use", [ToolCall("t1", "delete_track", {"track": 1})]),
+        Turn("tool_use", [ToolCall("t1", "delete_clip", {"track": 1, "slot": 0})]),
         Turn("end_turn", text="Kept."),
     ])
+    live.on_main(lambda: live.song.tracks[1].clip_slots[0].create_clip(4.0))
     api, _ = app_factory(provider)
     with api.websocket_connect(f"/chat?token={TOKEN}") as ws:
         ws.receive_json()
-        ws.send_json({"type": "user", "text": "delete track 2"})
+        ws.send_json({"type": "user", "text": "delete the clip on track 2"})
         events = _until(ws, "confirm")
-        assert events[-1]["message"] == "Delete track 2 '2-MIDI' with 0 clip(s)?"
+        assert events[-1]["message"].startswith("Delete clip") and "track 2 '2-MIDI'" in events[-1]["message"]
         ws.send_json({"type": "confirm_reply", "id": events[-1]["id"], "accept": False})
         events = _until(ws, "done")
     assert events[0]["type"] == "tool_result" and events[0]["is_error"] and "CANCELLED" in events[0]["result"]
-    assert live.on_main(lambda: len(live.song.tracks)) == 2
+    assert live.on_main(lambda: live.song.tracks[1].clip_slots[0].has_clip)
 
 
 def test_chat_reset_and_unknown_messages(app_factory):
@@ -284,44 +184,6 @@ def test_chat_page_reloads_for_a_new_token(app_factory):
     page = api.get("/ui?key=0123abcd")
     assert page.status_code == 200
     assert 'addEventListener("hashchange", () => location.reload())' in page.text
-
-
-@pytest.mark.parametrize("kind, params", [
-    ("drums", {"swing": 0, "density": 0.5, "style": "house", "chance": 0.5}),
-    ("bass", {"swing": 0.2, "density": 0.5, "style": "syncopated"}),
-    ("chords", {"swing": 0, "rhythm": "stabs"}),
-    ("melody", {"swing": 0, "density": 0.7}),
-])
-def test_generate_accepts_the_requests_the_generator_device_builds(app_factory, kind, params):
-    """Mirrors buildBody() in packages/m4l/src/miditool.js."""
-    api, _ = app_factory()
-    body = {"context": {"start": 4, "length": 16, "seed": 1, "scale": A_MINOR}, "kind": kind, "params": params}
-    response = api.post("/miditool/generate", json=body, headers=AUTH)
-    assert response.status_code == 200, response.text
-    notes = response.json()["notes"]
-    assert notes and all(4 <= n["start_time"] < 20 for n in notes)
-
-
-@pytest.mark.parametrize("operation, params", [
-    ("humanize", {"amount": 0.5}),
-    ("quantize", {"strength": 1.0, "grid": 0.25}),
-    ("invert", {}),
-    ("arpeggiate", {"rate": 0.25}),
-    ("variation", {"amount": 0.5}),
-    ("transpose", {"semitones": 12}),
-])
-def test_transform_accepts_the_requests_the_transform_device_builds(app_factory, operation, params):
-    api, _ = app_factory()
-    notes = [
-        {"note_id": 1, "pitch": 57, "start_time": 4.0, "duration": 1.0, "velocity": 100, "mute": False,
-         "probability": 1, "velocity_deviation": 0, "release_velocity": 64},
-        {"note_id": 2, "pitch": 60, "start_time": 4.0, "duration": 1.0, "velocity": 90, "mute": False,
-         "probability": 1, "velocity_deviation": 0, "release_velocity": 64},
-    ]
-    body = {"context": {"start": 4, "length": 16, "seed": 1, "scale": A_MINOR}, "operation": operation, "params": params, "notes": notes}
-    response = api.post("/miditool/transform", json=body, headers=AUTH)
-    assert response.status_code == 200, response.text
-    assert response.json()["notes"]
 
 
 def test_models_lists_default_and_claude_and_skips_unreachable_local_servers(app_factory, monkeypatch):
@@ -382,7 +244,7 @@ def test_second_api_on_a_busy_port_keeps_the_running_apis_token(bridge_env):
 def test_song_plan_reaches_the_page_and_its_apply_button_writes_it(app_factory, live):
     """plan_song's preview carries what the timeline card draws; Apply on the card writes the song."""
     provider = ScriptedProvider([
-        Turn("tool_use", [ToolCall("t1", "plan_song", {"genre": "trap", "seed": 3, "create_missing": True})]),
+        Turn("tool_use", [ToolCall("t1", "plan_song", {"genre": "trap", "seed": 3})]),
         Turn("end_turn", text="Here is the song."),
     ])
     api, _ = app_factory(provider)
