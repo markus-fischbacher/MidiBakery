@@ -237,7 +237,7 @@ def test_delete_clip_takes_arrangement_clip_like_every_other_tool():
 
 
 async def test_clip_ops_take_arrangement_clips_by_name(client):
-    # qwen: get_clip {"arrangement_clip": "Breakdown Bass"}, like compose and transform_notes take it
+    # qwen: get_clip {"arrangement_clip": "Breakdown Bass"}, like compose takes it
     await client.call("arrangement.edit", {"actions": [
         {"action": "add_clip", "track": 0, "start": 0, "length": 4, "name": "Intro Bass"},
         {"action": "add_clip", "track": 0, "start": 8, "length": 4, "name": "Drop Bass"},

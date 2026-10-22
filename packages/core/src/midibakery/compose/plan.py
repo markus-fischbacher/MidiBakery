@@ -707,8 +707,7 @@ async def build_plan(call: Call, steps: list[Spec]) -> Plan:
                                        f"({names}) stay unchanged. To change one, pass arrangement_clip (its name or index).")
         if key.in_arrangement and change.existing:
             # a model asked to vary the second half of 'Breakdown Bass' rewrote all of it with kind 'bass'
-            change.info["note"] = (f"Replaces all {len(change.existing)} notes of this arrangement clip with a new part. "
-                                   "To vary it or only part of it, use transform_notes (operation 'variation', half 'second').")
+            change.info["note"] = (f"Replaces all {len(change.existing)} notes of this arrangement clip with a new part.")
         if (step.kind in SOUNDS and key.track not in sounds and not session.track(key.track).get("devices")
                 and session.track(key.track).get("kind") == "midi"):
             sounds[key.track] = step.kind

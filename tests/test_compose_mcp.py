@@ -311,4 +311,4 @@ async def test_composing_over_an_arrangement_clip_says_it_replaces_it(client, li
     await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 16, "name": "Breakdown Bass",
                                                         "notes": [{"pitch": 33, "start_time": float(b), "duration": 0.5} for b in range(16)]}]})
     plan = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": "Breakdown Bass", "seed": 1, "preview": True}))
-    assert plan["changes"][0]["note"].startswith("Replaces all 16 notes") and "transform_notes" in plan["changes"][0]["note"]
+    assert plan["changes"][0]["note"].startswith("Replaces all 16 notes")

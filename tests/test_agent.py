@@ -601,11 +601,11 @@ def test_invented_sub_objects_are_lifted():
 
 
 async def test_a_model_claiming_a_failed_write_is_asked_to_fix_it(client, live):
-    # gemma: transform_notes failed, then "I transposed the Lead Riff an octave down"
-    bad = ("transform_notes", {"track": 1, "slot": 0, "operation": "transpose", "semitones": 99})
-    provider = ScriptedProvider([tool_turn(bad), Turn("end_turn", text="Done, an octave down."), Turn("end_turn", text="That did not work.")])
-    events = await run(build_server(client), provider, "play the lead an octave lower")
-    assert provider.users[-1].startswith("[Check: transform_notes failed") and "changed nothing" in provider.users[-1]
+    # gemma: a write failed, then "I wrote the bass"
+    bad = ("compose", {"kind": "bass", "track": 99})
+    provider = ScriptedProvider([tool_turn(bad), Turn("end_turn", text="Done, a new bass."), Turn("end_turn", text="That did not work.")])
+    events = await run(build_server(client), provider, "write a bass")
+    assert provider.users[-1].startswith("[Check: compose failed") and "changed nothing" in provider.users[-1]
     assert events[-1]["type"] == "done" and not provider.turns  # asked once, then the model's answer stands
 
 
@@ -684,7 +684,7 @@ async def test_a_vague_wish_changes_the_clip_instead_of_composing_a_new_one(clie
     # gemma: "Mach den Bass spannender" -> compose into a free slot, every time
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 8.0, "name": "Bass Loop"})
     compose = ("compose", {"kind": "bass", "track": 1})
-    provider = ScriptedProvider([tool_turn(compose), tool_turn(("transform_notes", {"track": 1, "slot": 0, "operation": "variation"})),
+    provider = ScriptedProvider([tool_turn(compose), tool_turn(("compose", {"kind": "bass", "track": 1, "slot": 0, "if_exists": "replace"})),
                                  Turn("end_turn", text="Variiert.")])
     events = await _compact_send(client, provider, "Mach den Bass spannender.")
     refusal = next(e for e in events if e["type"] == "tool_result" and e["name"] == "compose")
@@ -725,21 +725,6 @@ async def test_deleting_an_arrangement_clip_by_name_asks_with_its_name(client, l
     assert [c["name"] for c in (await client.call("arrangement.get", {}))["tracks"][0]["clips"]] == ["Drop Kick"]
 
 
-async def test_deleting_a_clip_is_not_answered_with_delete_track(client, live):
-    # gemma: "Delete the clip 'Intro Kick'" -> delete_track {"track": 0}
-    provider = ScriptedProvider([tool_turn(("delete_track", {"track": 0})), Turn("end_turn", text="Could not.")])
-    before = live.on_main(lambda: len(live.song.tracks))
-    events = await _compact_send(client, provider, "Delete the clip 'Intro Kick'.")
-    refusal = next(e for e in events if e["type"] == "tool_result")
-    assert refusal["is_error"] and "not a track" in refusal["result"]
-    assert live.on_main(lambda: len(live.song.tracks)) == before
-    # naming the track as well keeps delete_track available
-    from midibakery.agent.loop import deletes_wrong_thing
-
-    assert not deletes_wrong_thing("Lösch die Spur und den Clip", "delete_track")
-    assert deletes_wrong_thing("Lösch den Clip 'Intro Kick'", "delete_track")
-
-
 async def test_a_request_answered_with_talk_only_is_nudged_once(client, live):
     # gemma: "Tausche ... tausche ich gegeneinander." / "wird nun mit dem Sound versehen" and no tool call
     provider = ScriptedProvider([Turn("end_turn", text="Die Chords-Spur wird nun mit dem Sound versehen."),
@@ -764,16 +749,6 @@ async def test_the_new_clip_guard_covers_a_free_slot_on_a_track_with_clips(clien
 SET_WITH_HATS = {"tracks": [{"index": 0, "name": "Drums", "volume": 0.85}, {"index": 1, "name": "Hats", "volume": 0.7}]}
 
 
-def test_a_relative_volume_wish_must_change_the_value():
-    from midibakery.agent.loop import unchanged_volume
-
-    # gemma: "mach die Hats leiser" -> volume 0.85 on a track already at 0.85
-    assert "nothing would change" in unchanged_volume("Mach die Drums leiser.", SET_WITH_HATS, "update_track", {"track": 0, "volume": 0.85})
-    assert unchanged_volume("Mach die Hats leiser.", SET_WITH_HATS, "update_track", {"track": "Hats", "volume": 0.6}) is None
-    assert "not 'quieter'" in unchanged_volume("Mach die Hats leiser.", SET_WITH_HATS, "update_track", {"track": 1, "mute": True})
-    assert unchanged_volume("Setz die Hats auf 0.7.", SET_WITH_HATS, "update_track", {"track": 1, "volume": 0.7}) is None  # absolute wish
-
-
 def test_update_track_says_how_to_change_volume_relatively():
     from midibakery.catalog.ops import TrackSet
 
@@ -784,29 +759,27 @@ def test_mastering_and_a_missing_vocal_track_are_refused():
     from midibakery.agent.loop import NO_MASTERING, NO_VOCALS, missing_thing
 
     assert missing_thing("Master den Song auf -14 LUFS.", SET_WITH_HATS) == NO_MASTERING
-    # plan_master's chain is the way to master: its apply_plan goes through
-    assert missing_thing("Master den Song.", SET_WITH_HATS, "apply_plan") is None
-    assert missing_thing("Wie viele LUFS hat der Song?", SET_WITH_HATS, "measure_master") is None
     assert missing_thing("Make the vocals louder.", SET_WITH_HATS) == NO_VOCALS
     assert missing_thing("Make the vocals louder.", {"tracks": [{"name": "Lead Vocals"}]}) is None
     assert missing_thing("Mach die Hats leiser.", SET_WITH_HATS) is None
 
 
 async def test_the_agent_refuses_a_write_for_a_missing_vocal_track(client, live):
-    provider = ScriptedProvider([tool_turn(("update_track", {"track": 3, "volume": 0.95})),
+    provider = ScriptedProvider([tool_turn(("compose", {"kind": "melody", "track": 0})),
                                  Turn("end_turn", text="Es gibt keine Gesangsspur.")])
-    events = await _compact_send(client, provider, "Make the vocals louder.")
-    result = next(e for e in events if e["type"] == "tool_result" and e["name"] == "update_track")
+    events = await _compact_send(client, provider, "Write a melody for the vocals.")
+    result = next(e for e in events if e["type"] == "tool_result" and e["name"] == "compose")
     assert result["is_error"] and "no vocal track" in result["result"]
 
 
 async def test_a_plan_waits_for_apply_without_a_nudge(client, live):
     # gemma: plan_song, "You can apply this plan with apply_plan(...)", then the nudge made it apply the song unasked
     provider = ScriptedProvider([
-        Turn("tool_use", tool_calls=[ToolCall("t1", "plan_master", {"genre": "house"})]),
-        Turn("end_turn", text="Here is the master chain. Apply it when you like."),
+        Turn("tool_use", tool_calls=[ToolCall("t1", "plan_song", {"genre": "house"})]),
+        Turn("end_turn", text="Here is the song plan. Apply it when you like."),
     ])
-    await _compact_send(client, provider, "Leg eine Master-Kette für House an.")
+    before = live.on_main(lambda: len(live.song.tracks))
+    await _compact_send(client, provider, "Bau einen House-Song.")
     assert not provider.turns and not any(u.startswith("[No tool ran") for u in provider.users)
-    assert live.on_main(lambda: len(live.song.master_track.devices)) == 0
+    assert live.on_main(lambda: len(live.song.tracks)) == before
 

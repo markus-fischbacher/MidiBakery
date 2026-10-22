@@ -60,7 +60,7 @@ def freeze(payload: Path, work: Path) -> Path:
         sys.executable, "-m", "PyInstaller", str(ENTRY),
         "--name", "midibakery", "--onedir", "--console", "--noconfirm", "--clean",
         "--distpath", str(OUT), "--workpath", str(work / "pyinstaller"), "--specpath", str(work),
-        "--collect-data", "midibakery",  # chat.html, piano_roll.html
+        "--collect-data", "midibakery",  # chat.html, importer.html
         "--collect-submodules", "midibakery",
         "--add-data", f"{payload}{':' if sys.platform != 'win32' else ';'}payload",
     ]

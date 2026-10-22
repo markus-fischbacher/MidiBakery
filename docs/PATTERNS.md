@@ -1,6 +1,6 @@
 # Named patterns for `compose`
 
-`compose` (and `plan_changes` steps) take `pattern` for drums, bass, melody and chords. It replaces `style` (drums, bass), the generated melody, or the progression (chords). Patterns come from four tutorials; the sound design they describe is kept as a hint and is not applied.
+`compose` takes `pattern` for drums, bass, melody and chords. It replaces `style` (drums, bass), the generated melody, or the progression (chords). Patterns come from four tutorials; the sound design they describe is kept as a hint and is not applied.
 
 Provenance: most voice-overs name notes and rhythms only briefly, so some rhythms are rebuilt from the description (`source: described`); patterns whose piano roll was readable say `roll`. Treat both as a starting point, not a transcription.
 
@@ -70,25 +70,6 @@ A chords pattern sets the progression and the voicing (roots doubled, thirds up,
 | `ambience_root_five_six` | Ambience: root, fifth, sixth, fifth. Count from the root to the fifth, hop to the sixth and back to the fifth, loop it: a quiet ambience for a dry techno track. |
 | `ambience_chord_semitone` | Melancholic ambience: minor chord with a top semitone. Root, fifth of the minor chord, both doubled an octave up and the third on top: the melancholic ambience under a kick-only track. |
 
-## Counter melody modes
-
-`counter_mode` of a melody that has `counter_to` (a main melody clip). Ten values, six read the main melody's rhythm, four are figures. Provenance as in [COUNTER_MELODY.md](COUNTER_MELODY.md): `roll` = seen in the tutorials' piano roll, `described` = said in the voice-over or inferred.
-
-| Mode | What it does | Provenance |
-|---|---|---|
-| `fill_the_gaps` | Plays inside the main's held notes and rests, sustains or stops when it returns. | `roll` |
-| `call_and_response` | Answers in the silent beats and bars of the main. | `described` |
-| `passive_over_active` | A third to half of a busy main's onsets, longer notes; more notes over a sparse one. | `described` + `roll` |
-| `contrasting_rhythm` | An onset pattern that differs from the main's per bar. | `described` |
-| `harmonic_notes` | Follows the main's onsets on another consonant note, never the same pitch class. | `roll` + `described` |
-| `note_layering` | The main's own pitch classes an octave away, same time or delayed. | `roll` + `described` |
-| `dotted_eighth_pulse` | Six onsets at 16th steps 1, 4, 7, 10, 13, 16; cyclic gaps 3-3-3-3-3-1, reset each bar, one chord tone per bar. Not continuous dotted eighths across bar lines. | `roll` rhythm interpretation |
-| `scale_staircase` | The pulse climbing one scale step every one or two bars, one step back before the restart. | `roll` + `described` |
-| `trance_dotted_eighth_staircase` | The Trance video's 8-bar figure, scale degrees 0 0 1 1 2 2 4 4, then the loop restarts. | `roll` rhythm, `described` pitches |
-| `echo_gap_answer` | In a main note of 1.25 beats or more: 3-4 short stepwise notes, then one longer note that sustains under the re-entry. | `roll` |
-
-All keep the register window (`counter_register`: above, below, same), avoid crossing the main and favor thirds, fifths, sixths or octaves to it on strong beats; a figure note that would clash moves to the nearest consonant scale tone. These and the parallel-fifth/octave restrictions are conservative engine choices, not universal musical rules. Shared rhythms, unisons, parallel motion and expressive dissonance can be intentional. `note_layering` may act as doubling rather than an independent line. Not built: `bass_mimic`, `timbre_split` (hint only); `octave_separation` is represented by `counter_register`, not a separate mode.
-
 ## Drum patterns (techno)
 
 | `pattern` | What it is |
@@ -124,15 +105,11 @@ Names describe the intended preset character, not a reliable emotion classifier.
 
 ## Which controls take effect
 
-Three intentions: **generate** a new idea, **follow** existing clips (`chords_from`, `follow_kick`, `counter_to`), **vary** existing material (transforms). A named `pattern` is a fixed figure: it reads the harmony, meter, bars and `swing`, and ignores the generic style fields. `generate` reports explicitly set fields that were not read as `ignored`; defaults are never listed.
+Two intentions: **generate** a new idea, **follow** existing clips (`chords_from`, `follow_kick`). A named `pattern` is a fixed figure: it reads the harmony, meter, bars and `swing`, and ignores the generic style fields. Explicitly set fields that were not read are reported as `ignored`; defaults are never listed.
 
 | Kind | With `pattern` | Without `pattern` |
 |---|---|---|
 | `bass` | reads `swing`; ignores `style`, `octave`, `density`, `kick_relation`, `follow_kick` | `offbeat`, `walking` and `sustained` sit on fixed pulses and ignore `swing`; the other styles read it |
 | `chords` | ignores `rhythm`, `low`, `high`, `voices` | all read |
 
-A mood `pattern` supplies its own progression and, unless `chords_per_bar` is given explicitly, its own chord rate, in standalone `generate` as in `compose`. The Max MIDI Tool has no pattern menus. `plan_song` uses genre recipes, not these named patterns; a copied `clips.chords` clip sets its bass and lead harmony unless `progression` is given (see docs/GENRES.md).
-
-The Max MIDI Tool sends the meter when Live's tool context provides one (unverified in real Live; otherwise 4/4) and, for drums, the named populated pads of the clip's track's first Drum Rack (one level into Instrument Racks), read through Live's object model (unverified in real Live). If they cannot be read the status says why and drums use General MIDI pitches (`drum_map: "gm"`). A changed kit makes a new request. Without a clip scale it uses C major.
-
-Replace removes notes only when the clip is still the one the cycle started on and the selection holds exactly the notes it held then; otherwise (or when that cannot be read) it writes nothing and says so. Live gives MIDI Tools no observer for a changed time selection, so this content check is the guard.
+A mood `pattern` supplies its own progression and, unless `chords_per_bar` is given explicitly, its own chord rate. `plan_song` uses genre recipes, not these named patterns; a copied `clips.chords` clip sets its bass and lead harmony unless `progression` is given (see docs/GENRES.md).
