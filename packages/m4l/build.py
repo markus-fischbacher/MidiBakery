@@ -416,7 +416,14 @@ def _sounds_window() -> dict[str, Any]:
     inlet = w.box("inlet", (20, 20, 30, 30), inlets=0, outlets=[""])
     outlet = w.box("outlet", (20, 600, 30, 30), inlets=1, outlets=[], comment="")
     route = w.obj("route " + " ".join(part for part, _ in SOUND_PARTS), 20, 60, outlets=["", "", "", "", ""], width=200)
-    w.connect(inlet, 0, route)
+    # "topmost 1" from the device (sent a moment after the window opens) keeps the window above Live's.
+    top = w.obj("route topmost", 20, 36, outlets=["", ""], width=100)
+    topmost = w.obj("prepend topmost", 130, 36, width=110)
+    thispatcher = w.obj("thispatcher", 250, 36, outlets=["", ""], width=80)
+    w.connect(inlet, 0, top)
+    w.connect(top, 0, topmost)
+    w.connect(topmost, 0, thispatcher)
+    w.connect(top, 1, route)
     menu = w.box("umenu", (260, 20, 160, 22), inlets=1, outlets=["int", "", ""], presentation=(pad, 16, width - 2 * pad, 24),
                  items=[x for g in SOUND_GENRES for x in (g, ",")][:-1], varname="genre")
     genre = w.obj("prepend genre", 260, 60, width=110)
@@ -498,6 +505,11 @@ def bake_device() -> dict[str, Any]:
     pcontrol = p.obj("pcontrol", 540, 180, width=70)  # pcontrol -> [p] inlet is how Max opens a subpatcher window
     _on_press(p, sounds, "open", pcontrol, 540, 100)
     p.connect(pcontrol, 0, window)
+    front = p.obj("delay 200", 640, 140, outlets=[""], width=70)  # "topmost" only works once the window has been shown
+    front_msg = p.message("topmost 1", 640, 180)
+    _on_press(p, sounds, "bang", front, 640, 100)
+    p.connect(front, 0, front_msg)
+    p.connect(front_msg, 0, window)
     _on_press(p, sounds, "labels", node, 640, 100)
     p.connect(window, 0, node)
     p.connect(route, 2, window)
