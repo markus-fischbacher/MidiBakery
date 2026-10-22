@@ -131,7 +131,7 @@ Apply kann einige Undo-Schritte brauchen (Spuren, Returns, Clips): drück **Undo
 
 ### Dein eigener Sound pro Part
 
-Neue Spuren bekommen die Presets des Genres. Im Bake-Gerät klickst du auf „Sounds...“: im Browser öffnet sich eine Seite mit Genres und Parts; dort wählst du ein Preset nach Namen (ein Suchfeld durchsucht Live's Browser; der erste Eintrag stellt das Genre-Preset wieder her). Oder ziehe ein Preset aus dem Live-Browser (dort kannst du es vorhören) auf die Drop-Fläche Drums, Bass, Chords oder Lead im Gerät. Die Auswahl gilt pro Genre: für das in Bake gewählte Genre. Im Terminal setzt `midibakery sound lead "…" --genre trap` ein Genre, ohne `--genre` alle (das eigene Genre gewinnt). Oder im Terminal (der Pfad ist ein Browser-Pfad; er beginnt in „sounds“, außer er beginnt mit „packs“, „user_library“ usw.):
+Neue Spuren bekommen die Presets des Genres. Im Bake-Gerät klickst du auf „Sounds...“: es öffnet sich ein Fenster mit Genre-Menü und einer Drop-Fläche pro Part; darunter steht das aktuelle Preset. Höre ein Preset im Live-Browser vor und ziehe es auf Drums, Bass, Chords oder Lead. „Search in browser...“ öffnet eine Seite mit Suchfeld über Live's Browser. Die Auswahl gilt pro Genre (Genre-Menü im Fenster; „All genres“ ist der Standard). Im Terminal setzt `midibakery sound lead "…" --genre trap` ein Genre, ohne `--genre` alle (das eigene Genre gewinnt). Oder im Terminal (der Pfad ist ein Browser-Pfad; er beginnt in „sounds“, außer er beginnt mit „packs“, „user_library“ usw.):
 
 ```bash
 midibakery sound lead "Synth Keys/Light Keys.adg"

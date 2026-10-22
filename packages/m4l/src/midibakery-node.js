@@ -145,7 +145,39 @@ Max.addHandler("popout", () => {
   else execFile("xdg-open", [url]);
 });
 
-// Bake device: the sound settings in the system browser (a page with room, a search field and the whole list).
+// Sounds window: the genre its menu shows ("" = all genres) and the preset each part has there.
+const GENRE_KEYS = { "All genres": "", House: "house", Melodic: "melodic_techno", "Peak-Time": "peak_time_techno", "D&B": "drum_and_bass", Trap: "trap" };
+const SOUND_PARTS = ["drums", "bass", "chords", "lead"];
+let currentGenre = "";
+
+function presetLabel(path) {
+  const last = String(path || "").split("/").pop().replace(/\.(adg|adv|amxd)$/i, "");
+  return last || "Genre default";
+}
+
+async function sendLabels() {
+  if (!api) return;
+  try {
+    const response = await fetch(`http://127.0.0.1:${api.port}/sounds?genre=${encodeURIComponent(currentGenre)}&view=1`, {
+      headers: { Authorization: `Bearer ${api.token}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    const mine = (await response.json().catch(() => ({}))).mine || {};
+    for (const part of SOUND_PARTS) await Max.outlet("label", part, presetLabel(mine[part]));
+  } catch (err) {
+    log("sound labels failed", String(err));
+  }
+}
+
+Max.addHandler("labels", sendLabels);
+
+Max.addHandler("genre", async (...name) => {
+  const key = name.join(" ");
+  currentGenre = key in GENRE_KEYS ? GENRE_KEYS[key] : "";
+  await sendLabels();
+});
+
+// Bake device: the browser page for the sound settings (search field and the whole preset list).
 Max.addHandler("sounds", () => {
   if (!api) return;
   const url = chatUrl("/sound-settings");
@@ -169,11 +201,12 @@ Max.addHandler("sound", async (part, ...rest) => {
     const response = await fetch(`http://127.0.0.1:${api.port}/sounds/drop`, {
       method: "POST",
       headers: { Authorization: `Bearer ${api.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ part, file }),
+      body: JSON.stringify({ part, file, genre: currentGenre || undefined }),
       signal: AbortSignal.timeout(40000),
     });
     const data = await response.json().catch(() => ({}));
     await Max.outlet("status", response.ok ? `${part}${data.genre ? " (" + data.genre + ")" : ""}: ${data.preset}` : data.message || `HTTP ${response.status}`);
+    if (response.ok) await sendLabels();
   } catch (err) {
     log("sound drop failed", String(err));
     await Max.outlet("status", "The sound could not be set: " + (err && err.message));

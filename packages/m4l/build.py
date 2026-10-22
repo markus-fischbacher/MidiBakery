@@ -401,19 +401,74 @@ def importer_device() -> dict[str, Any]:
     return p.to_json(kind="midi_effect", title="MidiBakery Set Importer", width=width, height=height)
 
 
+SOUND_PARTS = (("drums", "Drums"), ("bass", "Bass"), ("chords", "Chords"), ("lead", "Lead"))
+SOUND_GENRES = ("All genres", "House", "Melodic", "Peak-Time", "D&B", "Trap")  # midibakery-node.js maps them to genres
+
+
+def _sounds_window() -> dict[str, Any]:
+    """The Sounds window: a subpatcher (opened with "open" to its [p] box) with the genre menu, a drop zone per part
+    (drag a preset from Live's browser; live.drop sends its file path) and the preset each part has now.
+    It talks to the device's node.script only: "genre <name>", "sound <part> <path>", "sounds" (the browser
+    page) go out; "<part> <preset>" comes in to fill the labels."""
+    w = Patcher()
+    width, height = 420.0, 312.0
+    zone_w, zone_h, gap = 196.0, 74.0, 8.0
+    inlet = w.box("inlet", (20, 20, 30, 30), inlets=0, outlets=[""])
+    outlet = w.box("outlet", (20, 600, 30, 30), inlets=1, outlets=[], comment="")
+    route = w.obj("route " + " ".join(part for part, _ in SOUND_PARTS), 20, 60, outlets=["", "", "", "", ""], width=200)
+    w.connect(inlet, 0, route)
+    menu = w.box("umenu", (260, 20, 160, 22), inlets=1, outlets=["int", "", ""], presentation=(12, 12, 396, 22),
+                 items=[x for g in SOUND_GENRES for x in (g, ",")][:-1], varname="genre")
+    genre = w.obj("prepend genre", 260, 60, width=110)
+    w.connect(menu, 1, genre)
+    w.connect(genre, 0, outlet)
+    for i, (part, label) in enumerate(SOUND_PARTS):
+        x, y = 12 + (i % 2) * (zone_w + gap), 50 + (i // 2) * (zone_h + 44 + gap)
+        zone = w.box("live.drop", (300 + i * 130, 120, 100, 22), inlets=1, outlets=[""], presentation=(x, y, zone_w, zone_h),
+                     varname=f"drop {part}")
+        prefix = w.obj(f"prepend sound {part}", 300 + i * 130, 160, width=120)
+        w.connect(zone, 0, prefix)
+        w.connect(prefix, 0, outlet)
+        w.comment(label, (300 + i * 130, 200, 60, 18), presentation=(x, y + zone_h + 2, zone_w, 18), fontsize=12.0, **THEMED_TEXT)
+        name = w.comment("Genre default", (300 + i * 130, 240, 120, 18), presentation=(x, y + zone_h + 20, zone_w, 18), fontsize=11.0,
+                         **THEMED_TEXT)
+        setter = w.obj("prepend set", 20 + i * 130, 100, width=100)
+        w.connect(route, i, setter)
+        w.connect(setter, 0, name)
+    search = w.box("live.text", (20, 300, 90, 16), inlets=1, outlets=["", ""], presentation=(12, height - 30, 396, 22),
+                   parameter_enable=0, mode=0, text="Search in browser...", texton="Search in browser...", varname="search")
+    _on_press(w, search, "sounds", outlet, 20, 340)
+    return {
+        "fileversion": 1,
+        "appversion": {"major": 9, "minor": 1, "revision": 0, "architecture": "x64", "modernui": 1},
+        "classnamespace": "box",
+        "rect": [120.0, 120.0, width, height],
+        "openrect": [0.0, 0.0, width, height],
+        "openinpresentation": 1,
+        "default_fontsize": 10.0,
+        "default_fontname": "Arial Bold",
+        "gridonopen": 1,
+        "gridsize": [8.0, 8.0],
+        "toolbarvisible": 0,
+        "boxes": w.boxes,
+        "lines": w.lines,
+        "dependency_cache": [],
+        "autosave": 0,
+    }
+
+
 def bake_device() -> dict[str, Any]:
-    """MIDI Effect: the Bake page (jweb; clicks only, Live passes it no keys) beside Pop out, About, a drop zone per part
-    (drag a preset from Live's browser) and the status."""
+    """MIDI Effect: the Bake page (jweb; clicks only, Live passes it no keys) beside Pop out, About, Sounds... (opens the
+    Sounds window) and the status."""
     p = Patcher()
-    width, height = 780.0, 169.0
-    drops_x, drop_w, drop_h = 446.0, 106.0, 58.0  # the drop zones, 2 x 2, between the page and the column
-    column_x, column_w = 666.0, 110.0
+    width, height = 560.0, 169.0
+    column_x, column_w = 446.0, 110.0
     midiin = p.obj("midiin", 20, 20, outlets=["int"], width=50)
     midiout = p.obj("midiout", 20, 60, outlets=[], width=50)
     p.connect(midiin, 0, midiout)  # MIDI passes through untouched
 
     node = p.obj("node.script midibakery-bake.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=320)
-    route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
+    route = p.obj("route url status label", 120, 60, inlets=1, outlets=["", "", "", ""])
     web_rect = (0, 0, 440, height)
     web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url=LOADING_URL)
     set_url = p.obj("prepend url", 120, 100)
@@ -434,19 +489,16 @@ def bake_device() -> dict[str, Any]:
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
     _on_press(p, popout, "popout", node, 440, 100)
     _about(p, (column_x, 28, column_w, 18), node, 440, 160)
+
+    # Sounds...: opens the window and has the node.script fill its labels; what the window sends goes to the node.script.
+    window = p.box("newobj", (700, 200, 90, 22), inlets=1, outlets=[""], text="p sounds", patcher=_sounds_window())
     sounds = p.box("live.text", (540, 60, 70, 16), inlets=1, outlets=["", ""], presentation=(column_x, 52, column_w, 18),
                    parameter_enable=0, mode=0, text="Sounds...", texton="Sounds...", varname="sounds")
-    _on_press(p, sounds, "sounds", node, 540, 100)
-    # One drop zone per part: a preset dragged from Live's browser (live.drop sends its file path) becomes the
-    # default sound of new tracks of that part ("sound <part> <path>" to the node.script).
-    for i, (part, label) in enumerate((("drums", "Drums"), ("bass", "Bass"), ("chords", "Chords"), ("lead", "Lead"))):
-        x, y = drops_x + (i % 2) * (drop_w + 4), 4 + (i // 2) * (drop_h + 16 + 6)
-        zone = p.box("live.drop", (700 + i * 120, 300, 100, 22), inlets=1, outlets=[""], presentation=(x, y, drop_w, drop_h),
-                     varname=f"drop {part}")
-        prefix = p.obj(f"prepend sound {part}", 700 + i * 120, 340, width=110)
-        p.connect(zone, 0, prefix)
-        p.connect(prefix, 0, node)
-        p.comment(label, (700 + i * 120, 380, 60, 18), presentation=(x, y + drop_h + 1, drop_w, 16), fontsize=11.0, **THEMED_TEXT)
+    _on_press(p, sounds, "open", window, 540, 100)
+    _on_press(p, sounds, "labels", node, 640, 100)
+    p.connect(window, 0, node)
+    p.connect(route, 2, window)
+
     set_status = p.obj("prepend set", 260, 100)
     status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 76, column_w, 90),
                        linecount=6, fontsize=9.0, **THEMED_TEXT)
