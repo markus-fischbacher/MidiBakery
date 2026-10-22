@@ -494,7 +494,9 @@ def bake_device() -> dict[str, Any]:
     window = p.box("newobj", (700, 200, 90, 22), inlets=1, outlets=[""], text="p sounds", patcher=_sounds_window())
     sounds = p.box("live.text", (540, 60, 70, 16), inlets=1, outlets=["", ""], presentation=(column_x, 52, column_w, 18),
                    parameter_enable=0, mode=0, text="Sounds...", texton="Sounds...", varname="sounds")
-    _on_press(p, sounds, "open", window, 540, 100)
+    pcontrol = p.obj("pcontrol", 540, 180, width=70)  # pcontrol -> [p] inlet is how Max opens a subpatcher window
+    _on_press(p, sounds, "open", pcontrol, 540, 100)
+    p.connect(pcontrol, 0, window)
     _on_press(p, sounds, "labels", node, 640, 100)
     p.connect(window, 0, node)
     p.connect(route, 2, window)
