@@ -31,6 +31,7 @@ from typing import Literal
 Role = Literal["drums", "bass", "chords", "lead"]
 ROLES: tuple[Role, ...] = ("drums", "bass", "chords", "lead")
 FX_ROLES = ("riser", "impact")  # placed by the song's drops, not by the sections' parts
+LEAD_SOUND = "Synth Keys/Light Keys.adg"  # every genre's lead: it sounds better than the genre presets did
 Genre = Literal["house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"]
 Length = Literal["radio", "standard", "extended"]
 
@@ -159,7 +160,7 @@ TEMPLATES: dict[str, Template] = {
     # builds, the pads close again in the outro; the drops are open.
     "house": Template("house", "House", Style(
         124, lead_range=(72, 89),
-        sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic FM House Bass.adg", chords="Synth Keys/106 Organ.adg", lead="Synth Keys/Basic Pluck Keys.adg"),
+        sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic FM House Bass.adg", chords="Synth Keys/106 Organ.adg", lead=LEAD_SOUND),
         mix=_mix("-6,-8,-12,-11", "-24,-,-14,-16", "-,-,-22,-18", decay=1.8, delay_16ths=3, feedback=0.35, duck="-,-24,-18,-", release=0.16),
         filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",)},
     ), (
@@ -174,7 +175,7 @@ TEMPLATES: dict[str, Template] = {
     # docs/GENRES.md, Melodic Techno: kick/hats/pad intro, bass and pads build, arp lead, pads-only breakdown.
     "melodic_techno": Template("melodic_techno", "Melodic Techno", Style(
         122, chords_per_bar=0.5, lead_range=(60, 84), lead="arp",
-        sounds=_sounds(_kit("Electronic", "AG Techno Kit"), bass="Bass/Analogue Bass.adv", chords="Pad/Analog Soft Pad.adv", lead="Synth Lead/Basic Waves Lead.adg", riser="Effects/Hyper Riser.adg"),
+        sounds=_sounds(_kit("Electronic", "AG Techno Kit"), bass="Bass/Analogue Bass.adv", chords="Pad/Analog Soft Pad.adv", lead=LEAD_SOUND, riser="Effects/Hyper Riser.adg"),
         mix=_mix("-6,-8,-13,-12", "-26,-,-8,-12", "-,-,-20,-12", decay=4.5, delay_16ths=3, feedback=0.45, duck="-,-22,-16,-", release=0.2),
         progressions=MELODIC_PROGRESSIONS, devices={"lead": "Wavetable", "chords": "Wavetable", "bass": "Drift"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"}, throws={"lead": ("break",)},
@@ -197,7 +198,7 @@ TEMPLATES: dict[str, Template] = {
     # follows the last peak; the outro hands over by removing bass, then kick, then hats.
     "peak_time_techno": Template("peak_time_techno", "Peak-Time Techno", Style(
         128, chords_per_bar=0.5, lead_range=(48, 62), lead="acid",
-        sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic Sub Boom.adg", chords="Pad/Butter Knife Stab.adg", lead="Bass/Basic 303 Bass.adg", riser="Effects/Hyper Riser.adg"),
+        sounds=_sounds(_kit("Drum Machines", "909 Core Kit"), bass="Bass/Basic Sub Boom.adg", chords="Pad/Butter Knife Stab.adg", lead=LEAD_SOUND, riser="Effects/Hyper Riser.adg"),
         mix=_mix("-5,-9,-12,-12", "-24,-,-12,-20", "-,-,-16,-16", decay=2.5, delay_16ths=3, feedback=0.4, duck="-,-24,-20,-", release=0.12),
         progressions=DRONE_PROGRESSIONS, devices={"lead": "Drift", "chords": "Wavetable", "bass": "Analog"},
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"}, throws={"chords": ("groove", "break")},
@@ -225,7 +226,7 @@ TEMPLATES: dict[str, Template] = {
     # 64-bar drops, a drumless 32-bar breakdown, liquid pads with 2 bars per chord, bass leaves the outro first.
     "drum_and_bass": Template("drum_and_bass", "Drum & Bass", Style(
         174, chords_per_bar=0.5, lead_range=(72, 89),
-        sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead="Synth Lead/Basic Glide Lead.adg", riser="Effects/ENCOM Riser.adg"),
+        sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead=LEAD_SOUND, riser="Effects/ENCOM Riser.adg"),
         mix=_mix("-5,-8,-13,-11", "-26,-,-10,-16", "-,-,-,-16", decay=2.0, delay_16ths=3, feedback=0.3, duck="-,-18,-,-", release=0.09),
         progressions=DNB_PROGRESSIONS, devices={"bass": "Operator", "chords": "Wavetable", "lead": "Operator"},
         filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",)},
@@ -242,7 +243,7 @@ TEMPLATES: dict[str, Template] = {
     # kicks, plucks without the root, hook only in the drops, a beat of silence before each drop.
     "trap": Template("trap", "Trap", Style(
         145, chords_per_bar=0.5, lead_range=(69, 86),
-        sounds=_sounds(_kit("Drum Machines", "808 Core Kit"), bass="Bass/808 Pure.adg", chords="Synth Keys/Basic Bell Keys.adg", lead="Synth Lead/Basic Sine Drive Lead.adg"),
+        sounds=_sounds(_kit("Drum Machines", "808 Core Kit"), bass="Bass/808 Pure.adg", chords="Synth Keys/Basic Bell Keys.adg", lead=LEAD_SOUND),
         mix=_mix("-6,-7,-12,-11", "-28,-,-12,-16", "-,-,-18,-16", decay=2.2, delay_16ths=2, feedback=0.3, duck="-,-14,-,-", release=0.1),
         progressions=TRAP_PROGRESSIONS, devices={"bass": "Operator", "chords": "Drift", "lead": "Wavetable"},
         filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",), "chords": ("verse",)},
