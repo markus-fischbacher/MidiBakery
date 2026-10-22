@@ -218,6 +218,8 @@ def test_bake_device_shows_its_page(devices):
     for part in ("drums", "bass", "chords", "lead"):  # a drop zone per part sends "sound <part> <path>" out
         zone = next(i for i, b in inner.items() if b["maxclass"] == "live.drop" and b.get("varname") == f"drop {part}")
         assert (zone, inner_text[f"prepend sound {part}"]) in inner_lines
+    assert (inner_text["prepend topmost"], inner_text["thispatcher"]) in inner_lines  # the window stays on top of Live
+    assert "topmost 1" in by_text
     node_js = (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
     for handler in ("sounds", "sound", "genre", "labels"):
         assert f'Max.addHandler("{handler}"' in node_js
