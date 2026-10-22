@@ -206,10 +206,21 @@ def test_bake_device_shows_its_page(devices):
     web = next(i for i, b in boxes.items() if b["maxclass"] == "jweb")
     assert (by_text["prepend url"], web) in lines
     assert (by_text["midiin"], by_text["midiout"]) in lines
+    sounds = next(i for i, b in boxes.items() if b.get("varname") == "sounds")  # the Sounds... button opens the settings page
+    assert sounds and 'Max.addHandler("sounds"' in (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
     for part in ("drums", "bass", "chords", "lead"):  # a drop zone per part sends "sound <part> <path>" to the node
         zone = next(i for i, b in boxes.items() if b["maxclass"] == "live.drop" and b.get("varname") == f"drop {part}")
         assert (zone, by_text[f"prepend sound {part}"]) in lines and (by_text[f"prepend sound {part}"], by_text["node.script midibakery-bake.js @autostart 1 @watch 0"]) in lines
     assert 'bake: "/bake"' in (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
+
+
+@pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
+def test_sounds_page_script_parses(tmp_path):
+    node = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
+    page = (ROOT / "packages/core/src/midibakery/api/ui/sounds.html").read_text()
+    script = page.split("<script>")[1].split("</script>")[0]
+    (tmp_path / "s.js").write_text(script)
+    assert subprocess.run([node, "--check", str(tmp_path / "s.js")], capture_output=True).returncode == 0
 
 
 @pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")

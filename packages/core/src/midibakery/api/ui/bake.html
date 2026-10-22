@@ -32,11 +32,6 @@
   #ref-name::before { content: "After  "; color: var(--dim); }
   #ref-name.on::before { color: var(--accent); opacity: .7; }
   #lengths { flex: none; width: 218px; }
-  #sounds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; flex: 1; }
-  .sound { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; height: 38px; padding: 0 9px; text-align: left; min-width: 0; }
-  .sound .part { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
-  .sound .preset { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-  .sound.on .part { color: var(--accent); opacity: .75; }
   .actions { align-items: center; }
   .big { height: 34px; font-size: 13px; padding: 0 14px; flex: none; }
   .primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; min-width: 96px; }
@@ -65,7 +60,6 @@
   <button class="tool" id="my-loops" title="The seed draws drums, bass, lead and chords from your imported Sets">My loops</button>
   <button class="tool" id="ref-name" title="Follow the structure of an imported Set or analyzed song">No reference</button>
 </div>
-<div class="row"><div id="sounds"></div></div>
 <div class="row actions">
   <button class="big primary" id="bake" title="A new song after the last clip in the Arrangement">Bake</button>
   <button class="big" id="again" title="Replace the last song with another seed" disabled>Again</button>
@@ -73,7 +67,6 @@
   <div class="state"><span class="dot" id="dot"></span><span class="status" id="status">Connecting...</span></div>
 </div>
 <div class="overlay" id="refs"></div>
-<div class="overlay" id="presets"></div>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -113,7 +106,7 @@ function chips(holder, labels, key) {
     const b = document.createElement("button");
     b.textContent = label;
     b.className = choice[key] === value ? "on" : "";
-    b.onclick = () => { choice[key] = choice[key] === value && key === "genre" && choice.reference ? null : value; save(); render(); if (key === "genre" && options) loadSounds().catch(() => {}); };
+    b.onclick = () => { choice[key] = choice[key] === value && key === "genre" && choice.reference ? null : value; save(); render(); if (key === "genre" && options) announceGenre(); };
     holder.append(b);
   }
 }
@@ -167,67 +160,9 @@ function showRefs() {
   list.classList.add("open");
 }
 
-const PARTS = { drums: "Drums", bass: "Bass", chords: "Chords", lead: "Lead" };
-let mine = {};
-
-function soundsUrl() { return `/sounds?genre=${encodeURIComponent(choice.genre || "")}`; }
-async function loadSounds() { mine = (await api(soundsUrl())).mine; renderSounds(); }
-
-function presetName(path) { return path.split("/").pop().replace(/\.[^.]*$/, ""); }
-
-function renderSounds() {
-  const holder = $("sounds");
-  holder.textContent = "";
-  for (const [part, label] of Object.entries(PARTS)) {
-    const b = document.createElement("button");
-    b.className = "sound" + (mine[part] ? " on" : "");
-    b.title = mine[part] ? `${mine[part]} (click to change)` : "The genre's preset for new tracks; click to choose your own";
-    b.innerHTML = '<span class="part"></span><span class="preset"></span>';
-    b.firstChild.textContent = label;
-    b.lastChild.textContent = mine[part] ? presetName(mine[part]) : "Genre default";
-    b.onclick = () => showPresets(part);
-    holder.append(b);
-  }
-}
-
-async function showPresets(part) {
-  const list = $("presets");
-  list.textContent = "";
-  const head = document.createElement("h4");
-  head.textContent = `${PARTS[part]}: the preset for new ${choice.genre ? GENRE_LABELS[choice.genre] : ""} tracks`;
-  list.append(head);
-  const add = (name, meta, path) => {
-    const row = document.createElement("div");
-    row.className = "ref";
-    row.innerHTML = '<span class="name"></span><span class="meta"></span>';
-    if (meta === "now") row.lastChild.className = "meta now";
-    row.firstChild.textContent = name;
-    row.lastChild.textContent = meta;
-    row.onclick = () => setSound(part, path);
-    list.append(row);
-  };
-  add("The genre's preset", mine[part] ? "" : "now", null);
-  list.classList.add("open");
-  status("Looking in Live's browser...", "busy");
-  try {
-    const { presets } = await api(`/sounds/presets?part=${part}`);
-    for (const p of presets) add(p.name, p.path === mine[part] ? "now" : p.path.split("/").slice(0, -1).join(" / "), p.path);
-    if (!presets.length) add("Nothing found in Live's browser", "", null);
-    status(describe(options && options.baked));
-  } catch (err) {
-    status(err.message, "err");
-  }
-}
-
-async function setSound(part, path) {
-  $("presets").classList.remove("open");
-  try {
-    mine = (await api("/sounds", { part, path, genre: choice.genre })).mine;
-  } catch (err) {
-    status(err.message, "err");
-  }
-  renderSounds();
-}
+// A preset dropped on the device is for the genre chosen here: tell the API which (the sounds themselves are
+// set in the Sounds... window).
+function announceGenre() { api(`/sounds?genre=${encodeURIComponent(choice.genre || "")}`).catch(() => {}); }
 
 function pickRef(name) {
   choice.reference = name;
@@ -261,7 +196,7 @@ async function load() {
     options = await api("/bake/options");
     if (choice.reference && !options.references.some((r) => r.name === choice.reference)) choice.reference = null;
     if (!options.my_loops) choice.my_loops = false;
-    await loadSounds();
+    announceGenre();
     status(describe(options.baked));
   } catch (err) {
     status(`Not connected: ${err.message}`, "off");
@@ -270,10 +205,7 @@ async function load() {
   render();
 }
 
-setInterval(async () => {  // a preset dropped on the device sets a sound: show it
-  if (!options || $("presets").classList.contains("open")) return;
-  try { const now = (await api(soundsUrl())).mine; if (JSON.stringify(now) !== JSON.stringify(mine)) { mine = now; renderSounds(); } } catch (_) {}
-}, 2500);
+setInterval(() => { if (options) announceGenre(); }, 5000);  // the API restarts and forgets it
 
 $("my-loops").onclick = () => { choice.my_loops = !choice.my_loops; save(); render(); };
 $("ref-name").onclick = () => { if (options) showRefs(); };

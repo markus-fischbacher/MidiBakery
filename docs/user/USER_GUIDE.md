@@ -131,7 +131,7 @@ Apply may take a few undo steps (tracks, returns, clips): press **Undo** until e
 
 ### Your own sound per part
 
-New tracks get the genre's presets. In the Bake device, click Drums, Bass, Chords or Lead under Sounds and choose a preset from Live's browser (the first entry goes back to the genre's). Or drag a preset from Live's browser (audition it there first) onto the Drums, Bass, Chords or Lead drop zone in the device. The choice is kept per genre: it applies to the genre chosen in Bake. In a terminal, `midibakery sound lead "…" --genre trap` sets one genre's, without `--genre` every genre's (a genre's own wins). Or run in a terminal (the path is a browser path; it starts in "sounds" unless it begins with "packs", "user_library" and so on):
+New tracks get the genre's presets. In the Bake device, click Sounds... : a page opens in your browser with the genres and parts; choose a preset by name (a search field looks through Live's browser; the first entry goes back to the genre's). Or drag a preset from Live's browser (audition it there first) onto the Drums, Bass, Chords or Lead drop zone in the device. The choice is kept per genre: it applies to the genre chosen in Bake. In a terminal, `midibakery sound lead "…" --genre trap` sets one genre's, without `--genre` every genre's (a genre's own wins). Or run in a terminal (the path is a browser path; it starts in "sounds" unless it begins with "packs", "user_library" and so on):
 
 ```bash
 midibakery sound lead "Synth Keys/Light Keys.adg"

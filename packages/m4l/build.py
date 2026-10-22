@@ -434,6 +434,9 @@ def bake_device() -> dict[str, Any]:
     p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
     _on_press(p, popout, "popout", node, 440, 100)
     _about(p, (column_x, 28, column_w, 18), node, 440, 160)
+    sounds = p.box("live.text", (540, 60, 70, 16), inlets=1, outlets=["", ""], presentation=(column_x, 52, column_w, 18),
+                   parameter_enable=0, mode=0, text="Sounds...", texton="Sounds...", varname="sounds")
+    _on_press(p, sounds, "sounds", node, 540, 100)
     # One drop zone per part: a preset dragged from Live's browser (live.drop sends its file path) becomes the
     # default sound of new tracks of that part ("sound <part> <path>" to the node.script).
     for i, (part, label) in enumerate((("drums", "Drums"), ("bass", "Bass"), ("chords", "Chords"), ("lead", "Lead"))):
@@ -445,7 +448,7 @@ def bake_device() -> dict[str, Any]:
         p.connect(prefix, 0, node)
         p.comment(label, (700 + i * 120, 380, 60, 18), presentation=(x, y + drop_h + 1, drop_w, 16), fontsize=11.0, **THEMED_TEXT)
     set_status = p.obj("prepend set", 260, 100)
-    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 56, column_w, 100),
+    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 76, column_w, 90),
                        linecount=6, fontsize=9.0, **THEMED_TEXT)
     p.connect(route, 1, set_status)
     p.connect(set_status, 0, status)
