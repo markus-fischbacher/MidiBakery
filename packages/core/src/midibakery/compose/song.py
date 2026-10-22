@@ -56,7 +56,7 @@ from midibakery.compose.rollback import batch_steps, completed, restore_locators
 from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, generate_bass_template
 from midibakery.compose.grooves import BASS, CHORDS, GROOVE_VARIANTS, GROOVES, Groove, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
-from midibakery.compose import user_patterns
+from midibakery.compose import my_sounds, user_patterns
 from midibakery.compose.lead_templates import generate_lead_template
 from midibakery.compose.references import find_reference, load_references, reference_scale
 from midibakery.compose.techno_templates import generate_techno_drums
@@ -550,8 +550,9 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
         warnings.append(f"No track for {', '.join(missing)}: those parts are left out (create_missing=false)")
         return roles, warnings
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
+    mine = my_sounds.load() if request.sounds else {}
     for offset, role in enumerate(missing):
-        sound = template.style.sounds.get(role) if request.sounds else None
+        sound = mine.get(role) or (template.style.sounds.get(role) if request.sounds else None)
         roles[role] = RoleTrack(role, len(tracks) + offset, role.title(), new=True, device=devices[role], sound=sound)
         if role == "drums" and sound is None:
             warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it")

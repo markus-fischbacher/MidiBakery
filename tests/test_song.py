@@ -958,3 +958,17 @@ async def test_a_long_drop_turns_to_other_chords_in_its_second_half(client, live
     first, second = _drop_chords(clips)
     assert first and second and first != second
 
+
+
+async def test_my_sounds_override_the_genre_preset(client, live, tmp_path, monkeypatch):
+    from midibakery.compose import my_sounds
+
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    my_sounds.save("bass", "Bass/Analogue Bass.adv")
+    assert my_sounds.load() == {"bass": ("sounds", "Bass", "Analogue Bass.adv")}
+    server = build_server(client, all_song_options=True)
+    preview = await _plan(server)
+    assert preview["tracks"]["bass"]["device"] == "Analogue Bass"
+    assert my_sounds.save("bass", None) == {} and my_sounds.load() == {}
+    with pytest.raises(ValueError):
+        my_sounds.save("riser", "x")

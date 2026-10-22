@@ -156,6 +156,24 @@ def cmd_auth(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sound(args: argparse.Namespace) -> int:
+    from midibakery.compose import my_sounds
+
+    try:
+        if args.part:
+            if args.preset:
+                my_sounds.save(args.part, None if args.preset == "-" else args.preset)
+            elif args.part not in my_sounds.load():
+                print(f"{args.part}: the genre's preset")
+                return 0
+        mine = my_sounds.load()
+    except ValueError as exc:
+        print(exc)
+        return 1
+    print("\n".join(f"{part}: {'/'.join(path)}" for part, path in mine.items()) or "No own presets: new tracks get the genre's.")
+    return 0
+
+
 def cmd_ping(args: argparse.Namespace) -> int:
     from midibakery.bridge import BridgeClient, BridgeError
 
@@ -309,6 +327,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("auth", help="manage the Claude API key (in the macOS Keychain or Windows Credential Manager)")
     p.add_argument("action", choices=["set-key", "status", "remove"])
     p.set_defaults(func=cmd_auth)
+
+    p = sub.add_parser("sound", help="the default preset for new tracks of a part (drums, bass, chords, lead); no preset: show or clear")
+    p.add_argument("part", nargs="?", help="drums, bass, chords or lead")
+    p.add_argument("preset", nargs="?", help='browser path, e.g. "Synth Keys/Light Keys.adg"; "-" clears it')
+    p.set_defaults(func=cmd_sound)
 
     p = sub.add_parser("ping", help="check the connection to Live")
     p.set_defaults(func=cmd_ping)
