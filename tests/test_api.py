@@ -319,3 +319,13 @@ def test_sounds_endpoints(app_factory, live, tmp_path, monkeypatch):
     assert chosen == {"mine": {"lead": "sounds/Synth Keys/Light Keys.adg"}}
     assert api.post("/sounds", headers=AUTH, json={"part": "lead", "path": None}).json() == {"mine": {}}
     assert api.post("/sounds", headers=AUTH, json={"part": "riser", "path": "x"}).status_code == 422
+
+
+def test_sounds_drop_resolves_a_dragged_preset(app_factory, live, tmp_path, monkeypatch):
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    api, _ = app_factory()
+    assert api.post("/sounds/drop", json={"part": "drums", "file": "/x/909 Core Kit.adg"}).status_code == 401
+    got = api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/Library/Core Library/909 Core Kit.adg"}).json()
+    assert got["preset"] == "909 Core Kit" and got["mine"]["drums"].endswith("909 Core Kit.adg")
+    assert api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/x/song.wav"}).status_code == 422
+    assert api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/x/Nothing Here.adg"}).status_code == 422

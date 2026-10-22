@@ -23,7 +23,7 @@
   the song baked last) and ``POST /bake/run`` ``{"genre", "length", "reference", "my_loops", "seed"?, "mode": "new"|"again"|"back"}``
   (a whole song without a model, see ``midibakery.bake``).
 - ``GET``/``POST /sounds`` (``{"part", "path"|null}``): the user's default preset per part, ``GET /sounds/presets?part=``
-  the presets of Live's browser that suit it (``midibakery.compose.my_sounds``).
+  the presets of Live's browser that suit it, ``POST /sounds/drop`` ``{"part", "file"}`` a preset file dragged onto the device (``midibakery.compose.my_sounds``).
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
@@ -220,6 +220,20 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         except ValueError as exc:
             return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
         return await sounds_get(request)
+
+    async def sounds_drop(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise ValueError("expected a JSON object")
+            part = str(body.get("part", ""))
+            my_sounds.save(part, await my_sounds.resolve(bridge.call, str(body.get("file", ""))))
+        except ValueError as exc:
+            return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
+        except BridgeError as exc:
+            return JSONResponse({"error": exc.code, "message": exc.message}, status_code=409)
+        mine = {role: "/".join(path) for role, path in my_sounds.load().items()}
+        return JSONResponse({"mine": mine, "part": part, "preset": mine[part].rsplit("/", 1)[-1].rsplit(".", 1)[0]})
 
     async def bake_run(request: Request) -> JSONResponse:
         if not license.allowed():
@@ -442,6 +456,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/sounds", guard(sounds_get), methods=["GET"]),
             Route("/sounds/presets", guard(sounds_presets), methods=["GET"]),
             Route("/sounds", guard(sounds_set), methods=["POST"]),
+            Route("/sounds/drop", guard(sounds_drop), methods=["POST"]),
             Route("/models", guard(models), methods=["GET"]),
             Route("/update", guard(update_status), methods=["GET"]),
             Route("/update/install", guard(update_install), methods=["POST"]),

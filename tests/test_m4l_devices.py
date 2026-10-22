@@ -206,6 +206,9 @@ def test_bake_device_shows_its_page(devices):
     web = next(i for i, b in boxes.items() if b["maxclass"] == "jweb")
     assert (by_text["prepend url"], web) in lines
     assert (by_text["midiin"], by_text["midiout"]) in lines
+    for part in ("drums", "bass", "chords", "lead"):  # a drop zone per part sends "sound <part> <path>" to the node
+        zone = next(i for i, b in boxes.items() if b["maxclass"] == "live.drop" and b.get("varname") == f"drop {part}")
+        assert (zone, by_text[f"prepend sound {part}"]) in lines and (by_text[f"prepend sound {part}"], by_text["node.script midibakery-bake.js @autostart 1 @watch 0"]) in lines
     assert 'bake: "/bake"' in (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
 
 

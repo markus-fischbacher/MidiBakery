@@ -74,3 +74,19 @@ async def presets(call, part: str, limit: int = 60) -> list[dict[str, str]]:
             path = "/".join(item["path"])
             found.setdefault(path, {"name": item["name"].rsplit(".", 1)[0], "path": path})
     return sorted(found.values(), key=lambda p: p["name"].lower())
+
+
+PRESET_SUFFIXES = (".adg", ".adv", ".adp")
+
+
+async def resolve(call, file: str) -> str:
+    """The browser path of a preset file dragged out of Live's browser: its name is searched in the browser."""
+    name = file.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+    if not name.lower().endswith(PRESET_SUFFIXES):
+        raise ValueError(f"'{name}' is not a preset (.adg, .adv or .adp): drag one from Live's browser")
+    stem = name.rsplit(".", 1)[0]
+    result = await call("browser.search", {"query": stem, "category": "all", "limit": 40})
+    items = [i for i in result.get("items", []) if i["name"].lower() == name.lower()]
+    if not items:
+        raise ValueError(f"'{name}' was not found in Live's browser")
+    return "/".join(min(items, key=lambda i: len(i["path"]))["path"])  # the shallowest: the library's own, not a copy
