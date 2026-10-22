@@ -204,17 +204,18 @@ TEMPLATES: dict[str, Template] = {
         filters={"drums": "High-pass", "chords": "Low-pass", "lead": "Low-pass"}, throws={"chords": ("groove", "break")},
     ), (
         # Sweeps: the drums' high-pass thins the kick out before each peak and lets it slam back in;
-        # the acid opens over a peak and closes a little, chords open out of the breakdown.
+        # the acid opens in the first 8 bars of a peak and closes a little; the lift and the breakdown hold, then sweep
+        # in their last 8 / 12 bars, chords open out of the breakdown.
         _s("Intro", "intro", 32, 0.4, fill=True, drums="kick_hats:16,groove", bass="-:16,on"),
         _s("Groove", "groove", 16, 0.6, fill=True, pause=8, drums="groove", bass="on", chords="accent"),
         _s("Lift", "build", 16, 0.7, fill=True, rest=1.0, drums="groove:12,sparse", chords="tease:8,stabs", lead="-:8,tease",
-           sweeps={"drums": "20:8,20>300", "chords": "200>20000~exp", "chords.res": "0>50~exp", "lead": "600>2500"}),
+           sweeps={"drums": "20:8,20>300", "chords": "200:8,200>20000~exp", "chords.res": "0:8,0>50~exp", "lead": "600:8,600>2500"}),
         _s("Peak", "drop", 32, 0.9, fill=True, pause=16, drums="full", bass="on", chords="stabs", lead="acid",
-           sweeps={"lead": "400>5000:24,5000>1500", "lead.res": "20>60:24,60>30"}),
+           sweeps={"lead": "400>5000:8,5000>1500", "lead.res": "20>60:8,60>30"}),
         _s("Breakdown", "break", 24, 0.5, drums="sparse:8", bass="rumble:16", chords="tease:8,stabs:2,-:2,stabs:2,-:2,stabs:6", lead="-:16,tease:6",
-           sweeps={"drums": "250", "chords": "150>9000~exp", "lead": "800>3000"}),
+           sweeps={"drums": "250", "chords": "150:12,150>9000~exp", "lead": "800:12,800>3000"}),
         _s("Peak 2", "drop", 32, 1.0, variation=1, fill=True, pause=16, drums="drive:8,full", bass="on", chords="stabs", lead="acid",
-           sweeps={"lead": "800>8000:16,8000>2000", "lead.res": "30>70:16,70>40"}),
+           sweeps={"lead": "800>8000:8,8000>2000", "lead.res": "30>70:8,70>40"}),
         _s("Lift 2", "build", 8, 0.8, variation=1, fill=True, rest=1.0, drums="groove:5,sparse", chords="stabs", lead="acid",
            sweeps={"drums": "20>400", "lead": "2000>12000", "lead.res": "40>75"}),
         _s("Peak 3", "drop", 16, 1.0, variation=2, drums="full", bass="on", chords="stabs", lead="acid",
