@@ -22,6 +22,8 @@
 - ``GET /bake``: the Bake device's page; ``GET /bake/options`` (genres, lengths, references, whether own loops exist,
   the song baked last) and ``POST /bake/run`` ``{"genre", "length", "reference", "my_loops", "seed"?, "mode": "new"|"again"|"back"}``
   (a whole song without a model, see ``midibakery.bake``).
+- ``GET``/``POST /sounds`` (``{"part", "path"|null}``): the user's default preset per part, ``GET /sounds/presets?part=``
+  the presets of Live's browser that suit it (``midibakery.compose.my_sounds``).
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
@@ -58,7 +60,7 @@ from midibakery.als import library as als_library
 from midibakery.agent import LOCAL_PROVIDERS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
-from midibakery.compose import user_patterns
+from midibakery.compose import my_sounds, user_patterns
 from midibakery import __version__
 from midibakery.api.live_state import LiveState
 from midibakery.api.models import list_models
@@ -197,6 +199,27 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
 
     async def bake_options(request: Request) -> JSONResponse:
         return JSONResponse({**await asyncio.to_thread(bake.options), **baker.state()})
+
+    async def sounds_get(request: Request) -> JSONResponse:
+        return JSONResponse({"mine": {role: "/".join(path) for role, path in my_sounds.load().items()}})
+
+    async def sounds_presets(request: Request) -> JSONResponse:
+        try:
+            return JSONResponse({"presets": await my_sounds.presets(bridge.call, request.query_params.get("part", ""))})
+        except ValueError as exc:
+            return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
+        except BridgeError as exc:
+            return JSONResponse({"error": exc.code, "message": exc.message}, status_code=409)
+
+    async def sounds_set(request: Request) -> JSONResponse:
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise ValueError("expected a JSON object")
+            my_sounds.save(str(body.get("part", "")), body.get("path") or None)
+        except ValueError as exc:
+            return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
+        return await sounds_get(request)
 
     async def bake_run(request: Request) -> JSONResponse:
         if not license.allowed():
@@ -416,6 +439,9 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/bake", bake_ui, methods=["GET"]),
             Route("/bake/options", guard(bake_options), methods=["GET"]),
             Route("/bake/run", guard(bake_run), methods=["POST"]),
+            Route("/sounds", guard(sounds_get), methods=["GET"]),
+            Route("/sounds/presets", guard(sounds_presets), methods=["GET"]),
+            Route("/sounds", guard(sounds_set), methods=["POST"]),
             Route("/models", guard(models), methods=["GET"]),
             Route("/update", guard(update_status), methods=["GET"]),
             Route("/update/install", guard(update_install), methods=["POST"]),

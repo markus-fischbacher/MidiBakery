@@ -131,7 +131,7 @@ Apply kann einige Undo-Schritte brauchen (Spuren, Returns, Clips): drück **Undo
 
 ### Dein eigener Sound pro Part
 
-Neue Spuren bekommen die Presets des Genres. Eigene Presets stellst du im Terminal ein (der Pfad ist ein Browser-Pfad; er beginnt in „sounds“, außer er beginnt mit „packs“, „user_library“ usw.):
+Neue Spuren bekommen die Presets des Genres. Im Bake-Gerät klickst du unter „Sounds“ auf Drums, Bass, Chords oder Lead und wählst ein Preset aus dem Live-Browser (der erste Eintrag stellt das Genre-Preset wieder her). Oder im Terminal (der Pfad ist ein Browser-Pfad; er beginnt in „sounds“, außer er beginnt mit „packs“, „user_library“ usw.):
 
 ```bash
 midibakery sound lead "Synth Keys/Light Keys.adg"

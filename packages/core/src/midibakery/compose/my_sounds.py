@@ -52,3 +52,25 @@ def save(role: str, path: str | None) -> dict[str, str]:
     sounds_path().parent.mkdir(parents=True, exist_ok=True)
     sounds_path().write_text(json.dumps(data, indent=2), encoding="utf-8")
     return data
+
+
+# What the picker searches Live's browser for, per part: (category, words); the first words come first.
+SEARCHES: dict[str, tuple[tuple[str, str], ...]] = {
+    "drums": (("drums", "kit"),),
+    "bass": (("sounds", "bass"),),
+    "chords": (("sounds", "pad"), ("sounds", "keys"), ("sounds", "stab")),
+    "lead": (("sounds", "lead"), ("sounds", "keys"), ("sounds", "pluck")),
+}
+
+
+async def presets(call, part: str, limit: int = 60) -> list[dict[str, str]]:
+    """Presets of Live's browser that suit a part: name and the path `save` takes."""
+    if part not in SEARCHES:
+        raise ValueError(f"part: one of {', '.join(SEARCHES)}")
+    found: dict[str, dict[str, str]] = {}
+    for category, words in SEARCHES[part]:
+        result = await call("browser.search", {"query": words, "category": category, "limit": limit})
+        for item in result.get("items", []):
+            path = "/".join(item["path"])
+            found.setdefault(path, {"name": item["name"].rsplit(".", 1)[0], "path": path})
+    return sorted(found.values(), key=lambda p: p["name"].lower())

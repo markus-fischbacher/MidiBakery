@@ -34,6 +34,10 @@
   .ref:hover { background: #242424; }
   .ref .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ref .meta { color: var(--dim); font-size: 10px; }
+  #presets { position: fixed; inset: 0; background: var(--bg); padding: 6px; overflow-y: auto; display: none; }
+  #presets.open { display: block; }
+  #presets h4 { margin: 0 0 4px; color: var(--dim); font-weight: normal; }
+  #sounds button { max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #ref-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
@@ -42,6 +46,7 @@
 <div class="row"><span class="label">Length</span><span class="row" id="lengths"></span>
   <button id="my-loops" title="The seed draws drums, bass, lead and chords from your imported Sets">My loops</button></div>
 <div class="row"><span class="label">After</span><button id="ref-name" title="Follow the structure of an imported Set or analyzed song">No reference</button></div>
+<div class="row"><span class="label">Sounds</span><span class="row" id="sounds"></span></div>
 <div class="row">
   <button class="big primary" id="bake" title="A new song after the last clip in the Arrangement">Bake</button>
   <button class="big" id="again" title="Replace the last song with another seed" disabled>Again</button>
@@ -49,6 +54,7 @@
 </div>
 <div class="row"><span class="dot" id="dot"></span><span class="status" id="status">Connecting...</span></div>
 <div id="refs"></div>
+<div id="presets"></div>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -141,6 +147,62 @@ function showRefs() {
   list.classList.add("open");
 }
 
+const PARTS = { drums: "Drums", bass: "Bass", chords: "Chords", lead: "Lead" };
+let mine = {};
+
+function presetName(path) { return path.split("/").pop().replace(/\.[^.]*$/, ""); }
+
+function renderSounds() {
+  const holder = $("sounds");
+  holder.textContent = "";
+  for (const [part, label] of Object.entries(PARTS)) {
+    const b = document.createElement("button");
+    b.textContent = mine[part] ? `${label}: ${presetName(mine[part])}` : label;
+    b.className = mine[part] ? "on" : "";
+    b.title = mine[part] ? `${mine[part]} (click to change)` : "The genre's preset for new tracks; click to choose your own";
+    b.onclick = () => showPresets(part);
+    holder.append(b);
+  }
+}
+
+async function showPresets(part) {
+  const list = $("presets");
+  list.textContent = "";
+  const head = document.createElement("h4");
+  head.textContent = `${PARTS[part]}: the preset for new tracks`;
+  list.append(head);
+  const add = (name, meta, path) => {
+    const row = document.createElement("div");
+    row.className = "ref";
+    row.innerHTML = '<span class="name"></span><span class="meta"></span>';
+    row.firstChild.textContent = name;
+    row.lastChild.textContent = meta;
+    row.onclick = () => setSound(part, path);
+    list.append(row);
+  };
+  add("The genre's preset", mine[part] ? "" : "now", null);
+  list.classList.add("open");
+  status("Looking in Live's browser...", "busy");
+  try {
+    const { presets } = await api(`/sounds/presets?part=${part}`);
+    for (const p of presets) add(p.name, p.path === mine[part] ? "now" : p.path.split("/").slice(0, -1).join(" / "), p.path);
+    if (!presets.length) add("Nothing found in Live's browser", "", null);
+    status(describe(options && options.baked));
+  } catch (err) {
+    status(err.message, "err");
+  }
+}
+
+async function setSound(part, path) {
+  $("presets").classList.remove("open");
+  try {
+    mine = (await api("/sounds", { part, path })).mine;
+  } catch (err) {
+    status(err.message, "err");
+  }
+  renderSounds();
+}
+
 function pickRef(name) {
   choice.reference = name;
   $("refs").classList.remove("open");
@@ -173,6 +235,8 @@ async function load() {
     options = await api("/bake/options");
     if (choice.reference && !options.references.some((r) => r.name === choice.reference)) choice.reference = null;
     if (!options.my_loops) choice.my_loops = false;
+    mine = (await api("/sounds")).mine;
+    renderSounds();
     status(describe(options.baked));
   } catch (err) {
     status(`Not connected: ${err.message}`, "off");
