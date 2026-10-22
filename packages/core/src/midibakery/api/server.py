@@ -22,7 +22,7 @@
 - ``GET /bake``: the Bake device's page; ``GET /bake/options`` (genres, lengths, references, whether own loops exist,
   the song baked last) and ``POST /bake/run`` ``{"genre", "length", "reference", "my_loops", "seed"?, "mode": "new"|"again"|"back"}``
   (a whole song without a model, see ``midibakery.bake``).
-- ``GET``/``POST /sounds`` (``{"part", "path"|null}``): the user's default preset per part, ``GET /sounds/presets?part=``
+- ``GET``/``POST /sounds`` (``{"part", "path"|null, "genre"?}``, ``?genre=`` on GET): the user's default preset per part, ``GET /sounds/presets?part=``
   the presets of Live's browser that suit it, ``POST /sounds/drop`` ``{"part", "file"}`` a preset file dragged onto the device (``midibakery.compose.my_sounds``).
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
@@ -103,6 +103,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
     live = live or LiveState()
     server = build_server(bridge)
     baker = bake.Baker(bridge.call)
+    sound_genre: list[str | None] = [None]  # the genre the Bake page shows its sounds for
 
     def guard(handler):
         async def wrapped(request: Request):
@@ -201,7 +202,10 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         return JSONResponse({**await asyncio.to_thread(bake.options), **baker.state()})
 
     async def sounds_get(request: Request) -> JSONResponse:
-        return JSONResponse({"mine": {role: "/".join(path) for role, path in my_sounds.load().items()}})
+        genre = request.query_params.get("genre") or None
+        if "genre" in request.query_params:
+            sound_genre[0] = genre  # the page's genre: a preset dropped on the device is for it
+        return JSONResponse({"mine": my_sounds.stored(genre)})
 
     async def sounds_presets(request: Request) -> JSONResponse:
         try:
@@ -216,7 +220,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             body = await request.json()
             if not isinstance(body, dict):
                 raise ValueError("expected a JSON object")
-            my_sounds.save(str(body.get("part", "")), body.get("path") or None)
+            my_sounds.save(str(body.get("part", "")), body.get("path") or None, body.get("genre") or None)
         except ValueError as exc:
             return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
         return await sounds_get(request)
@@ -227,12 +231,13 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             if not isinstance(body, dict):
                 raise ValueError("expected a JSON object")
             part = str(body.get("part", ""))
-            my_sounds.save(part, await my_sounds.resolve(bridge.call, str(body.get("file", ""))))
+            genre = body.get("genre") or sound_genre[0]
+            my_sounds.save(part, await my_sounds.resolve(bridge.call, str(body.get("file", ""))), genre)
         except ValueError as exc:
             return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
         except BridgeError as exc:
             return JSONResponse({"error": exc.code, "message": exc.message}, status_code=409)
-        mine = {role: "/".join(path) for role, path in my_sounds.load().items()}
+        mine = my_sounds.stored(genre)
         return JSONResponse({"mine": mine, "part": part, "preset": mine[part].rsplit("/", 1)[-1].rsplit(".", 1)[0]})
 
     async def bake_run(request: Request) -> JSONResponse:

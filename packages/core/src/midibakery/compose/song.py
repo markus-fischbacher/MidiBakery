@@ -550,7 +550,7 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
         warnings.append(f"No track for {', '.join(missing)}: those parts are left out (create_missing=false)")
         return roles, warnings
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
-    mine = my_sounds.load() if request.sounds else {}
+    mine = my_sounds.load(template.genre) if request.sounds else {}
     for offset, role in enumerate(missing):
         sound = mine.get(role) or (template.style.sounds.get(role) if request.sounds else None)
         roles[role] = RoleTrack(role, len(tracks) + offset, role.title(), new=True, device=devices[role], sound=sound)

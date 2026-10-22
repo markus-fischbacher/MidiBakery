@@ -972,3 +972,17 @@ async def test_my_sounds_override_the_genre_preset(client, live, tmp_path, monke
     assert my_sounds.save("bass", None) == {} and my_sounds.load() == {}
     with pytest.raises(ValueError):
         my_sounds.save("riser", "x")
+
+
+async def test_my_sounds_per_genre(client, live, tmp_path, monkeypatch):
+    from midibakery.compose import my_sounds
+
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    my_sounds.save("bass", "Bass/Analogue Bass.adv")
+    my_sounds.save("bass", "Bass/808 Pure.adg", genre="trap")
+    assert my_sounds.load("house")["bass"][-1] == "Analogue Bass.adv"
+    assert my_sounds.load("trap")["bass"][-1] == "808 Pure.adg"
+    assert my_sounds.stored("trap") == {"bass": "sounds/Bass/808 Pure.adg"}
+    my_sounds.save("bass", None, genre="trap")
+    assert my_sounds.load("trap")["bass"][-1] == "Analogue Bass.adv"
+    assert "genres" not in my_sounds._read()

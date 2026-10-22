@@ -329,3 +329,14 @@ def test_sounds_drop_resolves_a_dragged_preset(app_factory, live, tmp_path, monk
     assert got["preset"] == "909 Core Kit" and got["mine"]["drums"].endswith("909 Core Kit.adg")
     assert api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/x/song.wav"}).status_code == 422
     assert api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/x/Nothing Here.adg"}).status_code == 422
+
+
+def test_sounds_per_genre_and_drop_uses_the_pages_genre(app_factory, live, tmp_path, monkeypatch):
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    api, _ = app_factory()
+    api.post("/sounds", headers=AUTH, json={"part": "lead", "path": "Synth Keys/Light Keys.adg", "genre": "trap"})
+    assert api.get("/sounds?genre=house", headers=AUTH).json() == {"mine": {}}
+    assert "lead" in api.get("/sounds?genre=trap", headers=AUTH).json()["mine"]  # the page now shows trap
+    api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/x/909 Core Kit.adg"})
+    assert "drums" in api.get("/sounds?genre=trap", headers=AUTH).json()["mine"]
+    assert api.get("/sounds?genre=house", headers=AUTH).json() == {"mine": {}}

@@ -1,4 +1,5 @@
-"""The user's default preset per part: ``sounds.json`` in the MidiBakery folder, e.g. {"lead": "Synth Keys/Light Keys.adg"}.
+"""The user's default preset per part: ``sounds.json`` in the MidiBakery folder, e.g. {"lead": "Synth Keys/Light Keys.adg",
+"genres": {"trap": {"bass": "Bass/808 Pure.adg"}}}: the top level holds every genre's, "genres" one genre's own (it wins).
 
 A new track of that part loads it instead of the genre's preset. A path starts in the browser's "sounds" folder;
 "packs/Core Library/..." or any other first folder name is used as given.
@@ -18,17 +19,31 @@ def sounds_path() -> Path:
     return config_dir() / "sounds.json"
 
 
-def load() -> dict[str, tuple[str, ...]]:
-    """Role -> browser path; a missing or broken file, unknown roles and empty paths count as none."""
+def _read() -> dict:
     try:
         data = json.loads(sounds_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    out: dict[str, tuple[str, ...]] = {}
-    for role, path in (data.items() if isinstance(data, dict) else ()):
-        if role in ROLES and isinstance(path, str) and path.strip("/"):
-            out[role] = parse(path)
-    return out
+    return data if isinstance(data, dict) else {}
+
+
+def _valid(data: object) -> dict[str, str]:
+    return {role: path for role, path in (data.items() if isinstance(data, dict) else ())
+            if role in ROLES and isinstance(path, str) and path.strip("/")}
+
+
+def stored(genre: str | None = None) -> dict[str, str]:
+    """Role -> path as stored: the genre's own presets over the ones for every genre."""
+    data = _read()
+    mine = _valid(data)
+    if genre:
+        mine.update(_valid((data.get("genres") or {}).get(genre)))
+    return mine
+
+
+def load(genre: str | None = None) -> dict[str, tuple[str, ...]]:
+    """Role -> browser path for new tracks of a genre; a missing or broken file, unknown roles and empty paths count as none."""
+    return {role: parse(path) for role, path in stored(genre).items()}
 
 
 def parse(path: str) -> tuple[str, ...]:
@@ -36,22 +51,25 @@ def parse(path: str) -> tuple[str, ...]:
     return parts if parts[0] in ROOTS else ("sounds", *parts)
 
 
-def save(role: str, path: str | None) -> dict[str, str]:
-    """Set (or, with no path, clear) one part's default; returns what is stored."""
+def save(role: str, path: str | None, genre: str | None = None) -> dict[str, str]:
+    """Set (or, with no path, clear) one part's default, for one genre or for every genre; returns what then applies."""
     if role not in ROLES:
         raise ValueError(f"part: one of {', '.join(ROLES)}")
-    try:
-        data = json.loads(sounds_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        data = {}
-    data = data if isinstance(data, dict) else {}
+    data = _read()
+    scope = data.setdefault("genres", {}).setdefault(genre, {}) if genre else data
+    if not isinstance(scope, dict):
+        scope = data["genres"][genre] = {}
     if path:
-        data[role] = "/".join(parse(path))
+        scope[role] = "/".join(parse(path))
     else:
-        data.pop(role, None)
+        scope.pop(role, None)
+    if not data.get("genres", {}).get(genre if genre else "", True):
+        del data["genres"][genre]
+    if not data.get("genres"):
+        data.pop("genres", None)
     sounds_path().parent.mkdir(parents=True, exist_ok=True)
     sounds_path().write_text(json.dumps(data, indent=2), encoding="utf-8")
-    return data
+    return stored(genre)
 
 
 # What the picker searches Live's browser for, per part: (category, words); the first words come first.
