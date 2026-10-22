@@ -411,37 +411,38 @@ def _sounds_window() -> dict[str, Any]:
     It talks to the device's node.script only: "genre <name>", "sound <part> <path>", "sounds" (the browser
     page) go out; "<part> <preset>" comes in to fill the labels."""
     w = Patcher()
-    width, height = 420.0, 312.0
-    zone_w, zone_h, gap = 196.0, 74.0, 8.0
+    width, height = 440.0, 424.0
+    pad, zone_w, zone_h, gap, pitch = 16.0, 196.0, 84.0, 16.0, 188.0
     inlet = w.box("inlet", (20, 20, 30, 30), inlets=0, outlets=[""])
     outlet = w.box("outlet", (20, 600, 30, 30), inlets=1, outlets=[], comment="")
     route = w.obj("route " + " ".join(part for part, _ in SOUND_PARTS), 20, 60, outlets=["", "", "", "", ""], width=200)
     w.connect(inlet, 0, route)
-    menu = w.box("umenu", (260, 20, 160, 22), inlets=1, outlets=["int", "", ""], presentation=(12, 12, 396, 22),
+    menu = w.box("umenu", (260, 20, 160, 22), inlets=1, outlets=["int", "", ""], presentation=(pad, 16, width - 2 * pad, 24),
                  items=[x for g in SOUND_GENRES for x in (g, ",")][:-1], varname="genre")
     genre = w.obj("prepend genre", 260, 60, width=110)
     w.connect(menu, 1, genre)
     w.connect(genre, 0, outlet)
     for i, (part, label) in enumerate(SOUND_PARTS):
-        x, y = 12 + (i % 2) * (zone_w + gap), 50 + (i // 2) * (zone_h + 44 + gap)
+        x, y = pad + (i % 2) * (zone_w + gap), 60 + (i // 2) * pitch
         zone = w.box("live.drop", (300 + i * 130, 120, 100, 22), inlets=1, outlets=[""], presentation=(x, y, zone_w, zone_h),
                      varname=f"drop {part}")
         prefix = w.obj(f"prepend sound {part}", 300 + i * 130, 160, width=120)
         w.connect(zone, 0, prefix)
         w.connect(prefix, 0, outlet)
-        w.comment(label, (300 + i * 130, 200, 60, 18), presentation=(x, y + zone_h + 2, zone_w, 18), fontsize=12.0, **THEMED_TEXT)
-        name = w.comment("Genre default", (300 + i * 130, 240, 120, 18), presentation=(x, y + zone_h + 20, zone_w, 18), fontsize=11.0,
+        w.comment(label, (300 + i * 130, 200, 60, 18), presentation=(x, y + zone_h + 6, zone_w, 18), fontsize=12.0, **THEMED_TEXT)
+        name = w.comment("Genre default", (300 + i * 130, 240, 120, 18), presentation=(x, y + zone_h + 26, zone_w, 18), fontsize=10.0, fontname="Arial",
                          **THEMED_TEXT)
         setter = w.obj("prepend set", 20 + i * 130, 100, width=100)
         w.connect(route, i, setter)
         w.connect(setter, 0, name)
-    search = w.box("live.text", (20, 300, 90, 16), inlets=1, outlets=["", ""], presentation=(12, height - 30, 396, 22),
+    search = w.box("live.text", (20, 300, 90, 16), inlets=1, outlets=["", ""], presentation=(pad, height - 44, width - 2 * pad, 28),
                    parameter_enable=0, mode=0, text="Search in browser...", texton="Search in browser...", varname="search")
     _on_press(w, search, "sounds", outlet, 20, 340)
     return {
         "fileversion": 1,
         "appversion": {"major": 9, "minor": 1, "revision": 0, "architecture": "x64", "modernui": 1},
         "classnamespace": "box",
+        "title": "Sounds",
         "rect": [120.0, 120.0, width, height],
         "openrect": [0.0, 0.0, width, height],
         "openinpresentation": 1,
