@@ -422,6 +422,9 @@ def _sounds_window() -> dict[str, Any]:
     thispatcher = w.obj("thispatcher", 250, 36, outlets=["", ""], width=80)
     w.connect(inlet, 0, top)
     w.connect(top, 0, topmost)
+    floating = w.message("window flags float, window exec", 20, 10)  # a floating window is not hidden when Live's main window is clicked
+    w.connect(top, 0, floating)
+    w.connect(floating, 0, thispatcher)
     w.connect(topmost, 0, thispatcher)
     w.connect(top, 1, route)
     menu = w.box("umenu", (260, 20, 160, 22), inlets=1, outlets=["int", "", ""], presentation=(pad, 16, width - 2 * pad, 24),
