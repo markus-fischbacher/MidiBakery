@@ -24,13 +24,14 @@ English version: [USER_GUIDE.md](USER_GUIDE.md)
 | Teil | Zweck |
 |---|---|
 | **Remote Script** „MidiBakery“ | die Verbindung zu Live (einmal in den Einstellungen setzen) |
+| **MidiBakery Bake** | ein Klick für einen ganzen Song, ohne KI |
 | **MidiBakery Chat** | hier bittest du in normalen Sätzen um Songs |
 | **MidiBakery Set Importer** | liest Live Sets (`.als`) als Referenzen und Loops ein |
 | **MidiBakery Reference Analyzer** | schätzt Abschnitte, Tonart und Tempo einer Audiodatei (z. B. MP3) |
 
 MidiBakery schreibt **MIDI-Noten** und lädt Sounds aus Lives Core Library. Es erzeugt kein Audio und lädt keine Samples. Jede Änderung ist ein Schritt in Lives Undo-Liste.
 
-Du brauchst **Ableton Live 12 Suite** (12.3 oder neuer; Max for Live ist in Suite enthalten), macOS oder Windows und eine KI: einen Claude-API-Key oder ein lokales Modell (Kapitel 4).
+Du brauchst **Ableton Live 12 Suite** (12.3 oder neuer; Max for Live ist in Suite enthalten), macOS oder Windows und für den Chat eine KI: einen Claude-API-Key oder ein lokales Modell (Kapitel 4). Das Bake-Device braucht keine KI.
 
 ## 2. Installieren und aktualisieren
 
@@ -51,6 +52,7 @@ Schließe zuerst Live. Beide Installer installieren nur für dein Benutzerkonto,
 
 | Device | Ordner |
 |---|---|
+| MidiBakery Bake | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
 | MidiBakery Chat | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
 | MidiBakery Set Importer | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
 | MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery |
@@ -84,6 +86,18 @@ Lokale Modelle bekommen dieselben Werkzeuge in kompakter Form. Nenne Spuren und 
 
 ## 5. Einen Song bauen
 
+### Mit einem Klick (Bake)
+
+Zieh **MidiBakery Bake** auf eine beliebige MIDI-Spur. Wähle **Genre** und **Length**, optional **After** (ein importiertes Set oder ein analysierter Song, Kapitel 6 und 7) und **My loops** (Loops aus deinen importierten Sets). Dann:
+
+- **Bake** schreibt einen neuen Song hinter den letzten Clip im Arrangement, im Tempo des Genres, auf passende Spuren (fehlende werden angelegt).
+- **Again** ersetzt den zuletzt gebackenen Song durch einen anderen Seed: seine Clips und Locators werden gelöscht, die Spuren bleiben.
+- **Back** holt den Seed davor zurück, an derselben Stelle.
+
+Die Statuszeile zeigt Takte, Seed und Tempo. Bake merkt sich seinen letzten Song, bis Live neu startet; danach beginnt **Bake** einen neuen. Alles ist in Live rückgängig zu machen.
+
+### Im Chat
+
 Schreib zum Beispiel:
 
 - „Bau mir einen House-Song mit zufälligem Seed, setze das Tempo passend zum Genre und lege die Spuren neu an.“
@@ -92,7 +106,7 @@ Schreib zum Beispiel:
 - „Melodic Techno, etwa 6 Minuten.“ / „Drum and Bass, Radio Edit, in a-Moll.“
 - „Nimm die Folge i - VI - III - VII.“ (römische Ziffern beziehen sich auf die Tonart des Sets; „Am F C G“ geht auch)
 
-Du bekommst eine **Vorschau-Karte**: eine Zeitleiste der Abschnitte. In Live hat sich noch nichts geändert. **Apply** schreibt den Song ins Arrangement hinter den letzten Clip dort; bestehende Clips werden nie überschrieben.
+Im Chat bekommst du eine **Vorschau-Karte**: eine Zeitleiste der Abschnitte. In Live hat sich noch nichts geändert. **Apply** schreibt den Song ins Arrangement hinter den letzten Clip dort; bestehende Clips werden nie überschrieben.
 
 | Genre | Tempo | Abschnitte (Standardlänge) |
 |---|---|---|
@@ -104,7 +118,7 @@ Du bekommst eine **Vorschau-Karte**: eine Zeitleiste der Abschnitte. In Live hat
 
 **Länge:** Radio, Standard, Extended (DJ-freundlich) oder eine Zeit in Minuten.
 
-Was MidiBakery bei Apply tut:
+Was MidiBakery schreibt (bei Bake wie bei Apply):
 
 - **Spuren:** es nimmt Spuren mit Namen wie Drums (oder mit Drum Rack), Bass/Sub/808, Chords/Pad/Keys und Lead/Melody/Synth. Fehlende werden mit einem Kit und Presets aus der Core Library angelegt. Benenne deine Spuren so, wenn du deine eigenen Sounds behalten willst.
 - **Tempo:** das Tempo des Genres (oder der Referenz), je Seed etwas gestreut.

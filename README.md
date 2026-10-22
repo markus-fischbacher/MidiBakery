@@ -20,7 +20,7 @@ By Klirrwerk. EDM song sketches for inspiration in Ableton Live 12 Suite: from g
 |---|---|
 | `packages/core` | `midibakery` Python package: op catalog, bridge client, composition engine (`compose/`), Live Set reader (`als/`), agent loop (`agent/`), local API for Max for Live (`api/`), MCP server, CLI |
 | `packages/remote_script/MidiBakery` | Remote Script loaded by Live (stdlib only, Python 3.11) |
-| `packages/m4l` | Max for Live devices: build script and sources (Chat, Set Importer, Reference Analyzer) |
+| `packages/m4l` | Max for Live devices: build script and sources (Bake, Chat, Set Importer, Reference Analyzer) |
 | `packaging/` | Packaged app (PyInstaller), macOS .pkg, Windows setup, release tools (signed update manifest) |
 | `services/updates` | Update and license service: Cloudflare Worker + R2 + D1 on `updates.klirrwerk.com` |
 | `tests/` | Contract tests: real Remote Script + fake Live Object Model over a real socket |
@@ -114,6 +114,9 @@ Each device's *About* button shows its version next to the API's and the Remote 
 
 - **MidiBakery Chat** (Max for Live > Max MIDI Effect > MidiBakery): chat with the agent in the device view;
   MIDI passes through. *Pop out* opens the same chat in the browser.
+- **MidiBakery Bake** (Max for Live > Max MIDI Effect > MidiBakery): a whole song with one click, no model:
+  genre, length, reference and own loops; *Bake* (a new song after the last clip), *Again* (another seed in its place),
+  *Back* (the seed before). The page is the API's `/bake`.
 - **MidiBakery Set Importer** (Max for Live > Max MIDI Effect > MidiBakery): reads Live Sets (`.als`, one file or a
   folder) into references (sections, tempo, key, which roles play where) and loops (`my_<set>_<role>_<n>`), stored
   in `references/` and `patterns/` of the MidiBakery folder. `plan_song` builds songs after them (`reference`,

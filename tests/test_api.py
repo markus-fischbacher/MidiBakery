@@ -292,3 +292,16 @@ def test_api_info_appears_only_once_the_server_answers(tmp_path):
     finally:
         server.terminate()
         server.wait(timeout=10)
+
+
+def test_bake_endpoints(app_factory, live):
+    api, _ = app_factory()
+    assert api.get("/bake/options").status_code == 401
+    assert api.get("/bake").status_code == 200  # the page holds no secret
+    options = api.get("/bake/options", headers=AUTH).json()
+    assert options["genres"][0] == "house" and options["baked"] is None
+    bad = api.post("/bake/run", headers=AUTH, json={"genre": "polka"})
+    assert bad.status_code == 422
+    baked = api.post("/bake/run", headers=AUTH, json={"genre": "house", "length": "radio", "seed": 3}).json()
+    assert baked["seed"] == 3 and baked["baked"]["genre"] == "house"
+    assert api.get("/bake/options", headers=AUTH).json()["baked"]["seed"] == 3

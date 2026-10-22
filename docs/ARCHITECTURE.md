@@ -1,9 +1,10 @@
 # MidiBakery – how the parts work together
 
-MidiBakery builds EDM song sketches in Live from genre recipes, imported Live Sets and analyzed reference songs. It consists of five parts:
+MidiBakery builds EDM song sketches in Live from genre recipes, imported Live Sets and analyzed reference songs. It consists of six parts:
 
 - **Remote Script** in Live: the only part that changes the Live Set.
 - **Core** in Python: composition engine, `.als` importer, MCP server, agent and local API.
+- **Bake device**: Max for Live MIDI effect: a whole song with one click, no model.
 - **Chat device**: Max for Live MIDI effect for the chat.
 - **Set Importer**: Max for Live MIDI effect that reads Live Sets (`.als`) into references and loops.
 - **Reference Analyzer**: Max for Live audio effect that analyzes a reference song in the Arrangement.
@@ -12,6 +13,7 @@ MidiBakery builds EDM song sketches in Live from genre recipes, imported Live Se
 flowchart LR
   subgraph Live["Ableton Live 12"]
     RS["Remote Script<br/>(Control Surface 'MidiBakery')"]
+    BAKE["Bake device<br/>(MIDI Effect)"]
     CHAT["Chat device<br/>(MIDI Effect)"]
     IMP["Set Importer<br/>(MIDI Effect)"]
     REF["Reference Analyzer<br/>(Audio Effect)"]
@@ -30,6 +32,7 @@ flowchart LR
   MCP -- "TCP :47681 (NDJSON + token)" --> RS
   CHAT -- "jweb: HTTP /ui + WebSocket /chat" --> API
   IMP -- "jweb: HTTP /importer + /import/*" --> API
+  BAKE -- "jweb: HTTP /bake + /bake/*" --> API
   API --> AGENT
   AGENT -- "MCP in-process" --> MCP
   AGENT <--> LLM
@@ -46,7 +49,7 @@ flowchart LR
 | Remote Script | `packages/remote_script/MidiBakery` → User Library/Remote Scripts | Python 3.11 (Live's interpreter, standard library only) | Live, when "MidiBakery" is the Control Surface | Live Object Model; listens on `127.0.0.1:47681` |
 | MCP server | `packages/core/src/midibakery/mcp` | Python 3.12 | Claude Code / Desktop (`midibakery mcp`) | Remote Script |
 | Local API | `packages/core/src/midibakery/api` | Python 3.12 | the Remote Script when it loads (`launcher.json`), or `uv run midibakery api` | Remote Script; LLM providers; Max devices |
-| Chat device, Set Importer | `packages/m4l` → Presets/MIDI Effects/Max MIDI Effect/MidiBakery | Max patch, `jweb`, Node for Max | Live, when the device is on a track | API |
+| Bake, Chat, Set Importer | `packages/m4l` → Presets/MIDI Effects/Max MIDI Effect/MidiBakery | Max patch, `jweb`, Node for Max | Live, when the device is on a track | API |
 | Reference Analyzer | `packages/m4l` → Presets/Audio Effects/Max Audio Effect/MidiBakery | Max patch, `v8`, `v8ui`, Node for Max | Live, when the device is on a track | Live API; writes `references/` |
 
 ### Remote Script
@@ -69,20 +72,21 @@ flowchart LR
 - **Agent loop** (`agent/`): a conversation with Claude (Anthropic API), LM Studio or Ollama that calls **the same** MCP tools in-process. Local models get compact schemas and results (`compact_tools`, `COMPACT_RESULTS`); tool schemas plus system prompt stay under 16,000 characters (`tests/test_agent.py`). Safeguards in `loop.py`: a claimed change without a tool call or an unretried failed write gets one hint; the same failure three times, six failed rounds or 24 tool rounds stop the message (`STUCK`).
 - **Local API** (`api/`, `127.0.0.1:8766`): the gateway for the Max devices, started by the Remote Script and stopped with Live.
   - `GET /ui`, `WS /chat`: the chat page and the agent (events `text`, `thinking`, `tool_call`, `tool_result`, `plan`, `confirm`, `live_state`, `done`, `error`).
+  - `GET /bake`, `/bake/options`, `POST /bake/run`: the Bake device (`bake.py`: `build_song` and `apply_song` without a model; *Again* deletes the last baked song's clips and locators and bakes another seed at its place, its tracks stay; a failure undoes the deletion).
   - `GET /importer`, `/import/scan|preview|run|queue|pick|library|patterns`, `DELETE /import/{reference}`: the Set Importer.
   - `GET /models`, `/auth/anthropic`, `/update`, `/license`, `/health`.
   Port and token are in `api.json`; every request needs the token. With the license check on and no valid license, the chat answers `LICENSE_REQUIRED`.
 
 ### Max devices
 
-- **Chat** and **Set Importer** show a page from the API in `jweb`; the token travels in the URL fragment. Live passes no keyboard to `jweb` and its dropdowns do not open, so the Chat device has native controls on the right (model menu, input field, Pop out) and the importer page works with clicks only. `node.script` (`midibakery-chat.js`, `midibakery-importer.js`, both on `midibakery-node.js`) finds the API through `api.json` and reloads the page when the token changes.
+- **Bake**, **Chat** and **Set Importer** show a page from the API in `jweb`; the token travels in the URL fragment. Live passes no keyboard to `jweb` and its dropdowns do not open, so the Chat device has native controls on the right (model menu, input field, Pop out) and the importer page works with clicks only. `node.script` (`midibakery-bake.js`, `midibakery-chat.js`, `midibakery-importer.js`, all on `midibakery-node.js`) finds the API through `api.json` and reloads the page when the token changes.
 - **Reference Analyzer**: `v8` finds the longest audio clip on its track; `node.script midibakery-reference.js` decodes it (`afconvert` on macOS, WAV elsewhere) and `reference-analysis.js` computes per-bar energy in four bands, kick, key and sections. Unwarped clips are first warped onto Live's grid. Results go to `references/<hash>.json`, where `get_reference` reads them. Neither the API nor the Remote Script is needed.
 
 ## Which process hosts what
 
 | Process | Started by | What runs in it | Connections |
 |---|---|---|---|
-| **Ableton Live** | you | Remote Script; Max for Live with the three devices | listens on `:47681` |
+| **Ableton Live** | you | Remote Script; Max for Live with the four devices | listens on `:47681` |
 | **Max Helper** (child of Live) | Live/Max | Chromium for `jweb` | → `:8766` |
 | **node** per `node.script` | Node for Max | API discovery, file decoding | → `:8766` |
 | **`midibakery api`** | the Remote Script or you | API, agent, engine and an in-process MCP server | listens on `:8766`; → `:47681`; → LLM |
@@ -108,7 +112,7 @@ All in `~/Library/Application Support/MidiBakery/` (Windows `%APPDATA%\MidiBaker
 |---|---|
 | `bridge.json`, `api.json` | port and token of the Remote Script and the API |
 | `api.log` | every user message and tool call with errors |
-| `device-chat.log`, `device-importer.log`, `device-reference.log` | the devices |
+| `device-bake.log`, `device-chat.log`, `device-importer.log`, `device-reference.log` | the devices |
 | `references/`, `patterns/` | analyzed and imported references, imported loops |
 | `launcher.json`, `installed.json` | how Live starts the API; every path `install` wrote |
 | `settings.json`, `update.json`, `license.json` | settings, update status, license token |

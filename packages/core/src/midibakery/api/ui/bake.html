@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MidiBakery Bake</title>
+<style>
+  :root {
+    --bg: #1e1e1e; --panel: #2a2a2a; --line: #3a3a3a; --text: #d9d9d9; --dim: #8a8a8a;
+    --accent: #ffad56; --err: #ff6b6b; --ok: #7fd18b;
+    font: 12px/1.35 -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+  body { display: flex; flex-direction: column; gap: 5px; padding: 5px 6px; overflow: hidden; }
+  .row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .label { color: var(--dim); width: 52px; flex: none; }
+  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 3px; padding: 1px 8px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button:disabled:hover { border-color: var(--line); }
+  button.on { color: var(--accent); border-color: var(--accent); }
+  button.big { padding: 5px 14px; font-size: 13px; }
+  button.primary { background: var(--accent); color: #1e1e1e; border-color: var(--accent); font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.on { background: var(--ok); }
+  .dot.busy { background: var(--accent); animation: p 1s ease-in-out infinite; }
+  @keyframes p { 50% { opacity: .35; } }
+  .status { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+  .status.err { color: var(--err); white-space: normal; }
+  #refs { position: fixed; inset: 0; background: var(--bg); padding: 6px; overflow-y: auto; display: none; }
+  #refs.open { display: block; }
+  .ref { display: flex; gap: 6px; padding: 3px 4px; border-bottom: 1px solid #262626; cursor: pointer; }
+  .ref:hover { background: #242424; }
+  .ref .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ref .meta { color: var(--dim); font-size: 10px; }
+  #ref-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="row"><span class="label">Genre</span><span class="row" id="genres"></span></div>
+<div class="row"><span class="label">Length</span><span class="row" id="lengths"></span>
+  <button id="my-loops" title="The seed draws drums, bass, lead and chords from your imported Sets">My loops</button></div>
+<div class="row"><span class="label">After</span><button id="ref-name" title="Follow the structure of an imported Set or analyzed song">No reference</button></div>
+<div class="row">
+  <button class="big primary" id="bake" title="A new song after the last clip in the Arrangement">Bake</button>
+  <button class="big" id="again" title="Replace the last song with another seed" disabled>Again</button>
+  <button class="big" id="back" title="Replace the last song with the seed before" disabled>Back</button>
+</div>
+<div class="row"><span class="dot" id="dot"></span><span class="status" id="status">Connecting...</span></div>
+<div id="refs"></div>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const token = new URLSearchParams(location.hash.slice(1)).get("token");
+addEventListener("hashchange", () => location.reload());  // a new token: the API restarted
+
+const GENRE_LABELS = { house: "House", melodic_techno: "Melodic", peak_time_techno: "Peak-Time", drum_and_bass: "D&B", trap: "Trap" };
+const LENGTH_LABELS = { radio: "Radio", standard: "Standard", extended: "Extended" };
+const KEY = "midibakery-bake";
+let choice = { genre: "house", length: "standard", reference: null, my_loops: false };
+try { Object.assign(choice, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (_) {}
+let options = null, busy = false;
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(choice)); } catch (_) {} }
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function status(text, kind) {
+  $("status").textContent = text;
+  $("status").className = "status" + (kind === "err" ? " err" : "");
+  $("dot").className = "dot " + (kind === "busy" ? "busy" : kind === "off" ? "" : "on");
+}
+
+function chips(holder, labels, key) {
+  holder.textContent = "";
+  for (const [value, label] of Object.entries(labels)) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.className = choice[key] === value ? "on" : "";
+    b.onclick = () => { choice[key] = choice[key] === value && key === "genre" && choice.reference ? null : value; save(); render(); };
+    holder.append(b);
+  }
+}
+
+function describe(baked) {
+  if (!baked) return "Ready. Bake writes a song after the last clip in the Arrangement.";
+  const what = baked.reference ? `after ${baked.reference}` : GENRE_LABELS[baked.genre] || baked.genre;
+  return `${what} · bars ${baked.bars} · seed ${baked.seed}`;
+}
+
+function render() {
+  chips($("genres"), GENRE_LABELS, "genre");
+  chips($("lengths"), LENGTH_LABELS, "length");
+  $("my-loops").className = choice.my_loops ? "on" : "";
+  $("my-loops").disabled = Boolean(options && !options.my_loops);
+  $("ref-name").textContent = choice.reference || "No reference";
+  $("ref-name").className = choice.reference ? "on" : "";
+  const baked = options && options.baked;
+  $("bake").disabled = busy || !options || (!choice.genre && !choice.reference);
+  $("again").disabled = busy || !baked;
+  $("back").disabled = busy || !baked || !baked.can_go_back;
+}
+
+function showRefs() {
+  const list = $("refs");
+  list.textContent = "";
+  const none = document.createElement("div");
+  none.className = "ref";
+  none.innerHTML = '<span class="name">No reference: the genre\'s recipe</span>';
+  none.onclick = () => pickRef(null);
+  list.append(none);
+  for (const ref of options.references) {
+    const row = document.createElement("div");
+    row.className = "ref";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = ref.name;
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    meta.textContent = [ref.source === "als" ? "Live Set" : "audio", ref.genre && GENRE_LABELS[ref.genre], ref.tempo && `${Math.round(ref.tempo)} BPM`].filter(Boolean).join(" · ");
+    row.append(name, meta);
+    row.onclick = () => pickRef(ref.name);
+    list.append(row);
+  }
+  if (!options.references.length) {
+    const empty = document.createElement("div");
+    empty.className = "ref meta";
+    empty.textContent = "No references yet: import Live Sets with the Set Importer or analyze a song with the Reference Analyzer.";
+    list.append(empty);
+  }
+  list.classList.add("open");
+}
+
+function pickRef(name) {
+  choice.reference = name;
+  $("refs").classList.remove("open");
+  save();
+  render();
+}
+
+async function run(mode) {
+  if (busy) return;
+  busy = true;
+  render();
+  status(mode === "new" ? "Baking..." : mode === "again" ? "Baking another one..." : "Going back...", "busy");
+  try {
+    const body = mode === "back" ? { mode } : { mode, genre: choice.genre, length: choice.length, reference: choice.reference, my_loops: choice.my_loops };
+    const result = await api("/bake/run", body);
+    options.baked = result.baked;
+    const tempo = result.tempo ? ` · ${Math.round(result.tempo)} BPM` : "";
+    const warn = result.warnings && result.warnings.length ? ` · ⚠ ${result.warnings[0]}` : "";
+    status(describe(result.baked) + tempo + warn);
+  } catch (err) {
+    status(err.message, "err");
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+async function load() {
+  try {
+    options = await api("/bake/options");
+    if (choice.reference && !options.references.some((r) => r.name === choice.reference)) choice.reference = null;
+    if (!options.my_loops) choice.my_loops = false;
+    status(describe(options.baked));
+  } catch (err) {
+    status(`Not connected: ${err.message}`, "off");
+    setTimeout(load, 3000);
+  }
+  render();
+}
+
+$("my-loops").onclick = () => { choice.my_loops = !choice.my_loops; save(); render(); };
+$("ref-name").onclick = () => { if (options) showRefs(); };
+$("bake").onclick = () => run("new");
+$("again").onclick = () => run("again");
+$("back").onclick = () => run("back");
+render();
+if (token) load(); else status("No token: open this page from the Bake device.", "off");
+if (window.max && window.max.outlet) window.max.outlet("loaded");
+</script>
+</body>
+</html>
