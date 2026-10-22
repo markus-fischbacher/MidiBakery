@@ -24,13 +24,14 @@ Deutsche Version: [BENUTZERHANDBUCH.md](BENUTZERHANDBUCH.md)
 | Part | Purpose |
 |---|---|
 | **Remote Script** "MidiBakery" | the connection to Live (set once in the preferences) |
+| **MidiBakery Bake** | one click for a whole song, no AI needed |
 | **MidiBakery Chat** | where you ask for songs, in plain sentences |
 | **MidiBakery Set Importer** | reads Live Sets (`.als`) into references and loops |
 | **MidiBakery Reference Analyzer** | estimates the sections, key and tempo of an audio file (e.g. an MP3) |
 
 MidiBakery writes **MIDI notes** and loads sounds from Live's Core Library. It does not create audio or load samples. Every change is a step in Live's undo list.
 
-You need **Ableton Live 12 Suite** (12.3 or newer; Max for Live is part of Suite), macOS or Windows, and an AI: a Claude API key or a local model (chapter 4).
+You need **Ableton Live 12 Suite** (12.3 or newer; Max for Live is part of Suite), macOS or Windows, and for the chat an AI: a Claude API key or a local model (chapter 4). The Bake device needs no AI.
 
 ## 2. Install and update
 
@@ -51,6 +52,7 @@ Close Live first. Both installers install for your user account only, without an
 
 | Device | Folder |
 |---|---|
+| MidiBakery Bake | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
 | MidiBakery Chat | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
 | MidiBakery Set Importer | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
 | MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery |
@@ -84,6 +86,18 @@ Local models get the same tools in a compact form. Name tracks and clips, ask on
 
 ## 5. Build a song
 
+### With one click (Bake)
+
+Drag **MidiBakery Bake** onto any MIDI track. Choose a **genre** and a **length**, optionally **After** (an imported Set or analyzed song, chapters 6 and 7) and **My loops** (loops from your imported Sets). Then:
+
+- **Bake** writes a new song after the last clip in the Arrangement, at the genre's tempo, on fitting tracks (missing ones are created).
+- **Again** replaces the song baked last with another seed: its clips and locators are deleted, the tracks stay.
+- **Back** brings the seed before back, at the same place.
+
+The status line shows the bars, the seed and the tempo. Bake remembers its last song until Live restarts; after that, **Bake** starts a new one. Everything is undoable in Live.
+
+### In the chat
+
 Write for example:
 
 - "Build me a house song with a random seed, set the genre's tempo and create new tracks."
@@ -92,7 +106,7 @@ Write for example:
 - "Melodic techno, about 6 minutes." / "Drum and bass, radio edit, in A minor."
 - "Use the progression i - VI - III - VII." (Roman numerals relate to the Set's key; "Am F C G" works too)
 
-You get a **preview card**: a timeline of the sections. Nothing in Live has changed yet. **Apply** writes the song into the Arrangement after the last clip there; existing clips are never overwritten.
+In the chat you get a **preview card**: a timeline of the sections. Nothing in Live has changed yet. **Apply** writes the song into the Arrangement after the last clip there; existing clips are never overwritten.
 
 | Genre | Tempo | Sections (standard length) |
 |---|---|---|
@@ -104,7 +118,7 @@ You get a **preview card**: a timeline of the sections. Nothing in Live has chan
 
 **Length:** radio, standard, extended (DJ-friendly) or a time in minutes.
 
-What MidiBakery does on Apply:
+What MidiBakery writes (Bake and Apply alike):
 
 - **Tracks:** it uses tracks named like Drums (or with a Drum Rack), Bass/Sub/808, Chords/Pad/Keys and Lead/Melody/Synth. Missing ones are created with a kit and presets from the Core Library. Name your tracks this way to keep your own sounds.
 - **Tempo:** the genre's tempo (or the reference's), with a little spread per seed.

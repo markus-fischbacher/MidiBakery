@@ -24,7 +24,7 @@ const Max = require("max-api");
 const { about } = require("./midibakery-about.js");
 
 // The page of the API each device shows in its jweb.
-const PAGES = { chat: "/ui", importer: "/importer" };
+const PAGES = { chat: "/ui", importer: "/importer", bake: "/bake" };
 const MODE = process.env.MIDIBAKERY_DEVICE in PAGES ? process.env.MIDIBAKERY_DEVICE : "chat";
 const PAGE = PAGES[MODE];
 const POLL_MS = 2000;

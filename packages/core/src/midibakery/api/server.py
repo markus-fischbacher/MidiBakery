@@ -19,6 +19,9 @@
   (stores them as references), ``GET``/``POST /import/queue`` (the list of Sets shared by the device and a popped-out page), ``POST /import/pick`` ``{"kind": "file"|"folder"}`` (the system file dialog, for the page in a browser),
   ``GET /import/library``, ``GET /import/patterns`` (the loops taken from imported Sets), ``DELETE /import/patterns/{id}`` (one Set's loops)
   and ``DELETE /import/{id}``.
+- ``GET /bake``: the Bake device's page; ``GET /bake/options`` (genres, lengths, references, whether own loops exist,
+  the song baked last) and ``POST /bake/run`` ``{"genre", "length", "reference", "my_loops", "seed"?, "mode": "new"|"again"|"back"}``
+  (a whole song without a model, see ``midibakery.bake``).
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
 - ``GET /ui``: the chat page shown by the chat device (``jweb``) or a browser.
   It holds no secret; the device passes the token in the URL fragment
@@ -50,7 +53,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from midibakery import credentials, license, updates
+from midibakery import bake, credentials, license, updates
 from midibakery.als import library as als_library
 from midibakery.agent import LOCAL_PROVIDERS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
@@ -65,6 +68,7 @@ VERSION = __version__
 UPDATE_RECHECK = 6 * 3600  # the API often runs for days; updates.check itself asks the service once a day
 UI_PAGE = Path(__file__).with_name("ui") / "chat.html"
 IMPORTER_PAGE = Path(__file__).with_name("ui") / "importer.html"
+BAKE_PAGE = Path(__file__).with_name("ui") / "bake.html"
 ProviderFactory = Callable[[dict[str, str]], Provider]
 
 
@@ -96,6 +100,7 @@ def _bearer(request: Request) -> str | None:
 def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: str, live: LiveState | None = None) -> Starlette:
     live = live or LiveState()
     server = build_server(bridge)
+    baker = bake.Baker(bridge.call)
 
     def guard(handler):
         async def wrapped(request: Request):
@@ -186,6 +191,25 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
 
     async def importer_ui(request: Request) -> HTMLResponse:
         return HTMLResponse(IMPORTER_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+    async def bake_ui(request: Request) -> HTMLResponse:
+        return HTMLResponse(BAKE_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+    async def bake_options(request: Request) -> JSONResponse:
+        return JSONResponse({**await asyncio.to_thread(bake.options), **baker.state()})
+
+    async def bake_run(request: Request) -> JSONResponse:
+        if not license.allowed():
+            return JSONResponse({"error": "LICENSE_REQUIRED", "message": license.status().message}, status_code=402)
+        try:
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise ValueError("expected a JSON object")
+            return JSONResponse(await baker.bake(body))
+        except ValueError as exc:
+            return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
+        except BridgeError as exc:
+            return JSONResponse({"error": exc.code, "message": exc.message}, status_code=409)
 
     def importer(action):
         """One import endpoint: the body's problems are the caller's (422), the work runs off the event loop."""
@@ -389,6 +413,9 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/import/patterns", guard(importer(import_patterns)), methods=["GET"]),
             Route("/import/patterns/{reference}", guard(importer(import_patterns_delete)), methods=["DELETE"]),
             Route("/import/{reference}", guard(importer(import_delete)), methods=["DELETE"]),
+            Route("/bake", bake_ui, methods=["GET"]),
+            Route("/bake/options", guard(bake_options), methods=["GET"]),
+            Route("/bake/run", guard(bake_run), methods=["POST"]),
             Route("/models", guard(models), methods=["GET"]),
             Route("/update", guard(update_status), methods=["GET"]),
             Route("/update/install", guard(update_install), methods=["POST"]),

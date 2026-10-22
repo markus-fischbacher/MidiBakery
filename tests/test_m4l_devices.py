@@ -134,7 +134,7 @@ def test_node_scripts_ship_next_to_every_device(devices):
 
 def test_each_device_starts_the_node_entry_for_its_mode(devices):
     """Node for Max does not pass script arguments in process.argv, so the mode comes from the entry file."""
-    expected = {"MidiBakery Chat": "midibakery-chat.js", "MidiBakery Set Importer": "midibakery-importer.js",
+    expected = {"MidiBakery Bake": "midibakery-bake.js", "MidiBakery Chat": "midibakery-chat.js", "MidiBakery Set Importer": "midibakery-importer.js",
                 "MidiBakery Reference Analyzer": "midibakery-reference.js"}
     for name, path in devices.items():
         _, patcher = build.read_amxd(path)
@@ -194,6 +194,28 @@ def test_importer_page_script_parses(tmp_path):
     assert 'bindInlet("add_path"' in script
     (tmp_path / "importer.js").write_text(script)
     result = subprocess.run([node, "--check", str(tmp_path / "importer.js")], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_bake_device_shows_its_page(devices):
+    """The Bake page is the API's /bake; MIDI passes through."""
+    _, patcher = build.read_amxd(devices["MidiBakery Bake"])
+    boxes = _boxes(patcher)
+    by_text = {b.get("text"): i for i, b in boxes.items() if b.get("text")}
+    lines = {(l["patchline"]["source"][0], l["patchline"]["destination"][0]) for l in patcher["patcher"]["lines"]}
+    web = next(i for i, b in boxes.items() if b["maxclass"] == "jweb")
+    assert (by_text["prepend url"], web) in lines
+    assert (by_text["midiin"], by_text["midiout"]) in lines
+    assert 'bake: "/bake"' in (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
+
+
+@pytest.mark.skipif(not MAX_NODE.exists() and shutil.which("node") is None, reason="no Node.js available")
+def test_bake_page_script_parses(tmp_path):
+    node = str(MAX_NODE) if MAX_NODE.exists() else shutil.which("node")
+    page = (ROOT / "packages/core/src/midibakery/api/ui/bake.html").read_text()
+    script = page.split("<script>", 1)[1].split("</script>", 1)[0]
+    (tmp_path / "bake.js").write_text(script)
+    result = subprocess.run([node, "--check", str(tmp_path / "bake.js")], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
 
@@ -367,7 +389,7 @@ def test_web_devices_show_a_loading_page_until_their_page_is_sent(devices):
     head, data = build.LOADING_URL.split(",", 1)
     assert head == "data:text/html;charset=utf-8;base64" and " " not in build.LOADING_URL
     assert "Starting MidiBakery" in base64.b64decode(data).decode()
-    for name in ("MidiBakery Chat", "MidiBakery Set Importer"):
+    for name in ("MidiBakery Bake", "MidiBakery Chat", "MidiBakery Set Importer"):
         _, patcher = build.read_amxd(devices[name])
         web = next(b for b in _boxes(patcher).values() if b["maxclass"] == "jweb")
         assert web["url"] == build.LOADING_URL

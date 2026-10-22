@@ -4,6 +4,8 @@
     uv run midibakery install            # builds them and installs everything into Live
 
 Devices:
+- MidiBakery Bake (MIDI Effect): one button for a whole song (genre, length, reference, own loops; Bake,
+  Again, Back) without a model. The page is the API's /bake.
 - MidiBakery Chat (MIDI Effect): chat with the MidiBakery agent in Live's device
   view (jweb shows the API's /ui page). MIDI passes through unchanged.
 - MidiBakery Set Importer (MIDI Effect): reads Ableton Live Sets (.als) you choose (one Set or a
@@ -33,7 +35,7 @@ SRC = HERE / "src"
 DIST = HERE / "dist"
 NODE_SCRIPT = "midibakery-node.js"
 # node.script entry files per device kind; each sets its mode and loads NODE_SCRIPT.
-NODE_ENTRIES = ("midibakery-chat.js", "midibakery-importer.js")
+NODE_ENTRIES = ("midibakery-chat.js", "midibakery-importer.js", "midibakery-bake.js")
 REFERENCE_FILES = ("midibakery-reference.js", "reference-analysis.js")  # the Reference device's node.script
 ABOUT_SCRIPT = "midibakery-about.js"  # the About button's version line, for every node.script
 NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES, ABOUT_SCRIPT)
@@ -399,6 +401,45 @@ def importer_device() -> dict[str, Any]:
     return p.to_json(kind="midi_effect", title="MidiBakery Set Importer", width=width, height=height)
 
 
+def bake_device() -> dict[str, Any]:
+    """MIDI Effect: the Bake page (jweb; clicks only, Live passes it no keys) beside Pop out, About and the status."""
+    p = Patcher()
+    width, height = 560.0, 169.0
+    column_x, column_w = 446.0, 110.0
+    midiin = p.obj("midiin", 20, 20, outlets=["int"], width=50)
+    midiout = p.obj("midiout", 20, 60, outlets=[], width=50)
+    p.connect(midiin, 0, midiout)  # MIDI passes through untouched
+
+    node = p.obj("node.script midibakery-bake.js @autostart 1 @watch 0", 120, 20, outlets=["", ""], width=320)
+    route = p.obj("route url status", 120, 60, inlets=1, outlets=["", "", ""])
+    web_rect = (0, 0, 440, height)
+    web = p.box("jweb", (120, 200, web_rect[2], web_rect[3]), inlets=1, outlets=[""], presentation=web_rect, url=LOADING_URL)
+    set_url = p.obj("prepend url", 120, 100)
+    p.connect(node, 0, route)
+    p.connect(route, 0, set_url)
+    p.connect(set_url, 0, web)
+    loaded = p.obj("route loaded", 120, 400, outlets=["", ""], width=90)
+    loaded_msg = p.message("loaded", 120, 440)
+    p.connect(web, 0, loaded)
+    p.connect(loaded, 0, loaded_msg)
+    p.connect(loaded_msg, 0, node)
+    other = p.obj("prepend jweb", 220, 440, width=90)
+    p.connect(loaded, 1, other)
+    p.connect(other, 0, node)
+
+    popout = p.parameter("live.text", (440, 60, 70, 16), (column_x, 4, column_w, 18), name="Pop out", short="Pop out",
+                         ptype=ENUM, inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
+    p.boxes[-1]["box"].update({"mode": 0, "text": "Pop out", "texton": "Pop out"})
+    _on_press(p, popout, "popout", node, 440, 100)
+    _about(p, (column_x, 28, column_w, 18), node, 440, 160)
+    set_status = p.obj("prepend set", 260, 100)
+    status = p.comment("Starting...", (260, 140, 190, 30), presentation=(column_x, 56, column_w, 100),
+                       linecount=6, fontsize=9.0, **THEMED_TEXT)
+    p.connect(route, 1, set_status)
+    p.connect(set_status, 0, status)
+    return p.to_json(kind="midi_effect", title="MidiBakery Bake", width=width, height=height)
+
+
 def _menu(p: Patcher, rect, presentation, name: str, short: str, items: list[str], initial: int, **attrs: Any) -> str:
     return p.parameter("live.menu", rect, presentation, name=name, short=short, ptype=ENUM, inlets=1,
                        outlets=["", "", "float"], parameter_enum=items, parameter_mmax=len(items) - 1,
@@ -493,6 +534,7 @@ def reference_device() -> dict[str, Any]:
 
 
 DEVICES = {
+    "MidiBakery Bake": ("midi_effect", bake_device),
     "MidiBakery Chat": ("midi_effect", chat_device),
     "MidiBakery Set Importer": ("midi_effect", importer_device),
     "MidiBakery Reference Analyzer": ("audio_effect", reference_device),
