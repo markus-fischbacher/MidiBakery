@@ -677,16 +677,16 @@ async def test_peak_time_sweeps_auto_filters_clip_by_clip(client, live):
             params = {p.name: p for p in filters[-1].parameters}
             freq, kind = params["Frequency"], params["Filter Type"]
             out[track.name] = (kind.value, {c.name: c.envelopes.get(id(freq)) for c in track.arrangement_clips})
-        return {name: (kind, {clip: [env.value_at_time(t) for t in (0, 32, 60)] if env else None for clip, env in envs.items()}) for name, (kind, envs) in out.items()}
+        return {name: (kind, {clip: [env.value_at_time(t) for t in (0, 16, 32, 60)] if env else None for clip, env in envs.items()}) for name, (kind, envs) in out.items()}
 
     tracks = live.on_main(read)
     kind, drums = tracks["Drums"]
     assert kind == 1.0  # High-pass
     assert all(values is not None for values in drums.values())  # every clip resets the filter
-    assert drums["Lift Drums"][0] == 0.0 and drums["Lift Drums"][2] == pytest.approx(0.36, abs=0.03)  # 20 Hz -> ~250 Hz before the peak
-    assert drums["Peak Drums"] == [0.0, 0.0, 0.0]  # the kick slams back in
+    assert drums["Lift Drums"][0] == 0.0 and drums["Lift Drums"][3] == pytest.approx(0.36, abs=0.03)  # 20 Hz -> ~250 Hz before the peak
+    assert drums["Peak Drums"] == [0.0, 0.0, 0.0, 0.0]  # the kick slams back in
     kind, lead = tracks["Lead"]
-    assert kind == 0.0 and lead["Peak Lead"][0] < lead["Peak Lead"][1] < lead["Peak Lead"][2]  # the acid opens over the peak
+    assert kind == 0.0 and lead["Peak Lead"][0] < lead["Peak Lead"][1] < lead["Peak Lead"][2] > lead["Peak Lead"][3]  # the acid opens in the first 8 bars, then closes a little
 
 
 async def test_an_existing_auto_filter_is_reused(client, live):
