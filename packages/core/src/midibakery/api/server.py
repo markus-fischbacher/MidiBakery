@@ -8,8 +8,6 @@
   ``tool_call``, ``tool_result``, ``plan``, ``confirm``, ``done``, ``error``) as
   JSON messages. Tool events carry ``source``: ``model`` or ``user``. ``live_state``
   messages (``connected``, ``state``) follow what Live plays, for the status line.
-- ``POST /miditool/generate`` and ``/miditool/transform``: the clip-view MIDI
-  Tools. Notes in, notes out; nothing is written to Live by the server.
 - ``GET /health``: server and Live bridge status; ``update`` names a newer version, if there is one.
 - ``GET /update``: the daily update check's result (``midibakery.updates``); ``?force=1`` asks now.
 - ``POST /update/install``: downloads the newer version's installer, verifies it and opens it.
@@ -46,7 +44,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
@@ -55,11 +52,10 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from midibakery import credentials, license, updates
 from midibakery.als import library as als_library
-from midibakery.agent import LOCAL_HIDDEN, LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, Provider, ToolHost, without_tools
+from midibakery.agent import LOCAL_PROVIDERS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.bridge.client import config_dir
 from midibakery.compose import user_patterns
-from midibakery.compose.standalone import GenerateRequest, TransformRequest, generate, transform
 from midibakery import __version__
 from midibakery.api.live_state import LiveState
 from midibakery.api.models import list_models
@@ -268,20 +264,6 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             return JSONResponse({"error": exc.code, "message": str(exc)}, status_code=422)
         return JSONResponse(license.status().as_dict())
 
-    def notes_endpoint(model, run):
-        async def endpoint(request: Request) -> JSONResponse:
-            if not license.allowed():
-                return JSONResponse({"error": "LICENSE_REQUIRED", "message": license.status().message}, status_code=402)
-            try:
-                body = model.model_validate(await request.json())
-                return JSONResponse(run(body))
-            except ValidationError as exc:
-                return JSONResponse({"error": "INVALID_PARAMS", "details": exc.errors(include_url=False, include_context=False)}, status_code=422)
-            except ValueError as exc:
-                return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
-
-        return endpoint
-
     async def chat(ws: WebSocket) -> None:
         if not _authorized(token, ws.query_params.get("token")):
             await ws.close(code=4401)
@@ -305,7 +287,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             finally:
                 pending.pop(confirm_id, None)
 
-        options = {k: v for k, v in ws.query_params.items() if k in ("provider", "model", "tools")}
+        options = {k: v for k, v in ws.query_params.items() if k in ("provider", "model")}
         try:
             provider = provider_factory(options)
         except credentials.MissingKey as exc:
@@ -317,14 +299,10 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             await emit({"type": "error", "message": str(exc)})
             await ws.close()
             return
-        # Every model gets every tool; local models get them with lean schemas and short
-        # results, minus LOCAL_HIDDEN. tools=small or tools=reduced opts into a subset.
-        small = options.get("tools") == "small"
-        allowed = SMALL_TOOLS if small else REDUCED_TOOLS if options.get("tools") == "reduced" else None
+        # Every model gets every tool; local models get them with lean schemas and short results.
         running: asyncio.Task[None] | None = None
-        hidden = LOCAL_HIDDEN if allowed is None and provider.name in LOCAL_PROVIDERS else frozenset()
-        async with ToolHost(server, confirm, allowed, hidden) as host:
-            agent = Agent(provider, host, without_tools(SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, hidden), compact=provider.name in LOCAL_PROVIDERS)
+        async with ToolHost(server, confirm) as host:
+            agent = Agent(provider, host, SYSTEM_PROMPT, compact=provider.name in LOCAL_PROVIDERS)
             await emit({"type": "ready", "provider": provider.name, "model": provider.model, "tools": len(host.tools)})
             changed = live.watch()
 
@@ -417,8 +395,6 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/license", guard(license_state), methods=["GET"]),
             Route("/license/{action}", guard(license_action), methods=["POST"]),
             Route("/auth/anthropic", guard(auth), methods=["GET", "PUT", "DELETE"]),
-            Route("/miditool/generate", guard(notes_endpoint(GenerateRequest, generate)), methods=["POST"]),
-            Route("/miditool/transform", guard(notes_endpoint(TransformRequest, transform)), methods=["POST"]),
             WebSocketRoute("/chat", chat),
         ]
     )

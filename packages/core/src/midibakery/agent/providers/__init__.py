@@ -6,7 +6,7 @@ from midibakery.agent.providers.base import Provider, ToolCall, ToolResult, Turn
 
 __all__ = ["LOCAL_PROVIDERS", "Provider", "ToolCall", "ToolResult", "Turn", "make_provider"]
 
-# Local backends get the small profile: SMALL_TOOLS, SMALL_SYSTEM_PROMPT, compact schemas.
+# Local backends get compact schemas and short tool results.
 LOCAL_PROVIDERS = frozenset({"ollama", "lmstudio"})
 
 

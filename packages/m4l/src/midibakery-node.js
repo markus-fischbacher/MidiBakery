@@ -2,7 +2,7 @@
  * MidiBakery Node for Max helper, shared by the devices.
  *
  *   node.script midibakery-chat.js       chat device: feeds jweb the chat page URL
- *   node.script midibakery-miditool.js   MIDI Tools: async HTTP for the v8 code
+ *   node.script midibakery-importer.js   Set Importer: feeds jweb the importer page URL
  *
  * Those entry files set MIDIBAKERY_DEVICE and load this module. Script arguments
  * are not used: Node for Max runs scripts through its own runner, so
@@ -23,12 +23,11 @@ const { execFile } = require("child_process");
 const Max = require("max-api");
 const { about } = require("./midibakery-about.js");
 
-// Devices that show a page of the API in a jweb (the others are MIDI Tools): the page each shows.
+// The page of the API each device shows in its jweb.
 const PAGES = { chat: "/ui", importer: "/importer" };
-const MODE = process.env.MIDIBAKERY_DEVICE in PAGES ? process.env.MIDIBAKERY_DEVICE : "miditool";
+const MODE = process.env.MIDIBAKERY_DEVICE in PAGES ? process.env.MIDIBAKERY_DEVICE : "chat";
 const PAGE = PAGES[MODE];
 const POLL_MS = 2000;
-const REQUEST_TIMEOUT_MS = 15000;
 
 function configDir() {
   if (process.env.MIDIBAKERY_HOME) return process.env.MIDIBAKERY_HOME;
@@ -85,13 +84,10 @@ async function refresh() {
     await Max.outlet("status", "MidiBakery API not running - start it with: midibakery api");
     return;
   }
-  if (!PAGE) await Max.outlet("status", `MidiBakery API on port ${api.port}`);
-  if (PAGE) {
-    waiting = false;
-    pageLoaded = false;
-    loadAttempts = 0;
-    await loadPage();
-  }
+  waiting = false;
+  pageLoaded = false;
+  loadAttempts = 0;
+  await loadPage();
 }
 
 const MAX_LOAD_ATTEMPTS = 5;
@@ -111,7 +107,7 @@ async function answers() {
 }
 
 async function loadPage() {
-  if (!PAGE || !api || pageLoaded) return;
+  if (!api || pageLoaded) return;
   if (loadAttempts >= MAX_LOAD_ATTEMPTS) {
     if (loadAttempts === MAX_LOAD_ATTEMPTS) {
       loadAttempts += 1;
@@ -139,74 +135,6 @@ Max.addHandler("loaded", async () => {
   pageLoaded = true;
   if (api) await Max.outlet("status", `Connected to MidiBakery API on port ${api.port}`);
 });
-
-// Max dicts hold numbers, strings, arrays and dicts only: no booleans, no null.
-function toMaxDict(value) {
-  if (value === true) return 1;
-  if (value === false) return 0;
-  if (Array.isArray(value)) return value.filter((v) => v !== null && v !== undefined).map(toMaxDict);
-  if (value && typeof value === "object") {
-    const out = {};
-    for (const [key, v] of Object.entries(value)) {
-      if (v !== null && v !== undefined) out[key] = toMaxDict(v);
-    }
-    return out;
-  }
-  return value;
-}
-
-function describeError(error) {
-  if (!error) return "unknown error";
-  if (typeof error === "string") return error;
-  return error.message || error.name || JSON.stringify(error);
-}
-
-async function post(route, body) {
-  if (!api) throw new Error("MidiBakery API not running");
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    const response = await fetch(`http://127.0.0.1:${api.port}${route}`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${api.token}` },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const detail = data.message || (data.details && data.details.map((d) => `${(d.loc || []).join(".")}: ${d.msg}`).join("; ")) || data.error;
-      throw new Error(`${response.status} ${detail || response.statusText}`);
-    }
-    return data;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// From the v8 code: request <id> <generate|transform> <dict name>; the body is in that dict
-// and the result goes back in "<dict name>_res".
-Max.addHandler("request", async (id, kind, dictName) => {
-  const started = Date.now();
-  let step = "check";
-  try {
-    if (kind !== "generate" && kind !== "transform") throw new Error(`unknown request kind ${kind}`);
-    step = "read request dict";
-    const body = await Max.getDict(dictName);
-    step = "call API";
-    const result = await post(`/miditool/${kind}`, body);
-    step = "write result dict";
-    const resName = `${dictName}_res`;
-    await Max.setDict(resName, toMaxDict(result));
-    log("request", id, kind, `${(result.notes || []).length} notes`, `${Date.now() - started} ms`);
-    await Max.outlet("response", id, resName);
-  } catch (error) {
-    const message = `${step}: ${describeError(error)}`;
-    log("request failed", id, kind, message, error && error.stack ? error.stack : "");
-    await Max.outlet("failed", id, message);
-  }
-});
-
-Max.addHandler("log", (...args) => log("v8", args));
 
 // Chat device: open the same page in the system browser, with more room.
 Max.addHandler("popout", () => {

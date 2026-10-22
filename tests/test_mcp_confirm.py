@@ -1,4 +1,4 @@
-"""MCP client round trips: confirmation of destructive changes and the piano-roll app."""
+"""MCP client round trips: confirmation of destructive changes."""
 
 import json
 
@@ -7,7 +7,6 @@ from mcp import Client
 from mcp_types import ElicitResult
 
 from midibakery.mcp import build_server
-from midibakery.mcp.server import PIANO_ROLL_URI
 
 
 class Answer:
@@ -32,41 +31,52 @@ def _notes(live, track, slot):
     return live.on_main(lambda: list(live.song.tracks[track].clip_slots[slot].clip.notes.values()))
 
 
+def _clips(live, track):
+    return live.on_main(lambda: [s.has_clip for s in live.song.tracks[track].clip_slots][:2])
+
+
+ASKED = "Delete clip 'Riff' in slot 1 of track 1 '1-MIDI'?"
+
+
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
 async def test_delete_asks_and_runs_on_accept(client, live, mode):
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 4, "name": "Riff"})
     answer = Answer()
     async with Client(build_server(client), mode=mode, elicitation_callback=answer) as mcp:
-        result = await mcp.call_tool("delete_track", {"track": 1})
+        result = await mcp.call_tool("delete_clip", {"track": 0, "slot": 0})
     assert not result.is_error
-    assert answer.messages == ["Delete track 2 '2-MIDI' with 0 clip(s)?"]
-    assert _tracks(live) == ["1-MIDI"]
+    assert answer.messages == [ASKED]
+    assert _clips(live, 0) == [False, False]
 
 
 @pytest.mark.parametrize("answer", [Answer("decline"), Answer("cancel"), Answer("accept", confirm=False)], ids=["decline", "cancel", "unchecked"])
 async def test_delete_is_cancelled_when_user_says_no(client, live, answer):
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 4, "name": "Riff"})
     async with Client(build_server(client), elicitation_callback=answer) as mcp:
-        result = await mcp.call_tool("delete_track", {"track": 0})
+        result = await mcp.call_tool("delete_clip", {"track": 0, "slot": 0})
     assert result.is_error and "CANCELLED" in result.content[0].text
-    assert _tracks(live) == ["1-MIDI", "2-MIDI"]
+    assert _clips(live, 0) == [True, False]
 
 
 async def test_clients_without_elicitation_get_a_plan_instead(client, live):
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 4, "name": "Riff"})
     async with Client(build_server(client)) as mcp:
-        result = await mcp.call_tool("delete_track", {"track": 0})
-        assert not result.is_error and _tracks(live) == ["1-MIDI", "2-MIDI"]  # nothing deleted yet
+        result = await mcp.call_tool("delete_clip", {"track": 0, "slot": 0})
+        assert not result.is_error and _clips(live, 0) == [True, False]  # nothing deleted yet
         pending = json.loads(result.content[0].text)
-        assert pending["not_applied"] == "Delete track 1 '1-MIDI' with 0 clip(s)?" and "apply_plan" in pending["next"]
+        assert pending["not_applied"] == ASKED and "apply_plan" in pending["next"]
         assert not (await mcp.call_tool("apply_plan", {"plan_id": pending["plan_id"]})).is_error
-    assert _tracks(live) == ["2-MIDI"]
+    assert _clips(live, 0) == [False, False]
 
 
 async def test_a_deferred_delete_is_refused_when_the_tracks_changed(client, live):
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 4, "name": "Riff"})
     async with Client(build_server(client)) as mcp:
-        pending = json.loads((await mcp.call_tool("delete_track", {"track": 1})).content[0].text)
+        pending = json.loads((await mcp.call_tool("delete_clip", {"track": 1, "slot": 0})).content[0].text)
         await client.call("track.delete", {"track": 0})  # index 1 is gone, '2-MIDI' is index 0 now
         result = await mcp.call_tool("apply_plan", {"plan_id": pending["plan_id"]})
     assert result.is_error and "CONFLICT" in result.content[0].text
-    assert _tracks(live) == ["2-MIDI"]
+    assert _clips(live, 0) == [True, False]
 
 
 async def test_replacing_without_elicitation_waits_for_apply_plan(client, live):
@@ -78,18 +88,6 @@ async def test_replacing_without_elicitation_waits_for_apply_plan(client, live):
         assert result.structured_content["not_applied"] == f"Replace {len(before)} existing note(s) in track 2 slot 1?"
         assert not (await mcp.call_tool("apply_plan", {"plan_id": result.structured_content["plan_id"]})).is_error
     assert _notes(live, 1, 0) != before
-
-
-async def test_batch_with_delete_asks_once(client, live):
-    await client.call("clip.create", {"track": 0, "slot": 0, "length": 4, "name": "Riff"})
-    answer = Answer()
-    async with Client(build_server(client), elicitation_callback=answer) as mcp:
-        result = await mcp.call_tool("run_batch", {"ops": [
-            {"op": "song.set", "params": {"tempo": 100}},
-            {"op": "clip.delete", "params": {"track": 0, "slot": 0}},
-        ]})
-    assert not result.is_error
-    assert len(answer.messages) == 1 and "delete clip 'Riff' in slot 1" in answer.messages[0]
 
 
 async def test_edits_without_removals_are_not_asked(client, live):
@@ -123,38 +121,14 @@ async def test_apply_plan_with_replacement_asks(client, live):
     declined = Answer("decline")
     server = build_server(client)
     async with Client(server, elicitation_callback=declined) as mcp:
-        plan = (await mcp.call_tool("plan_changes", {"steps": [
-            {"kind": "drums", "track": 0, "slot": 0, "seed": 1, "if_exists": "replace"},
-        ]})).structured_content
+        plan = (await mcp.call_tool("compose", {"kind": "drums", "track": 0, "slot": 0, "seed": 1, "if_exists": "replace",
+                                                "preview": True})).structured_content
         assert (await mcp.call_tool("apply_plan", {"plan_id": plan["plan_id"]})).is_error
     assert len(_notes(live, 0, 0)) == 1
     async with Client(server, elicitation_callback=Answer()) as mcp:
         # Declining keeps the plan, so it can still be applied later.
         assert not (await mcp.call_tool("apply_plan", {"plan_id": plan["plan_id"]})).is_error
     assert len(_notes(live, 0, 0)) == plan["changes"][0]["add"]
-
-
-async def test_piano_roll_app(client, live):
-    async with Client(build_server(client)) as mcp:
-        tools = {t.name: t for t in (await mcp.list_tools()).tools}
-        for name in ("compose", "transform_notes", "plan_changes"):
-            assert tools[name].meta["ui"]["resourceUri"] == PIANO_ROLL_URI
-        resource = await mcp.read_resource(PIANO_ROLL_URI)
-        html = resource.contents[0].text
-        assert resource.contents[0].mime_type == "text/html;profile=mcp-app"
-        assert "ui/initialize" in html and "apply_plan" in html
-
-        await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
-        await client.call("notes.apply", {"track": 1, "slot": 0, "add": [
-            {"pitch": 60, "start_time": 0.1, "duration": 1}, {"pitch": 64, "start_time": 1, "duration": 1},
-        ]})
-        result = await mcp.call_tool("transform_notes", {"track": 1, "slot": 0, "operation": "quantize", "preview": True})
-        roll = result.meta["midibakery/roll"]
-        assert roll["applied"] is False and roll["plan_id"] == result.structured_content["plan_id"]
-        clip = roll["clips"][0]
-        assert clip["length"] == 4 and len(clip["existing"]) == 2
-        assert clip["modify"] == [{"note_id": clip["existing"][0][0], "start_time": 0.0}]
-        assert json.loads(result.content[0].text)["changes"][0]["modify"] == 1
 
 
 async def test_replacing_an_arrangement_clip_asks_with_its_name(client, live):

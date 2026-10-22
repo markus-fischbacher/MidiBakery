@@ -203,7 +203,7 @@ def cmd_api(args: argparse.Namespace) -> int:
 
 
 def cmd_chat(args: argparse.Namespace) -> int:
-    from midibakery.agent import LOCAL_HIDDEN, LOCAL_PROVIDERS, REDUCED_TOOLS, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, SYSTEM_PROMPT, Agent, ToolHost, without_tools
+    from midibakery.agent import LOCAL_PROVIDERS, SYSTEM_PROMPT, Agent, ToolHost
     from midibakery.agent.loop import describe_input
     from midibakery.bridge import BridgeClient
     from midibakery.mcp import build_server
@@ -236,12 +236,9 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
     async def run() -> int:
         bridge = BridgeClient()
-        small = args.small
-        allowed = SMALL_TOOLS if small else REDUCED_TOOLS if args.reduced else None
         try:
-            hidden = LOCAL_HIDDEN if allowed is None and provider.name in LOCAL_PROVIDERS else frozenset()
-            async with ToolHost(build_server(bridge), confirm, allowed, hidden) as host:
-                agent = Agent(provider, host, without_tools(SMALL_SYSTEM_PROMPT if small else SYSTEM_PROMPT, hidden), compact=provider.name in LOCAL_PROVIDERS)
+            async with ToolHost(build_server(bridge), confirm) as host:
+                agent = Agent(provider, host, SYSTEM_PROMPT, compact=provider.name in LOCAL_PROVIDERS)
                 print(f"MidiBakery chat ({provider.name}, {provider.model}, {len(host.tools)} tools). Empty line or Ctrl-D quits, /reset forgets.")
                 while True:
                     try:
@@ -275,8 +272,6 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--provider", choices=["anthropic", "ollama", "lmstudio"], default="anthropic")
         p.add_argument("--model", help="default: claude-sonnet-5-5 (anthropic), qwen3:8b (ollama), google/gemma-4-e4b (lmstudio)")
         if name == "chat":
-            p.add_argument("--reduced", action="store_true", help="only the core tools")
-            p.add_argument("--small", action="store_true", help="the smallest tool set and prompt, for 8k-context models")
             p.set_defaults(func=cmd_chat)
         else:
             p.add_argument("--port", type=int, default=8766)

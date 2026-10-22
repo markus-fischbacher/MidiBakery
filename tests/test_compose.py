@@ -5,7 +5,6 @@ import random
 import pytest
 
 from midibakery.compose import harmony
-from midibakery.compose import transform as tf
 from midibakery.compose.bass import STYLES as BASS_STYLES
 from midibakery.compose.bass import generate_bass
 from midibakery.compose.chords import RHYTHMS, generate_chords
@@ -249,70 +248,6 @@ def _clip(*pitches_starts):
     ]
 
 
-def test_quantize_only_touches_off_grid_notes():
-    notes = _clip((60, 0.0, 0.5), (62, 0.27, 0.5), (64, 1.0, 0.5))
-    diff = tf.quantize(notes, Grid(Meter(), 0.25))
-    assert diff.modify == [{"note_id": 2, "start_time": 0.25}]
-    assert not diff.add and not diff.remove
-
-
-def test_humanize_is_seeded_and_modifies_by_id():
-    notes = _clip((60, 0.0, 0.5), (62, 1.0, 0.5))
-    a = tf.humanize(notes, random.Random(3), 0.8)
-    b = tf.humanize(notes, random.Random(3), 0.8)
-    assert a.modify == b.modify and {m["note_id"] for m in a.modify} <= {1, 2}
-    assert all(set(m) <= {"note_id", "start_time", "velocity"} for m in a.modify)
-
-
-def test_invert_is_diatonic():
-    notes = _clip((60, 0, 1), (64, 1, 1), (67, 2, 1))
-    diff = tf.invert(notes, C_MAJOR, axis=64)
-    pitches = {m["note_id"]: m["pitch"] for m in diff.modify}
-    assert pitches == {1: 67, 3: 60}  # E stays, C <-> G mirrored around E in C major
-
-
-def test_transpose_in_key():
-    diff = tf.transpose(_clip((60, 0, 1), (64, 1, 1)), C_MAJOR, 2)
-    assert [m["pitch"] for m in diff.modify] == [64, 67]
-
-
-def test_transpose_by_semitones_is_chromatic():
-    diff = tf.transpose(_clip((60, 0, 1), (64, 1, 1)), C_MAJOR, 0, semitones=2)
-    assert [m["pitch"] for m in diff.modify] == [62, 66]  # E + 2 = F#, out of key on purpose
-    combined = tf.transpose(_clip((60, 0, 1)), C_MAJOR, 2, semitones=12)
-    assert [m["pitch"] for m in combined.modify] == [76]  # a third up in key, then an octave
-
-
-def test_transform_spec_transpose_needs_an_amount():
-    from pydantic import ValidationError
-
-    from midibakery.compose.specs import TransformSpec
-
-    with pytest.raises(ValidationError, match="semitones"):
-        TransformSpec(track=0, slot=0, operation="transpose")
-    with pytest.raises(ValidationError, match="not both"):
-        TransformSpec(track=0, slot=0, operation="transpose", semitones=2, steps=1)
-    assert TransformSpec(track=0, slot=0, operation="transpose", semitones=-2).semitones == -2
-    assert TransformSpec(track=0, slot=0, operation="humanize").semitones == 0
-
-
-def test_arpeggiate_replaces_chords_only():
-    notes = _clip((60, 0, 1), (64, 0, 1), (67, 0, 1), (72, 2, 0.5))
-    diff = tf.arpeggiate(notes, random.Random(1), rate=0.25, direction="up")
-    assert sorted(diff.remove) == [1, 2, 3]
-    assert [n.pitch for n in diff.add] == [60, 64, 67, 60]
-    assert [n.start_time for n in diff.add] == [0, 0.25, 0.5, 0.75]
-
-
-def test_variation_keeps_scale_and_uses_probability():
-    notes = _clip(*[(C_MAJOR.pitch(d, 3), d * 0.5, 0.5) for d in range(16)])
-    diff = tf.variation(notes, random.Random(4), C_MAJOR, amount=1.0)
-    assert diff.modify and not diff.add and not diff.remove
-    assert all(C_MAJOR.contains(m["pitch"]) for m in diff.modify if "pitch" in m)
-    assert any("probability" in m for m in diff.modify)
-    assert tf.variation(notes, random.Random(4), C_MAJOR, 1.0).modify == diff.modify
-
-
 def test_fit_to_length_removes_same_pitch_overlaps():
     from midibakery.compose.notes import Note, fit_to_length
 
@@ -365,13 +300,3 @@ def test_drum_chance_scales_only_the_optional_hits():
     assert scale_chance(0.7, 0.5) == 0.7
     assert all(n.probability == 1.0 for n in generate_drums(Meter(), 4, "hiphop", random.Random(3), map_pads(None)))
 
-
-def test_a_slight_variation_always_changes_a_pitch():
-    # amount 0.2 on a short phrase used to roll no pitch change at all: the user heard nothing
-    import random
-
-    from midibakery.compose.transform import variation
-    notes = [{"note_id": i, "pitch": 33, "start_time": float(i), "duration": 0.5, "velocity": 100.0} for i in range(8)]
-    for seed in range(50):
-        diff = variation(notes, random.Random(seed), None, amount=0.1)
-        assert any("pitch" in c for c in diff.modify), seed

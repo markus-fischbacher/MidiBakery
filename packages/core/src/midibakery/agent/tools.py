@@ -22,31 +22,6 @@ from midibakery.compose.plan import is_drum_track
 
 Confirm = Callable[[str], Awaitable[bool]]
 
-# For small local models: few, coarse tools work better than the full set.
-REDUCED_TOOLS = frozenset({
-    "get_session",
-    "get_clip",
-    "get_arrangement",
-    "create_track",
-    "create_clip",
-    "edit_notes",
-    "compose",
-    "transform_notes",
-    "plan_changes",
-    "apply_plan",
-    "transport",
-    "launch_clip",
-    "undo",
-})
-
-# For 8k-context models: plan_changes alone is ~3k tokens of schema.
-SMALL_TOOLS = REDUCED_TOOLS - {"plan_changes"}
-
-# Local models get every tool but these: the 36k-character budget is nearly full, and a song built on the
-# Arrangement (plan_song, compose) needs no session playing, hand-drawn clip automation or take lanes.
-LOCAL_HIDDEN = frozenset({"launch_clip", "fire_scene", "create_scene", "transport", "write_clip_envelope", "compose_takes"})
-
-
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -85,12 +60,9 @@ def tidy_validation_error(text: str) -> str:
 class ToolHost:
     """An in-process MCP client session on the MidiBakery server."""
 
-    def __init__(self, server: MCPServer, confirm: Confirm, allowed: frozenset[str] | None = None,
-                 hidden: frozenset[str] = frozenset()):
+    def __init__(self, server: MCPServer, confirm: Confirm):
         self._server = server
         self._confirm = confirm
-        self._allowed = allowed
-        self._hidden = hidden
         self._client: Client | None = None
         self.tools: list[ToolSpec] = []
 
@@ -107,7 +79,6 @@ class ToolHost:
                     bool(t.annotations and t.annotations.read_only_hint),
                 )
                 for t in listed
-                if (self._allowed is None or t.name in self._allowed) and t.name not in self._hidden
             ),
             key=lambda t: t.name,  # deterministic order keeps the prompt cache warm
         )

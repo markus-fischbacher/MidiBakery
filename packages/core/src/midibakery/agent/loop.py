@@ -14,48 +14,14 @@ from midibakery.agent.tools import COMPACT_RESULTS, ToolHost, ToolOutcome, compa
 from midibakery.mcp.server import INSTRUCTIONS
 
 SYSTEM_PROMPT = (
-    "You are MidiBakery, a music production assistant inside Ableton Live 12. "
-    "You compose and edit MIDI and control the Live session through tools. "
+    "You are MidiBakery, a music production assistant inside Ableton Live 12 that builds EDM song sketches for inspiration. "
     "Always answer in the language of the user's latest message and keep replies short: say what you changed or propose, "
     "with names of tracks, clips, chords and seeds where useful.\n\n"
     "Find named tracks and clips in get_session; never ask for indices. Meet a vague wish with a sensible choice. "
-    "A vague wish about an existing part ('more exciting') changes that clip (transform_notes), never adds one. "
-    "A track or clip the set lacks (no typo): say so, use no other.\n\n"
-    "Work like a producer: keep parts in the song's scale and "
-    "time signature and fitting together (bass follows kick and chords, melody follows the chords). For more than one part, or when the user wants to hear options first, "
-    "use plan_changes and let them apply the preview; otherwise write directly with the compose "
-    "tools. If a tool fails, fix the call instead of repeating it.\n\n"
+    "A vague wish about an existing part ('more exciting') rewrites that clip with compose, never adds one. "
+    "A track or clip the set lacks (no typo): say so, use no other. If a tool fails, fix the call instead of repeating it. "
+    "Call plan_song once per request; never claim a change you did not make.\n\n"
     "Tool guide:\n" + INSTRUCTIONS
-)
-
-def without_tools(prompt: str, hidden: frozenset[str]) -> str:
-    """The prompt without the lines that talk about tools the model does not get."""
-    if not hidden:
-        return prompt
-    names = re.compile(r"\b(" + "|".join(sorted(hidden)) + r")\b")
-    return "\n".join(line for line in prompt.split("\n") if not names.search(line))
-
-
-# For local models with a small context (e.g. 8k): the essentials of SYSTEM_PROMPT and INSTRUCTIONS.
-SMALL_SYSTEM_PROMPT = (
-    "You are MidiBakery, a music assistant controlling the open Ableton Live 12 set through tools. "
-    "Always answer in the language of the user's latest message, briefly.\n"
-    "- Call get_session first and find the tracks and clips the user names there; never ask for indices. Tracks and clip slots are zero-based indices; "
-    "users count from 1, so \"track 1\" is index 0.\n"
-    "- Times are in beats (quarter notes); pitch 60 = C3. Stay in the song scale.\n"
-    "- compose (kind drums/bass/chords/melody) writes a new clip into a free slot (omit slot for the first free one). "
-    "Give bass and melody chords_from = the chord clip (never a drums track), the bass follow_kick = the drum clip. "
-    "A counter melody = compose kind melody with counter_to = the lead's clip. "
-    "Never overwrite a clip unless the user asks for it.\n"
-    "- A song in the Arrangement: get_arrangement lists each track's clips (arrangement_clip index, start beat, name). "
-    "To change one part of it, give compose or transform_notes arrangement_clip (its index or its name, "
-    "e.g. 'Groove Bass') instead of slot. To vary a part of a clip, transform_notes with operation 'variation' "
-    "and half 'second' (or from_bar/to_bar: bars of the clip, 1 = its first bar).\n"
-    "- edit_notes and transform_notes change existing notes by note_id from get_clip. "
-    "Transpose by half steps/semitones/octaves with semitones (12 = octave); steps means scale steps.\n"
-    "- To play a clip, launch it with launch_clip; transport only starts or stops the whole song.\n"
-    "- Every write can be undone with undo. If a tool fails, read the error, fix the call and retry it yourself. "
-    "If the user declined a change (CANCELLED), nothing was written: say so, never claim it was done."
 )
 
 log = logging.getLogger("midibakery.agent")

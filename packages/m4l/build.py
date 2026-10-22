@@ -8,12 +8,8 @@ Devices:
   view (jweb shows the API's /ui page). MIDI passes through unchanged.
 - MidiBakery Set Importer (MIDI Effect): reads Ableton Live Sets (.als) you choose (one Set or a
   folder) and stores their structure as references for plan_song. The page is the API's /importer.
-- MidiBakery Generator / MidiBakery Transform (MIDI Tools, Live 12.2+): the
-  composition engine in the clip view's Generate / Transform panels.
 - MidiBakery Reference Analyzer (Audio Effect): analyzes the reference song on its track
   (sections, kick, energy per bar), shows the structure and sets locators.
-- MidiBakery Loudness Meter (Audio Effect): on the Master, after the Limiter: momentary,
-  short-term and integrated LUFS (BS.1770) and the sample peak, for MidiBakery's measure_master.
 
 Patchers are generated here instead of hand-saved in Max, so they stay
 reviewable in git and every device shares one node helper (src/midibakery-node.js).
@@ -37,11 +33,10 @@ SRC = HERE / "src"
 DIST = HERE / "dist"
 NODE_SCRIPT = "midibakery-node.js"
 # node.script entry files per device kind; each sets its mode and loads NODE_SCRIPT.
-NODE_ENTRIES = ("midibakery-chat.js", "midibakery-miditool.js", "midibakery-importer.js")
+NODE_ENTRIES = ("midibakery-chat.js", "midibakery-importer.js")
 REFERENCE_FILES = ("midibakery-reference.js", "reference-analysis.js")  # the Reference device's node.script
-METER_FILES = ("midibakery-meter.js", "loudness.js")  # the Loudness Meter's node.script
 ABOUT_SCRIPT = "midibakery-about.js"  # the About button's version line, for every node.script
-NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES, *METER_FILES, ABOUT_SCRIPT)
+NODE_FILES = (NODE_SCRIPT, *NODE_ENTRIES, *REFERENCE_FILES, ABOUT_SCRIPT)
 # MidiBakery's one version (midibakery.__version__), read as text: building needs no installed package.
 # What a jweb shows until its node.script sends the real page (the API may still be starting): without a url
 # jweb is white and says "jweb". One symbol, no spaces, so Max keeps it whole.
@@ -55,12 +50,10 @@ LOADING_URL = "data:text/html;charset=utf-8;base64," + base64.b64encode(LOADING_
 VERSION = re.search(r'^__version__ = "([^"]+)"', (HERE.parent / "core/src/midibakery/__init__.py").read_text(encoding="utf-8"), re.M)[1]
 
 # Four-character device type codes, as found in Live's own device templates.
-DEVICE_TYPES = {"midi_effect": b"mmmm", "audio_effect": b"aaaa", "generator": b"nagg", "transformation": b"natt"}
+DEVICE_TYPES = {"midi_effect": b"mmmm", "audio_effect": b"aaaa"}
 INSTALL_DIRS = {
     "audio_effect": Path("Presets/Audio Effects/Max Audio Effect/MidiBakery"),
     "midi_effect": Path("Presets/MIDI Effects/Max MIDI Effect/MidiBakery"),
-    "generator": Path("MIDI Tools/Max Generators"),
-    "transformation": Path("MIDI Tools/Max Transformations"),
 }
 
 # live.* parameter types and unit styles (Max parameter attributes)
@@ -406,137 +399,10 @@ def importer_device() -> dict[str, Any]:
     return p.to_json(kind="midi_effect", title="MidiBakery Set Importer", width=width, height=height)
 
 
-def _miditool_core(p: Patcher, mode: str) -> tuple[str, str]:
-    """live.miditool.in -> dict.join -> v8.codebox -> live.miditool.out, plus node.script.
-    Returns the v8 and node.script box ids."""
-    code = f'var MODE = "{mode}";\n' + (SRC / "miditool.js").read_text(encoding="utf-8")
-    tool_in = p.obj("live.miditool.in", 20, 20, outlets=["", ""], width=110)
-    join = p.obj("dict.join", 20, 60, inlets=2, outlets=["dictionary"], width=70)
-    v8 = p.box("v8.codebox", (20, 100, 420, 300), inlets=2, outlets=["", "", "", "", ""], code=code, filename="none",
-               fontface=0, fontname="<Monospaced>", fontsize=10.0)
-    tool_out = p.obj("live.miditool.out", 20, 420, outlets=[], width=110)
-    node = p.obj("node.script midibakery-miditool.js @autostart 1 @watch 0", 460, 420, outlets=["", ""], width=300)
-    rebang = p.obj("t b", 460, 20, outlets=["bang"], width=40)
-    # Context (right outlet) fires first and is stored; notes (left) trigger the join.
-    p.connect(tool_in, 1, join, 1)
-    p.connect(tool_in, 0, join, 0)
-    p.connect(join, 0, v8, 0)
-    p.connect(v8, 0, tool_out)
-    p.connect(v8, 1, node)
-    p.connect(v8, 2, rebang)
-    p.connect(rebang, 0, tool_in)
-    p.connect(node, 0, v8, 1)
-    return v8, node
-
-
-def _status_and_feedback(p: Patcher, v8: str, presentation) -> dict[str, str]:
-    status = p.comment("Connecting...", (460, 120, 250, 36), presentation=presentation, linecount=3,
-                       fontsize=9.0, **THEMED_TEXT)
-    p.connect(v8, 3, status)
-    feedback = p.obj("route seed", 460, 180, outlets=["", ""], width=70)
-    thispatcher = p.obj("thispatcher", 560, 220, outlets=["", ""], width=80)
-    p.connect(v8, 4, feedback)
-    p.connect(feedback, 1, thispatcher)
-    return {"seed_feedback": feedback}
-
-
-def _param_to_v8(p: Patcher, box: str, name: str, v8: str, x: float, y: float) -> None:
-    prepend = p.obj(f"prepend param {name}", x, y, width=130)
-    p.connect(box, 0, prepend)
-    p.connect(prepend, 0, v8, 1)
-
-
-def _seed_controls(p: Patcher, v8: str, feedback: str, numbox_rect, dice_rect, label_rect) -> None:
-    seed = p.parameter("live.numbox", (760, 300, 50, 15), numbox_rect, name="Seed", short="Seed", ptype=FLOAT,
-                       inlets=1, outlets=["", "float"], parameter_mmin=1, parameter_mmax=9999, parameter_initial=[1],
-                       parameter_initial_enable=1, parameter_unitstyle=UNIT_INT)
-    _param_to_v8(p, seed, "seed", v8, 760, 330)
-    p.connect(feedback, 0, seed)
-    dice = p.parameter("live.text", (840, 300, 50, 15), dice_rect, name="New seed", short="Dice", ptype=ENUM,
-                       inlets=1, outlets=["", ""], parameter_enum=["val1", "val2"], parameter_mmax=1)
-    p.boxes[-1]["box"].update({"mode": 0, "text": "Dice", "texton": "Dice"})
-    _on_press(p, dice, "dice", v8, 840, 330, inlet=1)
-    p.comment("Seed", (760, 280, 40, 18), presentation=label_rect, fontsize=9.0)
-
-
 def _menu(p: Patcher, rect, presentation, name: str, short: str, items: list[str], initial: int, **attrs: Any) -> str:
     return p.parameter("live.menu", rect, presentation, name=name, short=short, ptype=ENUM, inlets=1,
                        outlets=["", "", "float"], parameter_enum=items, parameter_mmax=len(items) - 1,
                        parameter_initial=[initial], parameter_initial_enable=1, **attrs)
-
-
-def _dial(p: Patcher, rect, presentation, name: str, short: str, initial: float) -> str:
-    return p.parameter("live.dial", rect, presentation, name=name, short=short, ptype=FLOAT, inlets=1,
-                       outlets=["", "float"], parameter_mmin=0.0, parameter_mmax=100.0, parameter_initial=[initial],
-                       parameter_initial_enable=1, parameter_unitstyle=UNIT_PERCENT)
-
-
-# Live's clip-view MIDI Tool panel (Live 12.4): the size of its own Max MIDI Tool templates.
-TOOL_WIDTH, TOOL_HEIGHT = 152.0, 147.0
-ABOUT_RECT = (102, 96, 48, 16)  # beside the Generator's Replace toggle
-TOOL_STATUS_RECT = (2, 116, 148, 30)  # below Replace and About
-
-
-def generator_device() -> dict[str, Any]:
-    """Layout (152 x 147): Part | Style menus; Density, Swing, Chance (drums only) dials; Seed row; Replace | About; status."""
-    p = Patcher()
-    v8, node = _miditool_core(p, "generate")
-    ui = _status_and_feedback(p, v8, TOOL_STATUS_RECT)
-    _about(p, ABOUT_RECT, node, 1020, 300)
-
-    kind = _menu(p, (760, 20, 80, 15), (2, 2, 72, 16), "Part", "Part", ["Drums", "Bass", "Chords", "Melody"], 0)
-    _param_to_v8(p, kind, "kind", v8, 760, 44)
-    styles = [
-        ("drums", "Drum Style", ["House", "Techno", "Hip-Hop", "Trap", "Rock", "Breakbeat"], 0),
-        ("bass", "Bass Style", ["Sustained", "Pulse", "Offbeat", "Octave", "Walking", "Syncopated"], 5),
-        ("chords", "Chord Rhythm", ["Sustain", "Pulse", "Offbeat", "Stabs"], 0),
-    ]
-    for i, (key, name, items, initial) in enumerate(styles):
-        menu = _menu(p, (760, 80 + i * 50, 110, 15), (78, 2, 72, 16), name, name.split()[-1], items, initial,
-                     varname=f"style_{key}")
-        p.boxes[-1]["box"]["hidden"] = 0 if key == "drums" else 1
-        _param_to_v8(p, menu, key, v8, 880, 80 + i * 50)
-    density = _dial(p, (760, 240, 44, 48), (2, 24, 48, 48), "Density", "Density", 50.0)
-    _param_to_v8(p, density, "density", v8, 760, 300)
-    swing = _dial(p, (820, 240, 44, 48), (52, 24, 48, 48), "Swing", "Swing", 0.0)
-    _param_to_v8(p, swing, "swing", v8, 820, 360)
-    chance = _dial(p, (880, 240, 44, 48), (102, 24, 48, 48), "Chance", "Chance", 100.0)
-    p.boxes[-1]["box"]["varname"] = "chance_dial"
-    _param_to_v8(p, chance, "chance", v8, 880, 360)
-    _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(52, 76, 46, 16), dice_rect=(102, 76, 48, 16),
-                   label_rect=(2, 77, 46, 14))
-    # Replace: clear the time selection before the new notes go in (a Generator can only add).
-    replace = p.parameter("live.text", (940, 300, 60, 15), (2, 96, 60, 16), name="Replace", short="Replace", ptype=ENUM,
-                          inlets=1, outlets=["", ""], parameter_enum=["off", "on"], parameter_mmax=1,
-                          parameter_initial=[1], parameter_initial_enable=1)
-    p.boxes[-1]["box"].update({"mode": 1, "text": "Replace", "texton": "Replace"})
-    _param_to_v8(p, replace, "replace", v8, 940, 330)
-    return p.to_json(kind="generator", title="MidiBakery Generator", width=TOOL_WIDTH, height=TOOL_HEIGHT)
-
-
-def transform_device() -> dict[str, Any]:
-    """Layout (152 x 147): Operation menu, Amount dial with Semis and Arp rate beside it, Seed row, About, status."""
-    p = Patcher()
-    v8, node = _miditool_core(p, "transform")
-    ui = _status_and_feedback(p, v8, TOOL_STATUS_RECT)
-    _about(p, ABOUT_RECT, node, 1020, 300)
-
-    operation = _menu(p, (760, 20, 110, 15), (2, 2, 148, 16), "Operation", "Operation",
-                      ["Humanize", "Quantize", "Invert", "Arpeggiate", "Variation", "Transpose"], 0)
-    _param_to_v8(p, operation, "operation", v8, 760, 44)
-    amount = _dial(p, (760, 80, 44, 48), (2, 24, 48, 48), "Amount", "Amount", 50.0)
-    _param_to_v8(p, amount, "amount", v8, 760, 140)
-    p.comment("Semis", (820, 60, 40, 18), presentation=(52, 24, 46, 14), fontsize=9.0)
-    semis = p.parameter("live.numbox", (820, 80, 44, 15), (52, 40, 46, 16), name="Semitones", short="Semis", ptype=FLOAT,
-                        inlets=1, outlets=["", "float"], parameter_mmin=-48, parameter_mmax=48, parameter_initial=[12],
-                        parameter_initial_enable=1, parameter_unitstyle=UNIT_INT)
-    _param_to_v8(p, semis, "semitones", v8, 820, 110)
-    p.comment("Arp rate", (900, 60, 50, 18), presentation=(102, 24, 48, 14), fontsize=9.0)
-    rate = _menu(p, (900, 80, 60, 15), (102, 40, 48, 16), "Arp Rate", "Rate", ["1/32", "1/16", "1/8", "1/4"], 1)
-    _param_to_v8(p, rate, "rate", v8, 900, 110)
-    _seed_controls(p, v8, ui["seed_feedback"], numbox_rect=(52, 76, 46, 16), dice_rect=(102, 76, 48, 16),
-                   label_rect=(2, 77, 46, 14))
-    return p.to_json(kind="transformation", title="MidiBakery Transform", width=TOOL_WIDTH, height=TOOL_HEIGHT)
 
 
 REFERENCE_WIDTH, REFERENCE_HEIGHT = 800.0, 169.0
@@ -626,97 +492,10 @@ def reference_device() -> dict[str, Any]:
     return p.to_json(kind="audio_effect", title="MidiBakery Reference Analyzer", width=REFERENCE_WIDTH, height=REFERENCE_HEIGHT)
 
 
-METER_WIDTH, METER_HEIGHT = 170.0, 169.0
-METER_ROWS = (("m", "Momentary", "LUFS"), ("s", "Short-term", "LUFS"), ("i", "Integrated", "LUFS"), ("p", "Peak", "dB"))
-METER_MAX_WINDOW = 19200  # average~'s longest window: 100 ms at 192 kHz
-
-
-def meter_device() -> dict[str, Any]:
-    """Layout (170 x 169): the four readings (momentary, short-term, integrated LUFS; sample peak), Reset | About,
-    the status line. Audio passes through. Per channel the K-weighting (two biquad~ with loudness.js's coefficients
-    for the current sample rate) feeds average~ rms over 100 ms; every 100 ms metro reads both RMS values and both
-    sample peaks (peakamp~ restarts on each read) and sends them to node.script as one block."""
-    p = Patcher()
-    plugin = p.obj("plugin~", 20, 20, inlets=2, outlets=["signal", "signal"], width=60)
-    plugout = p.obj("plugout~", 20, 400, inlets=2, outlets=["signal", "signal"], width=60)
-    p.connect(plugin, 0, plugout, 0)
-    p.connect(plugin, 1, plugout, 1)
-    node = p.obj("node.script midibakery-meter.js @autostart 1 @watch 0", 520, 400, outlets=["", ""], width=300)
-
-    # node.script -> the filters, the window, the display, the status line; "needrate" asks dspstate~ again
-    route = p.obj("route coeff window needrate status " + " ".join(key for key, _, _ in METER_ROWS), 520, 440,
-                  outlets=[""] * (5 + len(METER_ROWS)), width=300)
-    p.connect(node, 0, route)
-    coeff = p.obj("route pre rlb", 520, 40, outlets=["", "", ""], width=90)
-    p.connect(route, 0, coeff)
-    dsp = p.obj("dspstate~", 640, 40, outlets=["int", "float", "int", "int"], width=70)
-    rate = p.obj("prepend samplerate", 640, 70, width=110)
-    p.connect(route, 2, dsp)
-    p.connect(dsp, 1, rate)
-    p.connect(rate, 0, node)
-
-    clock = p.obj("metro 100", 300, 80, inlets=2, outlets=["bang"], width=70)
-    start = p.message("1", 300, 50)
-    this_device = p.obj("live.thisdevice", 300, 20, outlets=["bang", "int", "int"], width=90)
-    p.connect(this_device, 0, start)
-    p.connect(start, 0, clock)
-    reads = p.obj("t b b b b", 300, 110, outlets=["bang"] * 4, width=80)
-    p.connect(clock, 0, reads)
-    block = p.obj("pack 0. 0. 0. 0.", 300, 340, inlets=4, outlets=[""], width=110)
-    to_node = p.obj("prepend block", 300, 370, width=90)
-    p.connect(block, 0, to_node)
-    p.connect(to_node, 0, node)
-
-    for ch in range(2):
-        x = 100 + 100 * ch
-        pre = p.obj("biquad~", x, 60, inlets=6, outlets=["signal"], width=60)
-        rlb = p.obj("biquad~", x, 100, inlets=6, outlets=["signal"], width=60)
-        rms = p.obj(f"average~ {METER_MAX_WINDOW} rms", x, 140, inlets=1, outlets=["signal"], width=90)
-        level = p.obj("snapshot~", x, 180, inlets=2, outlets=["float"], width=70)
-        peak = p.obj("peakamp~", x, 220, inlets=2, outlets=["float"], width=70)
-        p.connect(plugin, ch, pre)
-        p.connect(pre, 0, rlb)
-        p.connect(rlb, 0, rms)
-        p.connect(rms, 0, level)
-        p.connect(plugin, ch, peak)
-        p.connect(coeff, 0, pre)
-        p.connect(coeff, 1, rlb)
-        p.connect(route, 1, rms)
-        # trigger fires right to left: the peaks and the right channel first, the left RMS (pack's hot inlet) last
-        p.connect(reads, ch, level)
-        p.connect(reads, 2 + ch, peak)
-        p.connect(level, 0, block, ch)
-        p.connect(peak, 0, block, 2 + ch)
-
-    for i, (key, label, unit) in enumerate(METER_ROWS):
-        y = 4 + 26 * i
-        p.comment(label, (860, 20 + 30 * i, 70, 14), presentation=(4, y + 6, 64, 14), fontsize=9.0, **THEMED_TEXT)
-        value = p.comment("--", (940, 20 + 30 * i, 60, 22), presentation=(68, y, 62, 24), fontsize=16.0,
-                          textjustification=2, **THEMED_TEXT)
-        p.comment(unit, (1010, 20 + 30 * i, 40, 14), presentation=(132, y + 6, 36, 14), fontsize=9.0, **THEMED_TEXT)
-        shown = p.obj("prepend set", 940, 160 + 30 * i, width=70)
-        p.connect(route, 4 + i, shown)
-        p.connect(shown, 0, value)
-
-    reset = p.box("live.text", (860, 300, 50, 15), inlets=1, outlets=["", ""], presentation=(4, 110, 60, 16),
-                  parameter_enable=0, mode=0, text="Reset", texton="Reset", varname="reset")
-    _on_press(p, reset, "reset", node, 860, 330)
-    _about(p, (116, 110, 50, 16), node, 960, 300)
-    status = p.comment("Starting...", (860, 440, 160, 30), presentation=(4, 130, 162, 36), linecount=3,
-                       fontsize=9.0, **THEMED_TEXT)
-    to_status = p.obj("prepend set", 860, 470, width=70)
-    p.connect(route, 3, to_status)
-    p.connect(to_status, 0, status)
-    return p.to_json(kind="audio_effect", title="MidiBakery Loudness Meter", width=METER_WIDTH, height=METER_HEIGHT)
-
-
 DEVICES = {
     "MidiBakery Chat": ("midi_effect", chat_device),
     "MidiBakery Set Importer": ("midi_effect", importer_device),
     "MidiBakery Reference Analyzer": ("audio_effect", reference_device),
-    "MidiBakery Loudness Meter": ("audio_effect", meter_device),
-    "MidiBakery Generator": ("generator", generator_device),
-    "MidiBakery Transform": ("transformation", transform_device),
 }
 
 

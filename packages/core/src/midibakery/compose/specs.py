@@ -8,13 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 from midibakery.compose.bass import BassStyle, KickRelation
 from midibakery.compose.chords import ChordRhythm
-from midibakery.compose.counter import MODES as COUNTER_MODES
 from midibakery.compose.drums import DrumStyle
 from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names, user_pattern_names
-from midibakery.compose.transform import ArpDirection, Operation
 
-CounterMode = Literal[COUNTER_MODES]  # type: ignore[valid-type]
-CounterRegister = Literal["above", "below", "same"]
 
 TrackIndex = Annotated[int, Field(ge=0, description="Zero-based track index")]
 SlotIndex = Annotated[int, Field(ge=0, description="0-based slot (= scene) index")]
@@ -52,15 +48,9 @@ def _check_pattern(name: str | None, names: tuple[str, ...], what: str) -> None:
         raise ValueError(f"unknown {what} pattern {name!r}; use one of: {', '.join(names)}, or a my_* pattern from an imported Set")
 
 
-def _one_place(spec: Any, required: bool) -> None:
+def _one_place(spec: Any) -> None:
     if spec.slot is not None and spec.arrangement_clip is not None:
         raise ValueError("give either slot (Session View) or arrangement_clip (Arrangement), not both")
-    if required and spec.slot is None and spec.arrangement_clip is None:
-        # A model asked for "the second half of the Break Bass" tends to send song bars without the clip
-        bars = (" from_bar/to_bar count bars of that clip (1 = its first bar), not of the song."
-                if getattr(spec, "from_bar", None) is not None or getattr(spec, "to_bar", None) is not None else "")
-        raise ValueError("give slot (Session View) or arrangement_clip (Arrangement: the clip's index or name, "
-                         "e.g. 'Break Bass', from get_session or get_arrangement)." + bars)
 
 
 class ClipLocation(Spec):
@@ -73,7 +63,7 @@ class ClipLocation(Spec):
 
     @model_validator(mode="after")
     def _place(self) -> ClipLocation:
-        _one_place(self, required=False)
+        _one_place(self)
         return self
 
 
@@ -99,7 +89,7 @@ class Generate(Spec):
 
     @model_validator(mode="after")
     def _place(self) -> Generate:
-        _one_place(self, required=False)
+        _one_place(self)
         return self
 
 
@@ -182,9 +172,6 @@ class MelodySpec(Harmonic):
     swing: Swing = 0.0
     swing_unit: SwingUnit = "1/16"
     pattern: str | None = None
-    counter_to: ClipLocation | None = Field(None, description="Main melody clip to answer; a lead in the Arrangement (arrangement_clip: a name like 'Breakdown Lead' means all such clips) gets counter clips at the same bars on track")
-    counter_mode: CounterMode | None = None
-    counter_register: CounterRegister | None = None
 
     @model_validator(mode="after")
     def _pattern(self) -> MelodySpec:
@@ -192,69 +179,9 @@ class MelodySpec(Harmonic):
         return self
 
     @model_validator(mode="after")
-    def _counter(self) -> MelodySpec:
-        if self.counter_to is None:
-            if self.counter_mode is not None or self.counter_register is not None:
-                raise ValueError("counter_mode and counter_register need counter_to (the main melody clip)")
-        elif self.pattern:
-            raise ValueError("counter_to and pattern cannot be combined yet; omit pattern")
-        return self
-
-    @model_validator(mode="after")
     def _range(self) -> MelodySpec:
         if self.high - self.low < 7:
             raise ValueError("melody range must span at least a fifth (high - low >= 7)")
-        return self
-
-
-class TransformSpec(Spec):
-    kind: Literal["transform"] = "transform"
-    track: TrackIndex
-    slot: SlotIndex | None = None
-    arrangement_clip: ArrangementClip = None
-    operation: Operation
-    note_ids: list[int] | None = Field(None, description="Only these notes (default: all notes in the clip)")
-    from_bar: Annotated[int, Field(ge=1)] | None = Field(
-        None, description="Only notes starting from this bar of the clip (1 = its first bar), e.g. its second half")
-    to_bar: Annotated[int, Field(ge=1)] | None = Field(None, description="Only notes starting up to this bar of the clip (inclusive)")
-    half: Literal["first", "second"] | None = Field(
-        None, description="Only the first or second half of the clip (instead of from_bar/to_bar)")
-    amount: Amount = Field(0.5, description="humanize/variation intensity")
-    grid: Annotated[float, Field(gt=0, le=4, description="quantize grid in beats (0.25 = 1/16)")] = 0.25
-    strength: Amount = Field(1.0, description="quantize strength")
-    swing: Swing = 0.0
-    swing_unit: SwingUnit = "1/16"
-    axis: Pitch | None = Field(None, description="invert: mirror pitch (default: middle of the notes' range)")
-    semitones: int = Field(
-        0, ge=-48, le=48,
-        description="transpose: chromatic half steps (12 = one octave). Use this for 'n semitones / half steps / up an octave'",
-    )
-    steps: int = Field(
-        0, ge=-24, le=24,
-        description="transpose: diatonic scale steps in the song key (2 = up a third, not 2 semitones). Only for 'n scale steps'",
-    )
-    rate: Annotated[float, Field(gt=0, le=4, description="arpeggiate: step length in beats")] = 0.25
-    direction: ArpDirection = "up"
-    octaves: Annotated[int, Field(ge=1, le=3)] = 1
-    seed: Seed = None
-
-    @model_validator(mode="after")
-    def _place(self) -> TransformSpec:
-        _one_place(self, required=True)
-        return self
-
-    @model_validator(mode="after")
-    def _bars(self) -> TransformSpec:
-        if self.from_bar is not None and self.to_bar is not None and self.to_bar < self.from_bar:
-            raise ValueError("to_bar must not be before from_bar")
-        if self.half is not None and (self.from_bar is not None or self.to_bar is not None):
-            raise ValueError("give either half or from_bar/to_bar, not both")
-        return self
-
-    @model_validator(mode="after")
-    def _transpose_amount(self) -> TransformSpec:
-        if self.operation == "transpose" and bool(self.semitones) == bool(self.steps):
-            raise ValueError("transpose needs either semitones (chromatic, 12 = octave) or steps (scale steps in key), not both")
         return self
 
 
@@ -290,9 +217,6 @@ class ComposeRequest(Generate):
     rhythm: ChordRhythm | None = Field(None, description="(chords) sustain (default), pulse, offbeat, stabs")
     voices: Literal[3, 4] | None = Field(None, description="(chords) 3 (default) or 4")
     sevenths: bool | None = Field(None, description="(chords) Seventh chords for a generated progression")
-    counter_to: ClipLocation | None = Field(None, description="(melody) Main melody clip to answer; a lead in the Arrangement (arrangement_clip: a name like 'Breakdown Lead' means all such clips) gets counter clips at the same bars on track")
-    counter_mode: CounterMode | None = Field(None, description="(melody) With counter_to: " + ", ".join(COUNTER_MODES) + "; default: picked from the lead's rests")
-    counter_register: CounterRegister | None = Field(None, description="(melody) With counter_to: above, below or same; default above, below when above would pass C7")
     low: Pitch | None = Field(None, description="(chords, melody) Lowest pitch; default 52 chords, 60 melody")
     high: Pitch | None = Field(None, description="(chords, melody) Highest pitch; default 76 chords, 84 melody")
 
@@ -308,4 +232,4 @@ class ComposeRequest(Generate):
         return PART_SPECS[self.kind].model_validate(self.model_dump(exclude_none=True, exclude_unset=True))  # defaults stay unset, so they never pose as choices
 
 
-Step = Annotated[DrumsSpec | BassSpec | ChordsSpec | MelodySpec | TransformSpec, Field(discriminator="kind")]
+Step = Annotated[DrumsSpec | BassSpec | ChordsSpec | MelodySpec, Field(discriminator="kind")]
