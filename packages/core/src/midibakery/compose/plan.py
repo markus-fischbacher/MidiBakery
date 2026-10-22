@@ -56,7 +56,7 @@ SOUNDS: dict[str, tuple[tuple[str, ...], str]] = {
     "drums": (("packs", "Core Library", "Racks", "Drum Racks", "Drum Machines", "909 Core Kit.adg"), "Drum Rack"),
     "bass": (("sounds", "Bass", "Analogue Bass.adv"), "Drift"),
     "chords": (("sounds", "Pad", "Analog Soft Pad.adv"), "Wavetable"),
-    "melody": (("sounds", "Synth Keys", "Basic Pluck Keys.adg"), "Operator"),
+    "melody": (("sounds", "Synth Keys", "Light Keys.adg"), "Operator"),
 }
 PREVIEW_NOTES = 48
 

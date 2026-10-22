@@ -45,7 +45,7 @@ async def test_house_song_on_found_and_new_tracks(client, live):
     assert [s["name"] for s in preview["sections"]] == ["Intro", "Build", "Drop", "Break", "Build 2", "Drop 2", "Outro"]
     assert preview["tracks"]["drums"] == {"track": 0, "name": "Drums", "automation": "Auto Filter High-pass cutoff (new device)"} and preview["tracks"]["bass"]["track"] == 1
     assert preview["tracks"]["chords"]["new"] and preview["tracks"]["chords"]["device"] == "106 Organ"
-    assert preview["tracks"]["lead"]["device"] == "Basic Pluck Keys"
+    assert preview["tracks"]["lead"]["device"] == "Light Keys"
     assert not (await client.call("arrangement.get", {}))["tracks"][0]["clips"]  # a preview changes nothing
 
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
@@ -72,7 +72,7 @@ async def test_new_drum_track_gets_the_genre_kit_and_its_pads(client, live):
     preview = await _plan(server)
     assert preview["tracks"]["drums"]["device"] == "909 Core Kit" and not preview["warnings"]
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
-    assert [t["device"] for t in applied["new_tracks"]] == ["909 Core Kit", "Basic FM House Bass", "106 Organ", "Basic Pluck Keys"]
+    assert [t["device"] for t in applied["new_tracks"]] == ["909 Core Kit", "Basic FM House Bass", "106 Organ", "Light Keys"]
     assert "7 undo step(s)" in applied["undo"]  # tracks+returns, the mix after them, one per sound, clips
     drums = next(t["track"] for t in applied["new_tracks"] if t["name"] == "Drums")
     drop = (await client.call("notes.get", {"track": drums, "arrangement_clip": 2}))["notes"]
@@ -84,10 +84,10 @@ async def test_sounds_off_or_missing_keep_native_devices(client, live):
     server = build_server(client, all_song_options=True)
     preview = await _plan(server, sounds=False)
     assert preview["tracks"]["chords"]["device"] == "Wavetable" and "empty Drum Rack" in preview["warnings"][0]
-    trap = _payload(await server.call_tool("plan_song", {"genre": "trap", "seed": 1}))  # its sounds are not in the fake browser
+    trap = _payload(await server.call_tool("plan_song", {"genre": "trap", "seed": 1}))  # its sounds (but the lead) are not in the fake browser
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": trap["plan_id"]}))
-    assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Wavetable", "Riser Basic", "Sub 808 Pitch Boom", "Operator"]
-    assert len(applied["warnings"]) == 4 and "808 Core Kit could not be loaded" in applied["warnings"][0]
+    assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Light Keys", "Riser Basic", "Sub 808 Pitch Boom", "Operator"]
+    assert len(applied["warnings"]) == 3 and "808 Core Kit could not be loaded" in applied["warnings"][0]
 
 
 async def test_mix_scaffold_returns_sends_and_levels(client, live):
