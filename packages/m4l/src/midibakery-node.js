@@ -68,11 +68,11 @@ function readApi() {
   return null;
 }
 
-function chatUrl() {
+function chatUrl(page = PAGE) {
   // A new token must be a new page: jweb does not reload when only the #fragment changes,
   // and the page reads its token once. The query is derived from the token, never the token.
   const key = crypto.createHash("sha256").update(api.token).digest("hex").slice(0, 8);
-  return `http://127.0.0.1:${api.port}${PAGE}?key=${key}#token=${encodeURIComponent(api.token)}`;
+  return `http://127.0.0.1:${api.port}${page}?key=${key}#token=${encodeURIComponent(api.token)}`;
 }
 
 async function refresh() {
@@ -145,6 +145,15 @@ Max.addHandler("popout", () => {
   else execFile("xdg-open", [url]);
 });
 
+// Bake device: the sound settings in the system browser (a page with room, a search field and the whole list).
+Max.addHandler("sounds", () => {
+  if (!api) return;
+  const url = chatUrl("/sound-settings");
+  if (process.platform === "darwin") execFile("open", [url]);
+  else if (process.platform === "win32") execFile("cmd", ["/c", "start", "", url]);
+  else execFile("xdg-open", [url]);
+});
+
 // About button: about <device version> -> the versions in the status line.
 Max.addHandler("about", async (version) => {
   await Max.outlet("status", await about(version));
@@ -164,7 +173,7 @@ Max.addHandler("sound", async (part, ...rest) => {
       signal: AbortSignal.timeout(40000),
     });
     const data = await response.json().catch(() => ({}));
-    await Max.outlet("status", response.ok ? `${part}: ${data.preset}` : data.message || `HTTP ${response.status}`);
+    await Max.outlet("status", response.ok ? `${part}${data.genre ? " (" + data.genre + ")" : ""}: ${data.preset}` : data.message || `HTTP ${response.status}`);
   } catch (err) {
     log("sound drop failed", String(err));
     await Max.outlet("status", "The sound could not be set: " + (err && err.message));

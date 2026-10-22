@@ -22,6 +22,7 @@
 - ``GET /bake``: the Bake device's page; ``GET /bake/options`` (genres, lengths, references, whether own loops exist,
   the song baked last) and ``POST /bake/run`` ``{"genre", "length", "reference", "my_loops", "seed"?, "mode": "new"|"again"|"back"}``
   (a whole song without a model, see ``midibakery.bake``).
+- ``GET /sound-settings``: the sound settings page (the Bake device's Sounds button opens it in the browser).
 - ``GET``/``POST /sounds`` (``{"part", "path"|null, "genre"?}``, ``?genre=`` on GET): the user's default preset per part, ``GET /sounds/presets?part=``
   the presets of Live's browser that suit it, ``POST /sounds/drop`` ``{"part", "file"}`` a preset file dragged onto the device (``midibakery.compose.my_sounds``).
 - ``GET /models``: model choices for the chat (Default, Claude, installed LM Studio / Ollama models).
@@ -70,6 +71,7 @@ VERSION = __version__
 UPDATE_RECHECK = 6 * 3600  # the API often runs for days; updates.check itself asks the service once a day
 UI_PAGE = Path(__file__).with_name("ui") / "chat.html"
 IMPORTER_PAGE = Path(__file__).with_name("ui") / "importer.html"
+SOUNDS_PAGE = Path(__file__).with_name("ui") / "sounds.html"
 BAKE_PAGE = Path(__file__).with_name("ui") / "bake.html"
 ProviderFactory = Callable[[dict[str, str]], Provider]
 
@@ -195,6 +197,9 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
     async def importer_ui(request: Request) -> HTMLResponse:
         return HTMLResponse(IMPORTER_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
+    async def sounds_ui(request: Request) -> HTMLResponse:
+        return HTMLResponse(SOUNDS_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
     async def bake_ui(request: Request) -> HTMLResponse:
         return HTMLResponse(BAKE_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
@@ -203,13 +208,13 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
 
     async def sounds_get(request: Request) -> JSONResponse:
         genre = request.query_params.get("genre") or None
-        if "genre" in request.query_params:
+        if "genre" in request.query_params and "view" not in request.query_params:
             sound_genre[0] = genre  # the page's genre: a preset dropped on the device is for it
         return JSONResponse({"mine": my_sounds.stored(genre)})
 
     async def sounds_presets(request: Request) -> JSONResponse:
         try:
-            return JSONResponse({"presets": await my_sounds.presets(bridge.call, request.query_params.get("part", ""))})
+            return JSONResponse({"presets": await my_sounds.presets(bridge.call, request.query_params.get("part", ""), query=request.query_params.get("q", ""))})
         except ValueError as exc:
             return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
         except BridgeError as exc:
@@ -238,7 +243,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         except BridgeError as exc:
             return JSONResponse({"error": exc.code, "message": exc.message}, status_code=409)
         mine = my_sounds.stored(genre)
-        return JSONResponse({"mine": mine, "part": part, "preset": mine[part].rsplit("/", 1)[-1].rsplit(".", 1)[0]})
+        return JSONResponse({"mine": mine, "part": part, "genre": genre, "preset": mine[part].rsplit("/", 1)[-1].rsplit(".", 1)[0]})
 
     async def bake_run(request: Request) -> JSONResponse:
         if not license.allowed():
@@ -456,6 +461,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/import/patterns/{reference}", guard(importer(import_patterns_delete)), methods=["DELETE"]),
             Route("/import/{reference}", guard(importer(import_delete)), methods=["DELETE"]),
             Route("/bake", bake_ui, methods=["GET"]),
+            Route("/sound-settings", sounds_ui, methods=["GET"]),
             Route("/bake/options", guard(bake_options), methods=["GET"]),
             Route("/bake/run", guard(bake_run), methods=["POST"]),
             Route("/sounds", guard(sounds_get), methods=["GET"]),

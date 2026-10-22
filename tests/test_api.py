@@ -340,3 +340,15 @@ def test_sounds_per_genre_and_drop_uses_the_pages_genre(app_factory, live, tmp_p
     api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/x/909 Core Kit.adg"})
     assert "drums" in api.get("/sounds?genre=trap", headers=AUTH).json()["mine"]
     assert api.get("/sounds?genre=house", headers=AUTH).json() == {"mine": {}}
+
+
+def test_sound_settings_page_and_search(app_factory, live, tmp_path, monkeypatch):
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    api, _ = app_factory()
+    assert api.get("/sound-settings").status_code == 200  # the page holds no secret
+    found = api.get("/sounds/presets?part=drums&q=909", headers=AUTH).json()["presets"]
+    assert found and all("909" in p["name"] for p in found)
+    api.get("/sounds?genre=trap", headers=AUTH)  # the Bake page's genre: drops are for it
+    api.get("/sounds?genre=house&view=1", headers=AUTH)  # the settings page only looks
+    dropped = api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/x/909 Core Kit.adg"}).json()
+    assert dropped["genre"] == "trap"
