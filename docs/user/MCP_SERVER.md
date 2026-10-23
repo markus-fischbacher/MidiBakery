@@ -1,6 +1,6 @@
 # MidiBakery as an MCP server
 
-The **MCP server** brings MidiBakery to **Claude Desktop**, **Claude Code** or any other MCP app. You talk to Claude in its own window instead of the Chat device; Claude uses the same 12 tools to read your Live set and build songs in it.
+The **MCP server** brings MidiBakery to **Claude Desktop**, **Claude Code** or any other MCP app. You talk to Claude in its own window instead of the Chat device; Claude uses the same 13 tools to read your Live set and build songs in it.
 
 Deutsche Version: [MCP_SERVER.de.md](MCP_SERVER.de.md) · Back to the [User Guide](USER_GUIDE.md)
 
@@ -40,7 +40,7 @@ The path contains the version: adjust it after an update. For apps without stdio
 - Before deleting a clip or replacing notes MidiBakery asks (apps without question support get a `plan_id` instead and must ask you in the chat before `apply_plan`). Declined: `CANCELLED`.
 - The server talks only to Live. The app you are in sees what the tools return: track and clip names, notes, tempo.
 
-## The 12 tools
+## The 13 tools
 
 Tracks, slots and arrangement clips count from **0** (track 1 in Live = `track 0`). Time is in beats; pitch 60 = C3. Clip tools take `slot` (Session) **or** `arrangement_clip` (Arrangement: index or **name**, e.g. "Drop Bass").
 
@@ -54,6 +54,7 @@ Tracks, slots and arrangement clips count from **0** (track 1 in Live = `track 0
 | `apply_plan` | **asks first** (when replacing) | Writes a plan to Live. `CONFLICT` if a target changed since planning. Plans are kept in memory (the last 32). |
 | `compose` | **asks first** (when replacing) | **One part** as a MIDI clip in the set's key: `kind` drums, bass, chords or melody; `bars`, `seed`, `style`, `pattern`, `density`, `swing`, `progression`, `chords_from`, `follow_kick`, `if_exists`, `preview`. With `arrangement_clip` it rewrites that clip. |
 | `edit_arrangement` | write | Add MIDI clips, copy session clips, **move, swap, delete** arrangement clips, set or delete locators (transport stopped). One undo step; a clip never lands on another. |
+| `create_track` | write | Create a MIDI or audio track (`kind`, `index` for the position, `name`); default: at the end. `compose` can then write into it. |
 | `delete_clip` | **asks first** | Delete one clip (Session by `slot`, Arrangement by `arrangement_clip`). |
 | `set_song` | write | Tempo, signature, key (`root_note`, `scale_name`, `scale_mode`), metronome, loop. |
 | `transport` | write | Play, stop, continue, stop all clips, toggle arrangement record. |

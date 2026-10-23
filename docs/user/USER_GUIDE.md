@@ -222,4 +222,4 @@ Fine edits, mixing and sound design are faster in Live itself.
 
 **Can the AI hear my music?** No. It works with notes. Decide with your ears.
 
-**Claude Desktop or Claude Code?** The MCP server offers the same 12 tools there: see [MCP_SERVER.md](MCP_SERVER.md).
+**Claude Desktop or Claude Code?** The MCP server offers the same 13 tools there: see [MCP_SERVER.md](MCP_SERVER.md).
