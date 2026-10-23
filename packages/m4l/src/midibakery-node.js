@@ -163,6 +163,7 @@ async function sendLabels() {
       signal: AbortSignal.timeout(10000),
     });
     const mine = (await response.json().catch(() => ({}))).mine || {};
+    log("labels", currentGenre || "all", JSON.stringify(mine));
     for (const part of SOUND_PARTS) await Max.outlet("label", part, presetLabel(mine[part]));
   } catch (err) {
     log("sound labels failed", String(err));
@@ -206,7 +207,11 @@ Max.addHandler("sound", async (part, ...rest) => {
     });
     const data = await response.json().catch(() => ({}));
     await Max.outlet("status", response.ok ? `${part}${data.genre ? " (" + data.genre + ")" : ""}: ${data.preset}` : data.message || `HTTP ${response.status}`);
-    if (response.ok) await sendLabels();
+    if (response.ok) {
+      await sendLabels();
+      // Once more shortly after: the labels set during the drop itself were not always redrawn.
+      setTimeout(() => sendLabels().catch((err) => log("labels failed", String(err))), 500);
+    }
   } catch (err) {
     log("sound drop failed", String(err));
     await Max.outlet("status", "The sound could not be set: " + (err && err.message));
