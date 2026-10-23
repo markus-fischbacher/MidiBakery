@@ -405,7 +405,7 @@ SOUND_PARTS = (("drums", "Drums"), ("bass", "Bass"), ("chords", "Chords"), ("lea
 SOUND_GENRES = ("All genres", "House", "Melodic", "Peak-Time", "D&B", "Trap")  # midibakery-node.js maps them to genres
 
 
-def _sounds_page(p: Patcher, node: str, route: str, thispatcher: str, width: float, height: float) -> list[str]:
+def _sounds_page(p: Patcher, node: str, route: str, width: float, height: float) -> list[str]:
     """The Sounds page: a genre menu, a drop zone per part (drag a preset from Live's browser; live.drop sends its
     file path), the preset each part has now, and a button for the browser page. Hidden until the Sounds button
     shows it (returns the varnames to show/hide). To the node.script go "genre <name>", "sound <part> <path>" and
@@ -432,17 +432,8 @@ def _sounds_page(p: Patcher, node: str, route: str, thispatcher: str, width: flo
         name = p.comment("Genre default", (700 + i * 130, 260, 120, 18), presentation=(x, 120, zone_w, 16), fontsize=10.0,
                          fontname="Arial", varname=f"name_{part}", hidden=1, **THEMED_TEXT)
         setter = p.obj("prepend set", 700 + i * 130, 300, width=100)
-        # Live does not repaint the device after a drop from its browser until the pointer moves in it, so the new
-        # name stayed old: nudging the comment's size right after the text is set makes Max redraw it.
-        both = p.obj("t b l", 700 + i * 130, 270, outlets=["bang", ""], width=50)
-        rect = (x, 120, zone_w, 16)
-        nudge = p.message(f"script sendbox name_{part} presentation_rect {rect[0]} {rect[1]} {rect[2] + 1} {rect[3]}, "
-                          f"script sendbox name_{part} presentation_rect {rect[0]} {rect[1]} {rect[2]} {rect[3]}", 700 + i * 130, 330)
-        p.connect(parts, i, both)
-        p.connect(both, 1, setter)
-        p.connect(both, 0, nudge)
+        p.connect(parts, i, setter)
         p.connect(setter, 0, name)
-        p.connect(nudge, 0, thispatcher)
         names += [f"drop_{part}", f"label_{part}", f"name_{part}"]
     search = p.box("live.text", (700, 340, 90, 16), inlets=1, outlets=["", ""], presentation=(pad, height - 28, width - 2 * pad, 22),
                    parameter_enable=0, mode=0, text="Search in browser...", texton="Search in browser...", varname="search", hidden=1)
@@ -487,7 +478,7 @@ def bake_device() -> dict[str, Any]:
     _about(p, (column_x, 28, column_w, 18), node, 440, 160)
 
     thispatcher = p.obj("thispatcher", 540, 500, outlets=["", ""], width=80)
-    sounds_page = _sounds_page(p, node, route, thispatcher, page_w, height)
+    sounds_page = _sounds_page(p, node, route, page_w, height)
     show_bake = "script show bake_page, " + ", ".join(f"script hide {n}" for n in sounds_page)
     show_sounds = "script hide bake_page, " + ", ".join(f"script show {n}" for n in sounds_page)
     for label, var, y, messages, extra in (("Bake", "bake", 52, show_bake, None), ("Sounds", "sounds", 76, show_sounds, "labels")):
