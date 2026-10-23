@@ -236,7 +236,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             if not isinstance(body, dict):
                 raise ValueError("expected a JSON object")
             part = str(body.get("part", ""))
-            genre = body.get("genre") or sound_genre[0]
+            genre = (body.get("genre") or None) if "genre" in body else sound_genre[0]  # "" = every genre (the Sounds page's All genres)
             my_sounds.save(part, await my_sounds.resolve(bridge.call, str(body.get("file", ""))), genre)
         except ValueError as exc:
             return JSONResponse({"error": "INVALID_PARAMS", "message": str(exc)}, status_code=422)
