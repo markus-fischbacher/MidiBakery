@@ -544,8 +544,8 @@ async def test_full_tool_set_stays_within_the_local_budget(client):
     payload = json.dumps([{"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in provider.tools])
     names = {t.name for t in provider.tools}
     assert names == {"get_session", "get_clip", "get_arrangement", "get_reference", "plan_song", "apply_plan", "compose",
-                     "edit_arrangement", "set_song", "transport", "delete_clip", "undo"}
-    assert len(payload) + len(SYSTEM_PROMPT) < 16000  # ~13k with 12 tools; was ~32k with 41
+                     "edit_arrangement", "set_song", "transport", "create_track", "delete_clip", "undo"}
+    assert len(payload) + len(SYSTEM_PROMPT) < 16000  # ~13k with 13 tools; was ~32k with 41
 
 
 async def test_a_model_repeating_a_failing_call_is_stopped(client, live):

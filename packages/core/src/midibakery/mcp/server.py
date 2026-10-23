@@ -61,6 +61,7 @@ Runner = Callable[[dict[str, Any], Context | None], Awaitable[Any]]
 TOOL_OPS: list[tuple[str, str, str]] = [
     ("set_song", "song.set", "Set tempo, signature, scale or loop"),
     ("transport", "transport.control", "Play / stop / stop all clips / record"),
+    ("create_track", "track.create", "Create track"),
     ("delete_clip", "clip.delete", "Delete clip"),
     ("get_arrangement", "arrangement.get", "Get arrangement clips and locators"),
     ("undo", "history.step", "Undo / redo"),
