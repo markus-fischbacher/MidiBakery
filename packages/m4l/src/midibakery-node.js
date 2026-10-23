@@ -201,7 +201,7 @@ Max.addHandler("sound", async (part, ...rest) => {
     const response = await fetch(`http://127.0.0.1:${api.port}/sounds/drop`, {
       method: "POST",
       headers: { Authorization: `Bearer ${api.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ part, file, genre: currentGenre || undefined }),
+      body: JSON.stringify({ part, file, genre: currentGenre }),
       signal: AbortSignal.timeout(40000),
     });
     const data = await response.json().catch(() => ({}));

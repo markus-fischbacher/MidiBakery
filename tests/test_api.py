@@ -352,3 +352,6 @@ def test_sound_settings_page_and_search(app_factory, live, tmp_path, monkeypatch
     api.get("/sounds?genre=house&view=1", headers=AUTH)  # the settings page only looks
     dropped = api.post("/sounds/drop", headers=AUTH, json={"part": "drums", "file": "/x/909 Core Kit.adg"}).json()
     assert dropped["genre"] == "trap"
+    everywhere = api.post("/sounds/drop", headers=AUTH, json={"part": "bass", "file": "/x/909 Core Kit.adg", "genre": ""}).json()
+    assert everywhere["genre"] is None  # the Sounds page's All genres: not the Bake page's genre
+    assert api.get("/sounds", headers=AUTH).json()["mine"]["bass"].endswith("909 Core Kit.adg")
