@@ -218,6 +218,7 @@ def test_bake_device_shows_its_page(devices):
     assert any(t.startswith("script show bake_page") for t in scripts) and any(t.startswith("script hide bake_page") and "script show drop_drums" in t for t in scripts)
     assert all(" " not in b["varname"] for b in boxes.values() if b.get("varname") and b["varname"].split("_")[0] in ("drop", "label", "name"))
     assert any((l[1] == thispatcher) for l in lines)
+    assert sum(1 for t in scripts if "script sendbox name_" in t) == 4  # each name is nudged so Live repaints it after a drop
     node_js = (ROOT / "packages/m4l/src/midibakery-node.js").read_text()
     for handler in ("sounds", "sound", "genre", "labels"):
         assert f'Max.addHandler("{handler}"' in node_js
