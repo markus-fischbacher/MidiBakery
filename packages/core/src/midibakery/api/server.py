@@ -19,8 +19,8 @@
   (stores them as references), ``GET``/``POST /import/queue`` (the list of Sets shared by the device and a popped-out page), ``POST /import/pick`` ``{"kind": "file"|"folder"}`` (the system file dialog, for the page in a browser),
   ``GET /import/library``, ``GET /import/patterns`` (the loops taken from imported Sets), ``DELETE /import/patterns/{id}`` (one Set's loops)
   and ``DELETE /import/{id}``.
-- ``GET /bake``: the Bake device's page; ``GET /bake/options`` (genres, lengths, references, whether own loops exist,
-  the song baked last) and ``POST /bake/run`` ``{"genre", "length", "reference", "my_loops", "seed"?, "mode": "new"|"again"|"back"}``
+- ``GET /bake``: the Bake device's page; ``GET /bake/options`` (genres, lengths, complexities, references, whether own loops exist,
+  the song baked last) and ``POST /bake/run`` ``{"genre", "length", "reference", "complexity": "simple"|"rich", "my_loops", "seed"?, "mode": "new"|"again"|"back"}``
   (a whole song without a model, see ``midibakery.bake``).
 - ``GET /sound-settings``: the sound settings page (the Bake device's Sounds button opens it in the browser).
 - ``GET``/``POST /sounds`` (``{"part", "path"|null, "genre"?}``, ``?genre=`` on GET): the user's default preset per part, ``GET /sounds/presets?part=``

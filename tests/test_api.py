@@ -302,8 +302,10 @@ def test_bake_endpoints(app_factory, live):
     assert options["genres"][0] == "house" and options["baked"] is None
     bad = api.post("/bake/run", headers=AUTH, json={"genre": "polka"})
     assert bad.status_code == 422
+    assert options["complexities"] == ["simple", "rich"]
+    assert api.post("/bake/run", headers=AUTH, json={"genre": "house", "complexity": "wild"}).status_code == 422
     baked = api.post("/bake/run", headers=AUTH, json={"genre": "house", "length": "radio", "seed": 3}).json()
-    assert baked["seed"] == 3 and baked["baked"]["genre"] == "house"
+    assert baked["seed"] == 3 and baked["baked"]["genre"] == "house" and baked["baked"]["complexity"] == "rich"
     assert api.get("/bake/options", headers=AUTH).json()["baked"]["seed"] == 3
 
 

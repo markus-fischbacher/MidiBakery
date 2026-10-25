@@ -88,7 +88,7 @@ Lokale Modelle bekommen dieselben Werkzeuge in kompakter Form. Nenne Spuren und 
 
 ### Mit einem Klick (Bake)
 
-Zieh **MidiBakery Bake** auf eine beliebige MIDI-Spur. Wähle **Genre** und **Length**, optional **After** (ein importiertes Set oder ein analysierter Song, Kapitel 6 und 7) und **My loops** (Loops aus deinen importierten Sets). Dann:
+Zieh **MidiBakery Bake** auf eine beliebige MIDI-Spur. Wähle **Genre**, **Length** und die Komplexität (**Rich**, Standard: geschichtete Lead und Bass, eine Antwortstimme, mehr FX; **Simple**: eine Stimme pro Rolle), optional **After** (ein importiertes Set oder ein analysierter Song, Kapitel 6 und 7) und **My loops** (Loops aus deinen importierten Sets). Dann:
 
 - **Bake** schreibt einen neuen Song hinter den letzten Clip im Arrangement, im Tempo des Genres, auf passende Spuren (fehlende werden angelegt).
 - **Again** ersetzt den zuletzt gebackenen Song durch einen anderen Seed: seine Clips und Locators werden gelöscht, die Spuren bleiben.

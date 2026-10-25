@@ -33,6 +33,20 @@ async def test_bake_writes_a_song_and_again_replaces_it(client, live):
     assert len({loc["time"] for loc in locators}) == len(locators)  # no locator twice
 
 
+async def test_bake_passes_the_complexity_on_and_again_keeps_it(client, live):
+    baker = Baker(client.call)
+    with pytest.raises(ValueError, match="complexity"):
+        await baker.bake({"genre": "house", "complexity": "wild"})
+    simple = await baker.bake({"genre": "house", "seed": 5, "length": "radio", "complexity": "simple"})
+    assert simple["baked"]["complexity"] == "simple"
+    song = await _clips(client)
+    again = await baker.bake({"mode": "again", "genre": "house", "length": "radio", "complexity": "simple", "seed": 5})
+    assert again["baked"]["complexity"] == "simple" and await _clips(client) == song  # same seed, same simple song
+    rich = await baker.bake({"genre": "house", "seed": 5, "length": "radio", "complexity": "rich"})
+    assert rich["baked"]["complexity"] == "rich"
+    assert (await baker.bake({"genre": "house", "seed": 6, "length": "radio"}))["baked"]["complexity"] == "rich"  # the default
+
+
 async def test_a_new_bake_goes_after_the_last_song(client, live):
     baker = Baker(client.call)
     first = await baker.bake({"genre": "house", "seed": 1, "length": "radio"})
