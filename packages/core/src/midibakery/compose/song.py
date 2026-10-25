@@ -57,14 +57,16 @@ from midibakery.compose.rollback import batch_steps, completed, restore_locators
 from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, generate_bass_template
 from midibakery.compose.grooves import BASS, CHORDS, GROOVE_VARIANTS, GROOVES, Groove, generate_groove, generate_recipe_bass, generate_recipe_chords, seventh_harmony
 from midibakery.compose.hook import generate_acid, generate_arp, generate_hook, make_acid, make_arp, make_hook
-from midibakery.compose import my_sounds, user_patterns
+from midibakery.compose import my_sounds, rich, user_patterns
 from midibakery.compose.lead_templates import generate_lead_template
 from midibakery.compose.references import find_reference, load_references, reference_scale
 from midibakery.compose.techno_templates import generate_techno_drums
-from midibakery.compose.structures import FX_ROLES, ROLES, TEMPLATES, Mix, Section, Template, from_reference, parse_segments, sized
+from midibakery.compose.structures import EXTRA_ROLES, FX_ROLES, RICH_FX, ROLES, TEMPLATES, Mix, Section, Template, from_reference, parse_segments, sized
 from midibakery.compose.theory import Scale, diatonic_chord
 
-NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator"}
+NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator",
+                     "answer": "Wavetable", "lead2": "Operator", "bass2": "Drift", "sweep": "Operator"}
+ROLE_NAMES = {"answer": "Answer", "lead2": "Lead Layer", "bass2": "Bass Layer", "sweep": "Sweep"}
 ROLE_WORDS = {
     "bass": ("bass", "sub", "808"),
     "chords": CHORD_TRACK_WORDS,
@@ -72,6 +74,10 @@ ROLE_WORDS = {
     "riser": ("riser", "uplift"),
     "impact": ("impact", "boom"),
     "sidechain": ("sidechain", "trigger"),
+    "answer": ("answer", "counter", "response"),
+    "lead2": ("lead layer", "lead 2", "lead2"),
+    "bass2": ("bass layer", "bass 2", "bass2"),
+    "sweep": ("sweep", "noise"),
 }
 TRIGGER_PITCH = 48  # the sidechain track's notes: a short Operator sine nobody hears
 PHRASE = 8  # bars
@@ -104,7 +110,7 @@ class SongRequest(BaseModel):
     length: Literal["radio", "standard", "extended"] = Field("standard", description="Or minutes for a duration ('3 minutes' -> minutes 3)")
     minutes: Annotated[float, Field(ge=0.5, le=20, description="Target duration; overrides length")] | None = None
     start_bar: Annotated[int, Field(ge=1, description="Arrangement bar to start at (default: after the last clip, or under the reference)")] | None = None
-    roles: dict[Literal["drums", "bass", "chords", "lead", "riser", "impact", "sidechain"], Annotated[int, Field(ge=0)]] = Field(
+    roles: dict[Literal["drums", "bass", "chords", "lead", "answer", "lead2", "bass2", "riser", "impact", "sweep", "sidechain"], Annotated[int, Field(ge=0)]] = Field(
         default_factory=dict, description="Role -> track index; others are found by Drum Rack or track name"
     )
     clips: list[UseClip] = Field(default_factory=list, description="Session clips to use for a role instead of generating it")
@@ -122,6 +128,8 @@ class SongRequest(BaseModel):
         default_factory=dict, description="Take a role's loops from another imported Set (part of its name), e.g. {\"bass\": \"Sound as a Pound\"}")
     fill_missing: bool = Field(False, description="With an imported Set: also play roles the Set lacks, from the genre")
     my_loops: bool = Field(False, description="The seed draws loops for the roles from the user's imported Sets")
+    complexity: Literal["simple", "rich"] = Field(
+        "rich", description="rich: layered lead and bass, an answer voice, more FX, varied sections; simple: one voice per role, the plain template")
     seed: Annotated[int, Field(ge=0)] | None = None
     _genre_note: str = PrivateAttr("")
 
@@ -505,7 +513,7 @@ def _auto_filter(track: dict[str, Any]) -> int | None:
     return next((d.get("index", i) for i, d in reversed(list(enumerate(devices))) if str(d.get("class_name", "")).startswith("AutoFilter")), None)
 
 
-def _assign_roles(session: Session, request: SongRequest, arrangement: dict[str, Any] | None = None) -> tuple[dict[str, RoleTrack], list[str]]:
+def _assign_roles(session: Session, request: SongRequest, arrangement: dict[str, Any] | None = None, extra: tuple[str, ...] = ()) -> tuple[dict[str, RoleTrack], list[str]]:
     tracks = session.tracks
     roles: dict[str, RoleTrack] = {}
     used: set[int] = set()
@@ -528,10 +536,10 @@ def _assign_roles(session: Session, request: SongRequest, arrangement: dict[str,
             roles[clip.role] = RoleTrack(clip.role, clip.track, session.track(clip.track).get("name", ""))
             used.add(clip.track)
     template = TEMPLATES[request.genre]
-    wanted: tuple[str, ...] = ROLES
+    wanted: tuple[str, ...] = ROLES + tuple(r for r in EXTRA_ROLES if r in extra)
     if request.fx and any(s.kind == "drop" for s in template.sections):
         if request.sounds:
-            wanted += FX_ROLES
+            wanted += FX_ROLES + tuple(r for r in RICH_FX if r in extra)
         else:
             warnings.append("No riser or impact: they need the genre's presets (sounds=false)")
     if request.sidechain and template.style.mix.duck:
@@ -550,7 +558,9 @@ def _assign_roles(session: Session, request: SongRequest, arrangement: dict[str,
             used.add(match["index"])
     missing = [r for r in wanted if r not in roles]
     if missing and not request.create_missing:
-        warnings.append(f"No track for {', '.join(missing)}: those parts are left out (create_missing=false)")
+        core = [r for r in missing if r not in extra]
+        if core:
+            warnings.append(f"No track for {', '.join(core)}: those parts are left out (create_missing=false)")
         return roles, warnings
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     mine = my_sounds.load(template.genre) if request.sounds else {}
@@ -564,7 +574,7 @@ def _assign_roles(session: Session, request: SongRequest, arrangement: dict[str,
             index = spare.pop(0)
         else:
             index, created = len(tracks) + created, created + 1
-        roles[role] = RoleTrack(role, index, role.title(), new=True, reuse=index < len(tracks), device=devices[role], sound=sound)
+        roles[role] = RoleTrack(role, index, ROLE_NAMES.get(role, role.title()), new=True, reuse=index < len(tracks), device=devices[role], sound=sound)
         if role == "drums" and sound is None:
             warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it")
     return roles, warnings
@@ -936,8 +946,15 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                                   True if request.fill_missing else frozenset(request.loops_from), frozenset(GROOVES[request.genre].parts))
     else:
         sections = sized(template, request.length, request.minutes, bpb, tempo)
+    is_rich = request.complexity == "rich"
+    extra: tuple[str, ...] = ()
+    if is_rich:
+        own = {c.role for c in request.clips}  # a copied Session clip has no notes to derive a layer from
+        sections = rich.enrich(sections, seed, structural=reference is None and request.minutes is None,
+                               skip=frozenset(r for r, base in rich.DERIVED_FROM.items() if base in own))
+        extra = tuple(r for r in EXTRA_ROLES if any(r in s.parts for s in sections)) + RICH_FX
 
-    roles, warnings = _assign_roles(session, request, arrangement)
+    roles, warnings = _assign_roles(session, request, arrangement, extra)
     if request._genre_note:
         warnings.append(request._genre_note)
     if request.my_loops:
@@ -1019,7 +1036,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     for role, target in roles.items():
         if role in use:
             continue
-        kind = style.filters.get(role)
+        kind = style.filters.get(role) or rich.FILTERS.get(role)
         if kind is None:
             if target.new or _auto_filter(session.track(target.index)) is None:
                 continue
@@ -1107,13 +1124,14 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         if loop is not None and part != "rumble":
             return _loop_notes(role, loop, part, section, harmony, scale, meter, bars, drum_map, kick_pitch)
         if role == "drums":
-            return generate_groove(
+            notes = generate_groove(
                 groove, part, meter, bars, r, drum_map, section.energy,
                 fill_at_end=section.fill and offset_bars + bars == section.bars,
                 crash=section.kind == "drop" and offset_bars == 0,
                 long_part=bars >= 16 and part == "full",
                 phrase_offset=offset_bars,
             )
+            return _rich_drums(notes, part, section, bars, offset_bars, rng("rich_drums", section.kind, section.variation, part, bars, offset_bars)) if is_rich else notes
         if role == "bass":
             if part == "rumble":
                 return _rumble(harmony, meter, bars)
@@ -1140,12 +1158,51 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             notes = generate_hook(hook, harmony, scale, meter, bars, swing, low, high, tease=tease, velocity=88 + 12 * section.energy, flip=flip)
         return notes if tease else _answer_space(notes, meter, bars, offset_bars)
 
+    def _rich_drums(notes: list[Note], part: str, section: Section, bars: int, offset_bars: int, r: random.Random) -> list[Note]:
+        snare, clap, kick = drum_map.note("snare"), drum_map.note("clap"), kick_pitch
+        if part in ("full", "groove", "drive"):
+            ghost = snare if request.genre in ("trap", "drum_and_bass") else next((p for p in (drum_map.note("rim"), drum_map.note("perc")) if p is not None), None)
+            if ghost is not None:
+                notes = rich.ghost_notes(notes, bars, bpb, ghost, {p for p in (snare, clap, kick) if p is not None}, r)
+        roll = snare if request.genre in ("trap", "drum_and_bass") else clap if clap is not None else snare
+        if section.kind == "build" and part != "full" and roll is not None and bars >= 2 and offset_bars + bars == section.bars:
+            notes = rich.snare_roll(notes, bars, bpb, roll)
+        return rich.humanize(notes, r, {kick} if kick is not None else set())
+
+    def place(role: str, target: RoleTrack, section: Section, at: float, first: int, until: int, clip_length: float, notes: list[Note]) -> None:
+        """One clip of a part: its notes, the Auto Filter sweep (and resonance), the delay throws."""
+        counts[role] += len(notes)
+        action: dict[str, Any] = {
+            "action": "add_clip",
+            "track": target.index,
+            "start": at + first * bpb,
+            "length": clip_length,
+            "name": f"{section.name} {ROLE_NAMES.get(role, role.title())}",
+            "notes": [n.to_spec() for n in notes],
+        }
+        if target.filter is not None:
+            envelope = _sweep(section.sweeps.get(role), section.bars, first, clip_length, bpb, OPEN_HZ[target.filter])
+            action["envelopes"] = [{"device": target.filter_device, "parameter": "Frequency", **envelope}]
+            if any(f"{role}.res" in s.sweeps for s in sections):  # every clip, so no resonance hangs over
+                envelope = _sweep(section.sweeps.get(f"{role}.res"), section.bars, first, clip_length, bpb, 0.0, float)
+                action["envelopes"].append({"device": target.filter_device, "parameter": "Resonance", "unit": "display", **envelope})
+        if role in throws and section.kind in style.throws[role]:
+            send, base = throws[role]
+            action.setdefault("envelopes", []).append(
+                {"parameter": send, "unit": "display", "points": _throw_points(section.bars, first, until, bpb, base)})
+        actions.append(action)
+
+    produced: dict[str, list[Note]] = {}
     section_harmonies: list[Harmony] = []
+    flip = is_rich and rng("flip").random() < 0.5  # the later drops start on the break's chords and turn to the main ones
     for section, at in zip(sections, starts):
-        harmony: Harmony = (alt if section.kind == "break" else main).for_length(meter, section.bars)
-        if turn is not None and section.kind == "drop" and section.bars >= 16 and section.bars % 2 == 0:  # a long drop turns to other chords for its second half
+        produced = {}
+        later = flip and section.kind == "drop" and section.variation > 0
+        base_loop, turn_loop = (alt, main if turn is not None else None) if later else (alt if section.kind == "break" else main, turn)
+        harmony: Harmony = base_loop.for_length(meter, section.bars)
+        if turn_loop is not None and section.kind == "drop" and section.bars >= (8 if is_rich else 16) and section.bars % 2 == 0:  # a long drop turns to other chords for its second half
             half = section.bars // 2
-            harmony = Harmony(tuple(main.for_length(meter, half).segments) + tuple(_shift(turn.for_length(meter, half), half * bpb)),
+            harmony = Harmony(tuple(base_loop.for_length(meter, half).segments) + tuple(_shift(turn_loop.for_length(meter, half), half * bpb)),
                               main.source, main.explicit)
         if clip_harmony is not None:
             chord_parts = [seg for seg in parse_segments(section.parts.get("chords", ""), section.bars) if seg[0] != "-"] if "chords" in roles else []
@@ -1209,31 +1266,41 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                     notes = fit_to_length([n for n in notes if n.start_time < cut - EPSILON], cut)
                 cache[cache_key] = fit_to_length(notes, clip_length)
             notes = cache[cache_key]
-            counts[role] += len(notes)
-            action = {
-                "action": "add_clip",
-                "track": target.index,
-                "start": at + first * bpb,
-                "length": clip_length,
-                "name": f"{section.name} {role.title()}",
-                "notes": [n.to_spec() for n in notes],
-            }
-            if target.filter is not None:
-                envelope = _sweep(section.sweeps.get(role), section.bars, first, clip_length, bpb, OPEN_HZ[target.filter])
-                action["envelopes"] = [{"device": target.filter_device, "parameter": "Frequency", **envelope}]
-                if any(f"{role}.res" in s.sweeps for s in sections):  # every clip, so no resonance hangs over
-                    envelope = _sweep(section.sweeps.get(f"{role}.res"), section.bars, first, clip_length, bpb, 0.0, float)
-                    action["envelopes"].append({"device": target.filter_device, "parameter": "Resonance", "unit": "display", **envelope})
-            if role in throws and section.kind in style.throws[role]:
-                send, base = throws[role]
-                action.setdefault("envelopes", []).append(
-                    {"parameter": send, "unit": "display", "points": _throw_points(section.bars, first, until, bpb, base)})
-            actions.append(action)
+            produced[role] = [replace(n, start_time=n.start_time + first * bpb) for n in notes]
+            place(role, target, section, at, first, until, clip_length, notes)
+        for role in EXTRA_ROLES:  # the layers and the answer: derived from what the lead and the bass play in this section
+            spec, base = section.parts.get(role), produced.get(rich.DERIVED_FROM[role])
+            if spec is None or role not in roles or not base:
+                continue
+            playing = [seg for seg in parse_segments(spec, section.bars) if seg[0] != "-"]
+            if not playing:
+                continue
+            first = playing[0][1]
+            until = playing[-1][1] + playing[-1][2]
+            r = rng(role, section.name, section.variation)
+            derived: list[Note] = []
+            for _, offset, count in playing:
+                span = count * bpb
+                seg = [replace(n, start_time=n.start_time - offset * bpb) for n in base if offset * bpb - EPSILON <= n.start_time < (offset + count) * bpb - EPSILON]
+                if role == "answer":
+                    low, high = style.lead_range
+                    seg = rich.answer_notes(seg, phrase_rests(seg, span, rich.ANSWER_BEATS), _from(harmony, offset * bpb, span), scale, low, high)
+                elif role == "lead2":
+                    seg = rich.double_lead(seg, scale, r)
+                else:
+                    seg = rich.mid_layer(seg)
+                derived += [replace(n, start_time=n.start_time + (offset - first) * bpb) for n in seg]
+            notes = fit_to_length(derived, (until - first) * bpb)
+            if notes:
+                place(role, roles[role], section, at, first, until, (until - first) * bpb, notes)
     riser = roles.get("riser")
     preset = style.sounds.get("riser")
     riser_macro = riser is not None and preset is not None and (
         riser.sound is not None or not riser.new and [d.get("name") for d in session.track(riser.index).get("devices", [])][:1] == [_sound_name(preset)])
     fx_plays = _fx(actions, counts, roles, sections, starts, bpb, scale, style.mix.volume.get("riser", -12.0), riser_macro)
+    if is_rich:
+        rich.rich_fx(actions, counts, roles, sections, starts, bpb, scale, style.mix.volume.get("riser", -12.0), style.mix.volume.get("sweep", -14.0),
+                     riser_macro, fx_plays, rng("fx"))
     if trigger is not None:
         if trigger_needed:
             assert drums is not None and kick_pitch is not None
@@ -1399,7 +1466,7 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
                     raise  # do not create a kick-following trigger for an unloaded kit
                 if exc.code == "LIVE_ERROR" and exc.message.startswith("Live did not load"):
                     raise  # it may still land later: roll back rather than guess
-                if t.role in FX_ROLES:  # a sine instead of a riser: better none
+                if t.role in FX_ROLES + RICH_FX:  # a sine instead of a riser: better none
                     actions = [a for a in actions if a.get("track") != t.index]
                     warnings.append(f"{_sound_name(t.sound)} could not be loaded ({exc.message}); track index {t.index} stays empty")
                 else:
