@@ -2,9 +2,11 @@
 
 import json
 
+import pytest
+
 from fake_song import DrumRackDevice
 from midibakery.mcp import build_server
-from test_song import references  # noqa: F401  (the fixture)
+from test_song import REFERENCE
 
 
 def _payload(result):
@@ -98,6 +100,13 @@ async def test_the_kick_stays_on_the_grid(client, live):
     for _, _, _, notes in await _clips(client, 0):
         kicks = [n for n in notes if n["pitch"] == 36]
         assert all(abs(n["start_time"] * 4 - round(n["start_time"] * 4)) < 1e-6 for n in kicks)
+
+
+@pytest.fixture
+def references(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIDIBAKERY_HOME", str(tmp_path))
+    (tmp_path / "references").mkdir()
+    (tmp_path / "references" / "katoff.json").write_text(json.dumps(REFERENCE))
 
 
 async def test_a_reference_still_decides_the_sections(client, live, references):
