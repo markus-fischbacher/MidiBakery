@@ -73,7 +73,7 @@ async def test_new_drum_track_gets_the_genre_kit_and_its_pads(client, live):
     assert preview["tracks"]["drums"]["device"] == "909 Core Kit" and not preview["warnings"]
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
     assert [t["device"] for t in applied["new_tracks"]] == ["909 Core Kit", "Basic FM House Bass", "106 Organ", "Light Keys"]
-    assert "7 undo step(s)" in applied["undo"]  # tracks+returns, the mix after them, one per sound, clips
+    assert "at least 7 undo steps" in applied["undo"]  # tracks+returns, the mix after them, one per sound, clips
     drums = next(t["track"] for t in applied["new_tracks"] if t["name"] == "Drums")
     drop = (await client.call("notes.get", {"track": drums, "arrangement_clip": 2}))["notes"]
     pitches = {n["pitch"] for n in drop}
@@ -102,7 +102,7 @@ async def test_mix_scaffold_returns_sends_and_levels(client, live):
     assert preview["mix"]["levels"]["drums"] == "reverb -24 dB"  # an existing track keeps its fader
     assert "bass" not in preview["mix"]["levels"]
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
-    assert applied["mix"] == preview["mix"] and applied["undo"].startswith("5 undo step(s)")  # tracks+returns, the mix after them, 2 sounds, clips
+    assert applied["mix"] == preview["mix"] and applied["undo"].startswith("at least 5 undo steps")  # tracks+returns, the mix after them, 2 sounds, clips
     mixer = await client.call("mixer.get", {})
     assert [(r["name"], r["devices"]) for r in mixer["returns"]] == [("Reverb", ["Reverb"]), ("Delay", ["Delay"])]
     reverb = {p["name"]: p["value"] for p in (await client.call("device.params", {"return_track": 0, "device": 0}))["parameters"]}

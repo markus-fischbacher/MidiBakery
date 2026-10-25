@@ -175,17 +175,81 @@ def _decorate(s: Section, last: bool, first_drop: bool, r: random.Random, skip: 
 # --------------------------------------------------------------------------- derived voices
 
 
-def double_lead(notes: list[Note], scale: Scale, r: random.Random) -> list[Note]:
-    """The lead's layer: an octave up or a third above, quieter; a dense lead (16ths) keeps only its 8ths."""
-    mode = r.choice(("octave", "octave", "third"))
-    out = []
+LAYER_TOP = 96  # no layer note above this (MIDI)
+
+
+def vary_lead(notes: list[Note], bars: int, bpb: float, offset_bars: int, harmony: Harmony, scale: Scale, low: int, high: int,
+              variation: int, seed_for: Any) -> list[Note]:
+    """Each 8-bar block of the lead gets its own shape, so it does not loop one 4-bar motif: the first block is
+    the hook as it is, later ones move the end of each 2-bar unit to another chord tone, answer the first
+    4 bars a step higher (a question and its answer), thin the off-beats, or lift the last 2 bars."""
+    blocks: dict[int, list[Note]] = {}
+    for note in notes:
+        blocks.setdefault(int((offset_bars + note.start_time // bpb) // 8), []).append(note)
+    result: list[Note] = []
+    for block in sorted(blocks):
+        mine = blocks[block]
+        r: random.Random = seed_for(block, variation)
+        mode = "same" if block == 0 and variation == 0 else r.choice(("target", "answer", "thin", "lift"))
+        begin = (block * 8 - offset_bars) * bpb
+        if mode == "target":
+            for unit in range(4):
+                lo_t, hi_t = begin + unit * 2 * bpb, begin + (unit + 1) * 2 * bpb
+                inside = [n for n in mine if lo_t <= n.start_time < hi_t]
+                if len(inside) > 2:
+                    last = inside[-1]
+                    pcs = [p for p in harmony.at(last.start_time).chord.pitch_classes]
+                    options = [p for p in range(low, high + 1) if p % 12 in pcs and p != last.pitch]
+                    if options:
+                        pick = min(options, key=lambda p: abs(p - last.pitch) + r.random() * 6)
+                        mine = [replace(n, pitch=pick) if n is last else n for n in mine]
+        elif mode == "answer":
+            step = r.choice((2, -2, 3))
+            mine = [replace(n, pitch=min(high, max(low, scale.step(n.pitch, step)))) if n.start_time >= begin + 4 * bpb else n for n in mine]
+        elif mode == "thin":
+            mine = [n for n in mine if abs(n.start_time * 2 - round(n.start_time * 2)) < 0.01 or r.random() < 0.6]
+            mine = [replace(n, start_time=n.start_time + 0.25) if abs(n.start_time % 1 - 0.5) < 0.01 and r.random() < 0.4 else n for n in mine]
+        elif mode == "lift":
+            mine = [replace(n, pitch=n.pitch + 12) if n.start_time >= begin + 6 * bpb and n.pitch + 12 <= high + 5 else n for n in mine]
+        result += mine
+    return sorted(result, key=lambda n: (n.start_time, n.pitch))
+
+
+def double_lead(notes: list[Note], scale: Scale, r: random.Random, bpb: float = 4.0) -> list[Note]:
+    """The lead's layer, 4 bars at a time in its own way: an octave up (an octave down where that would pass
+    LAYER_TOP), a third or a fifth above, only the 8ths of a dense lead, an echo half a beat late, or a pause."""
+    out: list[Note] = []
+    chunks: dict[int, list[Note]] = {}
     for n in notes:
-        if n.duration < 0.3 and abs(n.start_time * 2 - round(n.start_time * 2)) > 0.01:
+        chunks.setdefault(int(n.start_time // (4 * bpb)), []).append(n)
+    previous = ""
+    for index in sorted(chunks):
+        chunk = chunks[index]
+        choices = [m for m in ("octave", "third", "fifth", "thin", "echo", "rest") if m != previous]
+        mode = r.choice(choices if index else choices[:4])
+        previous = mode
+        if mode == "rest" and len(chunks) > 1:
             continue
-        pitch = scale.step(n.pitch, 2) if mode == "third" else n.pitch + 12
-        if pitch > 108:
-            pitch -= 12
-        out.append(replace(n, pitch=pitch, velocity=max(1.0, n.velocity - 14)))
+        top = max(n.pitch for n in chunk)
+        for n in chunk:
+            if mode in ("thin", "octave") and n.duration < 0.3 and abs(n.start_time * 2 - round(n.start_time * 2)) > 0.01:
+                continue
+            if mode == "third":
+                pitch = scale.step(n.pitch, 2)
+            elif mode == "fifth":
+                pitch = scale.step(n.pitch, 4)
+            elif mode == "thin":
+                if abs(n.start_time % 1) > 0.01 and r.random() < 0.5:
+                    continue
+                pitch = n.pitch + 12
+            else:
+                pitch = n.pitch + 12
+            if mode == "octave" and top + 12 > LAYER_TOP:
+                pitch = n.pitch - 12
+            while pitch > LAYER_TOP:
+                pitch -= 12
+            start = n.start_time + (0.5 if mode == "echo" else 0.0)
+            out.append(replace(n, pitch=pitch, start_time=start, velocity=max(1.0, n.velocity - 14)))
     return out
 
 
@@ -205,27 +269,41 @@ def _chord_tone(harmony: Harmony, time: float, pitch: int, low: int, high: int) 
     return min(options, key=lambda p: abs(p - pitch)) if options else pitch
 
 
-def answer_notes(lead: list[Note], rests: list[tuple[float, float]], harmony: Harmony, scale: Scale, low: int, high: int) -> list[Note]:
-    """A reply in each rest of the lead: the last notes before the rest, in the same rhythm, half a beat late, one octave
-    away; every second reply upside down. The last note lands on a chord tone and holds."""
+def answer_notes(lead: list[Note], rests: list[tuple[float, float]], harmony: Harmony, scale: Scale, low: int, high: int,
+                 r: random.Random | None = None) -> list[Note]:
+    """A reply in each rest of the lead, built from the notes before it in one of several ways (repeated in the
+    same rhythm, upside down, backwards, a step higher, only its start, answering after a beat), never the
+    same way twice in a row, three to five notes long. The last note lands on a chord tone and holds."""
+    r = r or random.Random(0)
     shift = 12 if high < 66 else -12
     lo, hi = low + shift, high + shift
     out: list[Note] = []
-    for index, (begin, end) in enumerate(rests):
+    previous = ""
+    for begin, end in rests:
         if end - begin < ANSWER_BEATS - EPSILON:
             continue
-        source = sorted((n for n in lead if begin - 4.0 - EPSILON <= n.start_time < begin - EPSILON), key=lambda n: n.start_time)[-4:]
+        count = r.choice((3, 4, 4, 5))
+        source = sorted((n for n in lead if begin - 4.0 - EPSILON <= n.start_time < begin - EPSILON), key=lambda n: n.start_time)[-count:]
         if not source:
             continue
+        mode = r.choice([m for m in ("repeat", "invert", "reverse", "step", "short", "late") if m != previous])
+        previous = mode
+        if mode == "short":
+            source = source[:3]
         origin, pivot = source[0].start_time, source[0].pitch + shift
+        pitches = [n.pitch + shift for n in source]
+        if mode == "invert":
+            pitches = [scale.snap(2 * pivot - p) for p in pitches]
+        elif mode == "reverse":
+            pitches.reverse()
+        elif mode == "step":
+            pitches = [scale.step(p, r.choice((2, -2))) for p in pitches]
+        delay = 1.0 if mode == "late" else 0.5
         phrase: list[Note] = []
-        for n in source:
-            start = begin + 0.5 + n.start_time - origin
+        for n, pitch in zip(source, pitches):
+            start = begin + delay + n.start_time - origin
             if start >= end - 0.75:
                 break
-            pitch = n.pitch + shift
-            if index % 2 == 1:
-                pitch = scale.snap(2 * pivot - pitch)
             while pitch > hi:
                 pitch -= 12
             while pitch < lo:

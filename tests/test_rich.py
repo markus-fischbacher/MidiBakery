@@ -116,3 +116,29 @@ async def test_a_reference_still_decides_the_sections(client, live, references):
     simple = await _plan(server, genre="peak_time_techno", reference="signal", minutes=3, complexity="simple")
     assert [(s["name"], s["bar"], s["bars"]) for s in rich["sections"]] == [(s["name"], s["bar"], s["bars"]) for s in simple["sections"]]
     assert "answer" in rich["tracks"] or "lead2" in rich["tracks"]
+
+
+async def test_the_lead_varies_and_the_layer_is_no_octave_copy(client, live):
+    _studio(live)
+    server = build_server(client, all_song_options=True)
+    preview = await _plan(server, seed=11)
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    lead = [n for c in await _clips(client, preview["tracks"]["lead"]["track"]) for n in c[3]]
+    layer = [n for c in await _clips(client, preview["tracks"]["lead2"]["track"]) for n in c[3]]
+    answer = [n for c in await _clips(client, preview["tracks"]["answer"]["track"]) for n in c[3]]
+    assert max(n["pitch"] for n in layer) <= 96
+    blocks = {}  # the 8-bar blocks of the lead are not one repeated motif
+    for n in lead:
+        blocks.setdefault(int(n["start_time"] // 32), []).append((round(n["start_time"] % 32, 2), n["pitch"]))
+    assert len({tuple(v) for v in blocks.values()}) >= 3
+    octave_copy = {(round(n["start_time"], 2), n["pitch"] + 12) for n in lead}
+    assert any((round(n["start_time"], 2), n["pitch"]) not in octave_copy for n in layer)
+    replies, current = [], []
+    for n in sorted(answer, key=lambda n: n["start_time"]):
+        if current and n["start_time"] - current[-1]["start_time"] > 3:
+            replies.append(current)
+            current = []
+        current.append(n)
+    replies.append(current)
+    shapes = {(len(r), tuple(b["pitch"] - a["pitch"] for a, b in zip(r, r[1:])), tuple(round(b["start_time"] - a["start_time"], 2) for a, b in zip(r, r[1:]))) for r in replies}
+    assert len(shapes) >= 4
