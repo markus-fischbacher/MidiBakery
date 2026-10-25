@@ -222,4 +222,4 @@ Feinschliff, Mixing und Sounddesign gehen in Live selbst schneller.
 
 **Hört die KI meine Musik?** Nein. Sie arbeitet mit Noten. Entscheide mit deinen Ohren.
 
-**Claude Desktop oder Claude Code?** Der MCP-Server bietet dort dieselben 13 Werkzeuge: siehe [MCP_SERVER.de.md](MCP_SERVER.de.md).
+**Claude Desktop oder Claude Code?** Der MCP-Server bietet dort dieselben 16 Werkzeuge: siehe [MCP_SERVER.de.md](MCP_SERVER.de.md).

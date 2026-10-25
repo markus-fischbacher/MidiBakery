@@ -8,7 +8,7 @@ By Klirrwerk. EDM song sketches for inspiration in Ableton Live 12 Suite: from g
 |---|---|
 | Musicians (German): install, set up, use | [docs/user/BENUTZERHANDBUCH.md](docs/user/BENUTZERHANDBUCH.md) |
 | Musicians (English) | [docs/user/USER_GUIDE.md](docs/user/USER_GUIDE.md) |
-| MCP server for Claude Desktop / Claude Code: setup and the 13 tools (German: [MCP_SERVER.de.md](docs/user/MCP_SERVER.de.md)) | [docs/user/MCP_SERVER.md](docs/user/MCP_SERVER.md) |
+| MCP server for Claude Desktop / Claude Code: setup and the 16 tools (German: [MCP_SERVER.de.md](docs/user/MCP_SERVER.de.md)) | [docs/user/MCP_SERVER.md](docs/user/MCP_SERVER.md) |
 | How the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Genre recipes behind `plan_song` | [docs/GENRES.md](docs/GENRES.md) |
 | Named patterns for `compose` (bass, lead, techno drums, emotion progressions) | [docs/PATTERNS.md](docs/PATTERNS.md) |
@@ -90,7 +90,7 @@ uv run midibakery chat --provider lmstudio --model google/gemma-4-e4b  # LM Stud
 uv run midibakery api                                   # HTTP/WebSocket API for the Max for Live devices
 ```
 
-Local models get all 13 tools too, in compact form (short schemas and results). LM Studio loads a model with its default context, which is too small for the tools: load it with at least 32768, `lms load <model> -c 32768`; the chat says so when the context is too small. The Chat device's model menu lists Claude and the local models it finds.
+Local models get all 16 tools too, in compact form (short schemas and results). LM Studio loads a model with its default context, which is too small for the tools: load it with at least 32768, `lms load <model> -c 32768`; the chat says so when the context is too small. The Chat device's model menu lists Claude and the local models it finds.
 
 Claude needs an API key: click **Key** in the chat (device or browser) or run `uv run midibakery auth set-key`. It is checked with the Claude API and stored in the macOS Keychain (service "MidiBakery") or the Windows Credential Manager, so the API that Live starts finds it too; `auth status` / `auth remove` show or delete it. `ANTHROPIC_API_KEY` and an `ant auth login` profile work as well. The API listens on
 127.0.0.1:8766 and writes its port and token to `api.json` in the MidiBakery config folder.
