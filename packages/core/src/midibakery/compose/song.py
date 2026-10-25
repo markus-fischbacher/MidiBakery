@@ -39,6 +39,7 @@ import hashlib
 import json
 import math
 import random
+import re
 import secrets
 from dataclasses import dataclass, field, replace
 from typing import Annotated, Any, Callable, Literal
@@ -50,7 +51,7 @@ from midibakery.compose import harmony as harmony_mod
 from midibakery.compose.drums import DrumMap, map_pads
 from midibakery.compose.harmony import Harmony
 from midibakery.compose.notes import Note, fit_to_length
-from midibakery.compose.plan import Call, Session, is_drum_track, new_seed
+from midibakery.compose.plan import CHORD_TRACK_WORDS, Call, Session, is_drum_track, new_seed
 from midibakery.compose.rhythm import Meter
 from midibakery.compose.rollback import batch_steps, completed, restore_locators, undo, undo_batch
 from midibakery.compose.bass_templates import BASS_TEMPLATES, BassTemplate, generate_bass_template
@@ -66,7 +67,7 @@ from midibakery.compose.theory import Scale, diatonic_chord
 NEW_TRACK_DEVICES = {"drums": "Drum Rack", "bass": "Drift", "chords": "Wavetable", "lead": "Operator", "riser": "Operator", "impact": "Operator", "sidechain": "Operator"}
 ROLE_WORDS = {
     "bass": ("bass", "sub", "808"),
-    "chords": ("chord", "pad", "keys", "piano", "stab"),
+    "chords": CHORD_TRACK_WORDS,
     "lead": ("lead", "melody", "synth", "arp", "pluck"),
     "riser": ("riser", "uplift"),
     "impact": ("impact", "boom"),
@@ -113,6 +114,7 @@ class SongRequest(BaseModel):
     fx: bool = Field(True, description="A riser before each drop and an impact on its first beat (needs sounds)")
     sidechain: bool = Field(True, description="Enable silent-trigger ducking; default pumps through kick rests")
     sidechain_mode: Literal["pumping", "follow_kick"] = Field("pumping", description="Continuous genre pulse or planned drum MIDI kick onsets")
+    key: str | None = Field(None, description="Key of the song, e.g. 'A minor'; set in Live with the plan (default: the Set's key)")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174); with a reference its tempo and key")
     reference: str | None = Field(None, description="Follow the sections of a song from get_reference (part of its name); overrides length")
@@ -152,6 +154,7 @@ class RoleTrack:
     index: int
     name: str
     new: bool = False
+    reuse: bool = False  # new, but on an empty default track of the Set (renamed) instead of a created one
     device: str | None = None
     sound: tuple[str, ...] | None = None  # browser path loaded onto a new track
     filter: str | None = None  # Auto Filter type the song sweeps
@@ -280,7 +283,7 @@ class SongPlan:
             "bars": int((self.end - self.start) / bpb),
             "from_bar": int(self.start / bpb) + 1,
             "seed": self.seed,
-            "tracks": {r: {"track": t.index, "name": t.name, **({"new": True, "device": _sound_name(t.sound) if t.sound else t.device} if t.new else {}), **_filter_info(t)} for r, t in self.roles.items()},
+            "tracks": {r: {"track": _first_shift(self)(t.index), "name": t.name, **({"new": True, **({"reused_empty_track": True} if t.reuse else {}), "device": _sound_name(t.sound) if t.sound else t.device} if t.new else {}), **_filter_info(t)} for r, t in self.roles.items()},
             **({"sidechain_mode": self.sidechain_mode} if "sidechain" in self.roles else {}),
             **self.mix_info(),
             "sections": sections,
@@ -502,7 +505,7 @@ def _auto_filter(track: dict[str, Any]) -> int | None:
     return next((d.get("index", i) for i, d in reversed(list(enumerate(devices))) if str(d.get("class_name", "")).startswith("AutoFilter")), None)
 
 
-def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, RoleTrack], list[str]]:
+def _assign_roles(session: Session, request: SongRequest, arrangement: dict[str, Any] | None = None) -> tuple[dict[str, RoleTrack], list[str]]:
     tracks = session.tracks
     roles: dict[str, RoleTrack] = {}
     used: set[int] = set()
@@ -551,9 +554,17 @@ def _assign_roles(session: Session, request: SongRequest) -> tuple[dict[str, Rol
         return roles, warnings
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     mine = my_sounds.load(template.genre) if request.sounds else {}
-    for offset, role in enumerate(missing):
+    arranged = {t["index"] for t in (arrangement or {}).get("tracks", []) if t.get("clips")}
+    spare = [t["index"] for t in tracks if t["index"] not in used and t["index"] not in arranged and t.get("kind") == "midi"
+             and re.fullmatch(r"\d+-MIDI", t.get("name", "")) and not t.get("clips") and not t.get("devices")]
+    created = 0
+    for role in missing:
         sound = mine.get(role) or (template.style.sounds.get(role) if request.sounds else None)
-        roles[role] = RoleTrack(role, len(tracks) + offset, role.title(), new=True, device=devices[role], sound=sound)
+        if spare and role != "sidechain":  # the sidechain track goes first in the Set: it is always created
+            index = spare.pop(0)
+        else:
+            index, created = len(tracks) + created, created + 1
+        roles[role] = RoleTrack(role, index, role.title(), new=True, reuse=index < len(tracks), device=devices[role], sound=sound)
         if role == "drums" and sound is None:
             warnings.append("The new drum track gets an empty Drum Rack: drop a kit on it")
     return roles, warnings
@@ -906,6 +917,11 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
             key = reference_scale(reference.get("key"))
             if key is not None:
                 scale = key
+    if request.key:
+        chosen = reference_scale(request.key)
+        if chosen is None:
+            raise BridgeError("INVALID_PARAMS", f"key: '{request.key}' is not a key like 'A minor' or 'F# major'")
+        key = scale = chosen
     seed = request.seed if request.seed is not None else new_seed()
     drawn = _draw_loops(request, reference, seed) if request.my_loops else {}
     if drawn:
@@ -921,7 +937,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
     else:
         sections = sized(template, request.length, request.minutes, bpb, tempo)
 
-    roles, warnings = _assign_roles(session, request)
+    roles, warnings = _assign_roles(session, request, arrangement)
     if request._genre_note:
         warnings.append(request._genre_note)
     if request.my_loops:
@@ -934,7 +950,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 sets = sorted({e["set_name"] for e in user_patterns.entries() if e["kind"] == role})
                 warnings.append(f"The Set plays no {role}: left out (fill_missing=true plays it from the genre"
                                 + (f"; loops_from={{\"{role}\": \"<Set>\"}} takes the {role} of an imported Set: {', '.join(sets)}" if sets else "") + ")")
-        for offset, track in enumerate(sorted((t for t in roles.values() if t.new), key=lambda t: t.index)):
+        for offset, track in enumerate(sorted((t for t in roles.values() if t.new and not t.reuse), key=lambda t: t.index)):
             track.index = len(session.tracks) + offset  # a left-out role leaves no gap among the new tracks
     loops = _loops(reference, request.loops_from)
     loop_choice = {(s.name, role): _choose_loop(entries, same, i, reference)
@@ -1351,7 +1367,11 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     new = [t for t in plan.roles.values() if t.new]
     ops: list[dict[str, Any]] = []
     for t in sorted(new, key=lambda t: t.index):
-        ops.append({"op": "track.create", "params": {"kind": "midi", "name": t.name, **({"index": 0} if t.index == 0 else {})}})
+        if t.reuse:
+            ops.append({"op": "track.set", "params": {"track": t.index, "name": t.name}})
+        else:
+            ops.append({"op": "track.create", "params": {"kind": "midi", "name": t.name, **({"index": 0} if t.index == 0 else {})}})
+        ops.append({"op": "track.set", "params": {"track": t.index, "arm": False}})  # Live arms a track it creates
         ops.append({"op": "device.insert", "params": {"track": t.index, "name": t.device}})
     for t in plan.roles.values():
         if t.filter is None:
@@ -1435,17 +1455,22 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
     }
 
 
+def _first_shift(plan: SongPlan) -> Callable[[int], int]:
+    """Where a track index ends up once a new sidechain track is put first (apply_plan does that)."""
+    trigger = plan.roles.get("sidechain")
+    if trigger is None or not trigger.new or trigger.index == 0:
+        return lambda index: index
+    moved = trigger.index
+    return lambda index: 0 if index == moved else index + 1 if index < moved else index
+
+
 def _trigger_first(plan: SongPlan) -> None:
     """A new sidechain track goes first in the Set, out of the way of the parts. It was planned last: it becomes
     index 0 and every track before it moves down one, in the roles and in the clip actions."""
     trigger = plan.roles.get("sidechain")
     if trigger is None or not trigger.new or trigger.index == 0:
         return
-    moved = trigger.index
-
-    def shift(index: int) -> int:
-        return 0 if index == moved else index + 1 if index < moved else index
-
+    shift = _first_shift(plan)
     for t in plan.roles.values():
         t.index = shift(t.index)
     plan.actions = [{**a, "track": shift(a["track"])} if "track" in a else a for a in plan.actions]

@@ -37,7 +37,7 @@ Der Pfad enthält die Version: nach einem Update anpassen. Für Apps ohne stdio 
 
 - Jede Änderung ist ein Schritt in Lives Undo-Liste; Claude kann selbst `undo` aufrufen.
 - `plan_song` ändert **nichts**, bis `apply_plan` kommt. Ein Song überschreibt nie bestehende Arrangement-Clips.
-- Vor dem Löschen eines Clips oder dem Ersetzen von Noten fragt MidiBakery nach (Apps ohne Rückfragen bekommen stattdessen eine `plan_id` und müssen dich im Chat fragen, bevor `apply_plan` kommt). Abgelehnt: `CANCELLED`.
+- Vor dem Löschen eines Clips oder dem Ersetzen von Noten fragt MidiBakery nach (Apps ohne Rückfragen bekommen stattdessen eine `plan_id` und müssen dich im Chat fragen, bevor `apply_plan` kommt). Abgelehnt: `CANCELLED`. Kommt `CANCELLED`, ohne dass du abgelehnt hast (die App zeigt keine Rückfrage), nimm `compose` mit `preview=true` und danach `apply_plan`.
 - Der Server spricht nur mit Live. Die App, in der du bist, sieht, was die Werkzeuge zurückgeben: Spur- und Clipnamen, Noten, Tempo.
 
 ## Die 13 Werkzeuge
@@ -50,7 +50,7 @@ Spuren, Slots und Arrangement-Clips zählen ab **0** (Spur 1 in Live = `track 0`
 | `get_clip` | lesen | Eigenschaften eines Clips und bei MIDI-Clips alle Noten. |
 | `get_arrangement` | lesen | Arrangement-Clips pro Spur, Locators, Songlänge. |
 | `get_reference` | lesen | Referenzen aus dem Reference Analyzer und vom Set Importer importierte Live Sets: Abschnitte, Tonart, Tempo, mit `name` auch die Spuren pro Takt. |
-| `plan_song` | lesen | Plant einen **ganzen Song**: `genre` (`house`, `melodic_techno`, `peak_time_techno`, `drum_and_bass`, `trap`), `length` (`radio`/`standard`/`extended`), `progression`, `reference` (ein analysierter Song oder ein importiertes Set), `loops_from` (`{"bass": "<Set>"}`; Rollen drums, bass, lead, chords), `my_loops` (der Seed zieht Loops aus den importierten Sets), `seed`. Das Tempo folgt Genre oder Referenz; Rollen, die einem Set fehlen, kommen aus dem Genre. Liefert eine Vorschau und eine `plan_id`. |
+| `plan_song` | lesen | Plant einen **ganzen Song**: `genre` (`house`, `melodic_techno`, `peak_time_techno`, `drum_and_bass`, `trap`), `length` (`radio`/`standard`/`extended`), `key` (z. B. `A minor`; wird in Live gesetzt), `progression`, `reference` (ein analysierter Song oder ein importiertes Set), `loops_from` (`{"bass": "<Set>"}`; Rollen drums, bass, lead, chords), `my_loops` (der Seed zieht Loops aus den importierten Sets), `seed`. Das Tempo folgt Genre oder Referenz; Rollen, die einem Set fehlen, kommen aus dem Genre. Liefert eine Vorschau und eine `plan_id`. |
 | `apply_plan` | **fragt nach** (beim Ersetzen) | Schreibt einen Plan nach Live. `CONFLICT`, wenn sich ein Ziel seit dem Planen geändert hat. Pläne bleiben im Speicher (die letzten 32). |
 | `compose` | **fragt nach** (beim Ersetzen) | **Eine Stimme** als MIDI-Clip in der Tonart des Sets: `kind` drums, bass, chords oder melody; `bars`, `seed`, `style`, `pattern`, `density`, `swing`, `progression`, `chords_from`, `follow_kick`, `if_exists`, `preview`. Mit `arrangement_clip` schreibt es diesen Clip neu. |
 | `edit_arrangement` | schreiben | MIDI-Clips anlegen, Session-Clips kopieren, Arrangement-Clips **verschieben, tauschen, löschen**, Locators setzen oder löschen (Transport gestoppt). Ein Undo-Schritt; ein Clip landet nie auf einem anderen. |

@@ -121,6 +121,10 @@ class ClipState:
         return _fingerprint(self.track, self.exists, self.is_midi, self.length, self.notes)
 
 
+# Names that make a track the song's chords track (also how plan_song finds it).
+CHORD_TRACK_WORDS = ("chord", "pad", "keys", "piano", "stab")
+
+
 class Session:
     """Read-only view of the open Live set, cached for the lifetime of one plan."""
 
@@ -184,6 +188,31 @@ class Session:
             found = (await self._call("arrangement.get", {"track": track}))["tracks"]
             self._arrangement[track] = found[0]["clips"] if found else []
         return self._arrangement[track]
+
+    async def chords_beside(self, spec: Any) -> Place | None:
+        """The MIDI clip of the song's chords track that sits where `spec`'s clip is (same Arrangement time, or the
+        same slot), for a part that has no chords of its own. None for the chords themselves, a clip planned in
+        this plan, or a set without a chords track."""
+        if isinstance(spec, ChordsSpec) or getattr(spec, "_at", None) is not None:
+            return None
+        place = Place.of(spec)
+        tracks = [t for t in self.tracks if t["index"] != spec.track and t.get("kind") == "midi" and not is_drum_track(t)
+                  and any(w in t.get("name", "").lower() for w in CHORD_TRACK_WORDS)]
+        if place.arrangement_clip is not None:
+            wanted = await self.arrangement_index(spec.track, place.arrangement_clip)
+            here = [c for c in await self._arrangement_clips(spec.track) if int(c["index"]) == wanted]
+            if not here:
+                return None
+            at = here[0]["start"]
+            for t in tracks:
+                for c in await self._arrangement_clips(t["index"]):
+                    if c.get("is_midi") and c["start"] <= at < c["end"]:
+                        return Place(t["index"], arrangement_clip=int(c["index"]))
+        elif place.slot is not None:
+            for t in tracks:
+                if any(c.get("slot") == place.slot and c.get("is_midi") for c in t.get("clips", [])):
+                    return Place(t["index"], slot=place.slot)
+        return None
 
     async def arrangement_tracks(self) -> list[dict[str, Any]]:
         """Every track's arrangement clips, in one read."""
@@ -514,6 +543,16 @@ def _not_drums(session: Session, index: int) -> None:
     )
 
 
+async def _detect(session: Session, spec: Harmonic, where: Place, what: str) -> Harmony:
+    meter = session.meter
+    source = await session.clip(where)
+    if not source.exists or not source.is_midi:
+        raise BridgeError("NOT_FOUND", f"{what}: no MIDI clip in {where}")
+    source_bars = max(1, round((source.length or meter.beats_per_bar) / meter.beats_per_bar))
+    result = harmony_mod.detect(source.notes or [], session.scale, meter, source_bars, spec.chords_per_bar)
+    return result.for_length(meter, spec.bars)
+
+
 async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harmony:
     meter, scale = session.meter, session.scale
     try:
@@ -524,13 +563,10 @@ async def _harmony(session: Session, spec: Harmonic, rng: random.Random) -> Harm
             result = mood_harmony(spec.pattern, scale, meter, spec.bars, explicit)
         elif spec.chords_from is not None:
             _not_drums(session, spec.chords_from.track)
-            where = Place.of(spec.chords_from)
-            source = await session.clip(where)
-            if not source.exists or not source.is_midi:
-                raise BridgeError("NOT_FOUND", f"chords_from: no MIDI clip in {where}")
-            source_bars = max(1, round((source.length or meter.beats_per_bar) / meter.beats_per_bar))
-            result = harmony_mod.detect(source.notes or [], scale, meter, source_bars, spec.chords_per_bar)
-            result = result.for_length(meter, spec.bars)
+            result = await _detect(session, spec, Place.of(spec.chords_from), "chords_from")
+        elif (beside := await session.chords_beside(spec)) is not None:
+            # A bass or melody for a clip of a song follows the song's chords there, not a new progression.
+            result = await _detect(session, spec, beside, "the song's chords")
         elif session.harmony is not None:
             result = session.harmony.for_length(meter, spec.bars)
         else:
