@@ -804,7 +804,7 @@ async def apply_plan(call: Call, plan: Plan, verify: bool = True) -> dict[str, A
                 result = results[cursor]
                 cursor += 1
                 if op["op"] == "notes.apply":
-                    entry.update(added_note_ids=result["added"], modified=result["modified"], removed=result["removed"])
+                    entry.update(added=len(result["added"]), modified=result["modified"], removed=result["removed"])
                 else:
                     entry["created_clip"] = True
             if change.seed is not None:

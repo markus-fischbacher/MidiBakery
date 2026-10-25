@@ -72,7 +72,7 @@ async def test_plan_does_not_touch_live_and_apply_is_one_undo_step(client, live)
     result = await apply_plan(client.call, plan)
     assert live.on_main(lambda: live.song.undo_steps) == steps_before + 1
     notes = _clip_notes(live, 0, 0)
-    assert len(notes) == change["add"] == len(result["applied"][0]["added_note_ids"])
+    assert len(notes) == change["add"] == result["applied"][0]["added"]
     assert {n["pitch"] for n in notes} <= set(KIT.values())
     assert all(n["start_time"] < 8 for n in notes)
 

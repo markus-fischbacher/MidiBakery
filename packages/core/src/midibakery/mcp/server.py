@@ -107,6 +107,11 @@ def _signature_from_model(model: type[BaseModel], skip: tuple[str, ...] = ()) ->
     return inspect.Signature(params, return_annotation=dict[str, Any])
 
 
+class GetClip(ClipRef):
+    from_time: Annotated[float, Field(ge=0)] = 0.0
+    to_time: Annotated[float, Field(gt=0, description="End of the notes returned; default: clip end")] | None = None
+
+
 class FindSounds(BaseModel):
     """Instruments, presets and kits of Live's browser, by words of their name."""
 
@@ -298,9 +303,12 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
         return with_arrangement(session, arrangement)
 
     async def get_clip(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:
-        clip = await bridge.call("clip.get", args)
+        wanted = GetClip.model_validate(args)
+        ref = wanted.model_dump(exclude_none=True, include={"track", "slot", "arrangement_clip"})
+        clip = await bridge.call("clip.get", ref)
         if clip.get("is_midi"):
-            clip["notes"] = (await bridge.call("notes.get", args))["notes"]
+            window = {"from_time": wanted.from_time, **({"time_span": wanted.to_time - wanted.from_time} if wanted.to_time is not None else {})}
+            clip["notes"] = (await bridge.call("notes.get", {**ref, **window}))["notes"]
         return clip
 
     async def call_op(op: str, args: dict[str, Any]) -> Any:
@@ -346,10 +354,11 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
         annotations=read_only,
     )
     server.add_tool(
-        _make_tool(ClipRef, get_clip, free=True),
+        _make_tool(GetClip, get_clip, free=True),
         name="get_clip",
         title="Get clip with notes",
-        description="Clip properties and, for MIDI clips, all notes with note_id, probability and velocity deviation.",
+        description="Clip properties and, for MIDI clips, its notes with note_id, probability and velocity deviation; "
+        "a long clip: give from_time/to_time (beats from the clip start) for one part.",
         annotations=read_only,
     )
 
@@ -367,7 +376,19 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
 
     async def find_sounds(args: dict[str, Any], ctx: Context | None) -> Any:
         found = FindSounds.model_validate(args).model_dump(exclude_none=True)
-        return await bridge.call("browser.search", found)
+        result = await bridge.call("browser.search", {**found, "limit": min(50, found["limit"] * 2)})
+        items, seen = [], set()
+        for item in result["items"]:
+            if item["name"].lower().endswith((".alc", ".als")) or item["name"] in seen:  # clips, sets; the same item in a pack
+                continue
+            seen.add(item["name"])
+            items.append(item)
+        out: dict[str, Any] = {"items": items[: found["limit"]]}
+        if result.get("matched"):
+            out["matched"] = result["matched"]
+        if not result.get("complete", True) and len(items) < found["limit"]:
+            out["hint"] = "the search stopped early: use a more exact name or a category"
+        return out
 
     server.add_tool(
         _make_tool(FindSounds, find_sounds),
@@ -468,7 +489,11 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
                 asked = await confirm(ctx, await describe(_op, args), later=lambda m: defer(_op, args, m))
                 if asked is not None:
                     return asked
-            return await call_op(_op, args)
+            result = await call_op(_op, args)
+            if _op == "transport.control" and isinstance(result, dict):
+                await asyncio.sleep(0.2)  # Live reports the old play state until its next tick
+                result = {**result, "is_playing": (await bridge.call("song.get"))["is_playing"]}
+            return result
 
         server.add_tool(
             _make_tool(spec.params, run, free=spec.read_only or op_name == "history.step"),

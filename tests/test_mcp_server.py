@@ -59,3 +59,20 @@ async def test_find_sounds_set_track_and_edit_notes(client, live):
     await server.call_tool("edit_notes", {"track": 1, "slot": 0, "transpose": 12, "from_time": 2.0, "add": [{"pitch": 36, "start_time": 3.0, "duration": 0.5}]})
     notes = sorted((n["start_time"], n["pitch"]) for n in (await client.call("notes.get", {"track": 1, "slot": 0}))["notes"])
     assert notes == [(0.0, 40), (2.0, 55), (3.0, 36)]
+
+
+async def test_get_clip_returns_only_the_asked_range(client, live):
+    import json
+    from midibakery.mcp import build_server
+    server = build_server(client)
+    await client.call("clip.create", {"track": 1, "slot": 0, "length": 8})
+    await client.call("notes.apply", {"track": 1, "slot": 0, "add": [
+        {"pitch": 40 + b, "start_time": float(b), "duration": 0.5} for b in range(8)]})
+
+    def clip(r):
+        c = r[0] if isinstance(r, tuple) else r
+        return c.structured_content if getattr(c, "structured_content", None) else json.loads(c.content[0].text)
+
+    whole = clip(await server.call_tool("get_clip", {"track": 1, "slot": 0}))
+    part = clip(await server.call_tool("get_clip", {"track": 1, "slot": 0, "from_time": 2.0, "to_time": 4.0}))
+    assert len(whole["notes"]) == 8 and sorted(n["start_time"] for n in part["notes"]) == [2.0, 3.0]
