@@ -198,6 +198,14 @@ def _copy_session_clip(ctx, action):
     return {"track": action["track"], "start": start, "end": start + source.length, "from_slot": action["slot"]}
 
 
+def _copy_clip(ctx, action):
+    source = ctx.clip_at({"track": action["track"], "arrangement_clip": action["clip"]})
+    start, length = float(action["start"]), source.end_time - source.start_time
+    _check_free(ctx, action["track"], start, start + length)
+    ctx.track(action["track"]).duplicate_clip_to_arrangement(source, start)
+    return {"track": action["track"], "start": start, "end": start + length, "from_clip": action["clip"]}
+
+
 def _delete_clip(ctx, action):
     clip = ctx.clip_at({"track": action["track"], "arrangement_clip": action["clip"]})
     span = (clip.start_time, clip.end_time)
@@ -292,6 +300,7 @@ def _cue_at(song, time):
 ACTIONS = {
     "add_clip": _add_clip,
     "copy_session_clip": _copy_session_clip,
+    "copy_clip": _copy_clip,
     "delete_clip": _delete_clip,
     "move_clip": _move_clip,
     "swap_clips": _swap_clips,

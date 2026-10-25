@@ -410,6 +410,16 @@ ArrangementClipIndex = Annotated[Annotated[int, Field(ge=0)] | Annotated[str, Fi
                                        validation_alias=AliasChoices("clip", "arrangement_clip"))]
 
 
+class CopyArrangementClip(BaseModel):
+    # A copy of an Arrangement clip (notes, name, color) at another start.
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["copy_clip"]
+    track: TrackIndex
+    clip: ArrangementClipIndex
+    start: Annotated[float, Field(ge=0)]
+
+
 class DeleteArrangementClip(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -474,7 +484,7 @@ class DeleteLocator(BaseModel):
 
 
 ClipAction = Annotated[
-    AddClip | CopySessionClip | DeleteArrangementClip | MoveArrangementClip | SwapArrangementClips | AddTakeLane | AddTakeClip,
+    AddClip | CopySessionClip | CopyArrangementClip | DeleteArrangementClip | MoveArrangementClip | SwapArrangementClips | AddTakeLane | AddTakeClip,
     Field(discriminator="action"),
 ]
 LocatorAction = Annotated[SetLocator | DeleteLocator, Field(discriminator="action")]
@@ -500,7 +510,7 @@ class ArrangementTool(Params):
     """Clip actions first (one undo step), then locators (transport must be stopped). A clip never lands on an existing one."""
 
     actions: list[
-        Annotated[AddClip | CopySessionClip | DeleteArrangementClip | MoveArrangementClip | SwapArrangementClips | SetLocator | DeleteLocator,
+        Annotated[AddClip | CopySessionClip | CopyArrangementClip | DeleteArrangementClip | MoveArrangementClip | SwapArrangementClips | SetLocator | DeleteLocator,
                   Field(discriminator="action")]
     ] = Field(min_length=1, max_length=256)
 
@@ -518,7 +528,7 @@ class History(Params):
     action: Literal["undo", "redo"]
 
 
-_CLIP_ACTIONS = frozenset({"add_clip", "copy_session_clip", "delete_clip", "move_clip", "swap_clips"})
+_CLIP_ACTIONS = frozenset({"add_clip", "copy_session_clip", "copy_clip", "delete_clip", "move_clip", "swap_clips"})
 
 
 class BatchItem(BaseModel):
