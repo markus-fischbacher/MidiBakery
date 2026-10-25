@@ -146,7 +146,7 @@ class EditNotes(ClipRef):
 
     add: list[NoteAdd] = Field(default_factory=list)
     remove: list[int] = Field(default_factory=list, description="note_ids to delete")
-    transpose: int | None = Field(None, ge=-48, le=48, description="Semitones, for the notes from from_time (beats) to to_time, default all")
+    transpose: int | None = Field(None, ge=-48, le=48, description="Semitones, for the notes from from_time to to_time (beats from the clip start), default all")
     from_time: float | None = None
     to_time: float | None = None
 
@@ -403,8 +403,9 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
         if wanted.name is None and wanted.sound is None:
             raise BridgeError("INVALID_PARAMS", "give a name, a sound or both")
         result: dict[str, Any] = {}
+        after: dict[str, Any] = {"track": wanted.track}  # name and unarm are one undo step, after the load
         if wanted.name is not None:
-            await bridge.call("track.set", {"track": wanted.track, "name": wanted.name})
+            after["name"] = wanted.name
             result["name"] = wanted.name
         if wanted.sound is not None:
             path = [wanted.sound] if isinstance(wanted.sound, str) else wanted.sound
@@ -412,14 +413,16 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
             armed = tracks[wanted.track]["arm"] if wanted.track < len(tracks) else None  # None: cannot be armed
             result["loaded"] = await bridge.call("browser.load", {"track": wanted.track, "path": path})
             if armed is False:  # Live arms a track when a sound is dropped on it
-                await bridge.call("track.set", {"track": wanted.track, "arm": False})
+                after["arm"] = False
+        if len(after) > 1:
+            await bridge.call("track.set", after)
         return result
 
     server.add_tool(
         _make_tool(SetTrack, set_track),
         name="set_track",
         title="Rename a track or load a sound onto it",
-        description="Rename a track and/or load an instrument, preset or kit from find_sounds onto it (one undo step each). "
+        description="Rename a track and/or load an instrument, preset or kit from find_sounds onto it (sound and rename: two undo steps). "
         "Not for mixing: volume, pan and sends stay as they are.",
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     )
@@ -481,6 +484,7 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
         name="edit_arrangement",
         title="Add, copy, move, swap or delete arrangement clips and locators",
         description="Add MIDI clips with notes, copy session clips, move, swap or delete arrangement clips, set or delete locators. "
+        "Times are absolute beats; clip indexes shift after a move, so use clip names. "
         + inspect.cleandoc(ArrangementTool.__doc__ or ""),
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     )
@@ -606,7 +610,7 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
         _make_tool(ApplyPlan, run_plan),
         name="apply_plan",
         title="Apply planned changes",
-        description="Write a plan from plan_song (or compose with preview=true) to Live as one undo step. "
+        description="Write a plan from plan_song (or compose with preview=true) to Live (a song is several undo steps: the result says how to undo). "
         "Fails with CONFLICT if a target clip changed since planning.",
         annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False),
     )

@@ -99,7 +99,7 @@ def history(ctx, params):
         if not song.can_redo:
             raise OpError(ErrorCode.CONFLICT, "Nothing to redo")
         song.redo()
-    return {"can_undo": song.can_undo, "can_redo": song.can_redo}
+    return {"can_undo": song.can_undo, "can_redo": song.can_redo, "tracks": len(song.tracks)}
 
 
 @op("scene.create")
