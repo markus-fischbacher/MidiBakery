@@ -123,7 +123,7 @@ Was MidiBakery schreibt (bei Bake wie bei Apply):
 - **Spuren:** es nimmt Spuren mit Namen wie Drums (oder mit Drum Rack), Bass/Sub/808, Chords/Pad/Keys und Lead/Melody/Synth. Fehlende werden mit einem Kit und Presets aus der Core Library angelegt. Benenne deine Spuren so, wenn du deine eigenen Sounds behalten willst.
 - **Tempo:** das Tempo des Genres (oder der Referenz), je Seed etwas gestreut.
 - **Noten:** Drums mit Ghost Notes und Fills, ein Bass, der den Akkorden folgt, eine Hook, die sich entwickelt, Dynamik nach der Energie jedes Abschnitts. Der Seed wählt Bassmuster, Akkord-Loop und Drum-Groove.
-- **Arrangement:** Locators an den Abschnitten, ein Reverb- und ein Delay-Return, Sidechain-Pumpen auf Bass und Pads, Riser vor und Impacts auf den Drops.
+- **Arrangement:** Locators an den Abschnitten, ein Reverb- und ein Delay-Return, Sidechain-Pumpen auf Bass und Pads, Riser vor und Impacts auf den Drops. Standardmäßig ist der Song **rich**: eine Antwortstimme antwortet in den Pausen des Leads, Lead und Bass bekommen Layer, die in verschiedenen Sektionen ein- und aussteigen, Noise-Sweeps, Downlifter und kurze Riser markieren die Übergänge, die Drums bekommen Ghost Notes und Fills, und die Sektionslängen sind je Seed verschieden. Sag „simple“ für den schlichten Song.
 
 Apply kann einige Undo-Schritte brauchen (Spuren, Returns, Clips): drück **Undo**, bis alles weg ist.
 

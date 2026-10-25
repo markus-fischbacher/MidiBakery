@@ -244,7 +244,7 @@ def test_second_api_on_a_busy_port_keeps_the_running_apis_token(bridge_env):
 def test_song_plan_reaches_the_page_and_its_apply_button_writes_it(app_factory, live):
     """plan_song's preview carries what the timeline card draws; Apply on the card writes the song."""
     provider = ScriptedProvider([
-        Turn("tool_use", [ToolCall("t1", "plan_song", {"genre": "trap", "seed": 3})]),
+        Turn("tool_use", [ToolCall("t1", "plan_song", {"genre": "trap", "seed": 3, "complexity": "simple"})]),
         Turn("end_turn", text="Here is the song."),
     ])
     api, _ = app_factory(provider)

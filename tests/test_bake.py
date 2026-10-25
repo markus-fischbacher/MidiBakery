@@ -21,7 +21,7 @@ async def test_bake_writes_a_song_and_again_replaces_it(client, live):
     assert song
 
     again = await baker.bake({"mode": "again", "genre": "house", "seed": 8})
-    assert again["baked"]["bars"] == first["baked"]["bars"] and again["baked"]["can_go_back"]
+    assert again["baked"]["bars"].startswith("1-") and again["baked"]["can_go_back"]  # its own length: the sections vary per seed
     assert live.on_main(lambda: len(live.song.tracks)) == tracks  # the tracks are used again
     replaced = await _clips(client)
     assert replaced and min(c[1] for c in replaced) == min(c[1] for c in song)  # in place, not after it

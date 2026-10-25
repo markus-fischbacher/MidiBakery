@@ -114,7 +114,7 @@ async def test_genre_is_optional_with_a_reference(client, live, home):
     _import(home)
     server = build_server(client, all_song_options=True)
     from test_song import _payload
-    preview = _payload(await server.call_tool("plan_song", {"reference": "Loops Demo", "seed": 7}))  # no genre: guessed from the tempo
+    preview = _payload(await server.call_tool("plan_song", {"reference": "Loops Demo", "seed": 7, "complexity": "simple"}))  # no genre: guessed from the tempo
     assert any("No genre given" in w for w in preview["warnings"])
     named = await _plan(server, reference="Loops Demo", genre="trap")
     assert not any("No genre given" in w for w in named["warnings"])

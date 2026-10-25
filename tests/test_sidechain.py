@@ -60,7 +60,7 @@ def test_pump_steps_follow_each_genres_main_kick():
 
 
 async def _house(server, **args):
-    return _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "fx": False, **args}))
+    return _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "complexity": "simple", "fx": False, **args}))
 
 
 def _compressors(live):
@@ -152,7 +152,7 @@ def _kick_and_trigger_times(live, kick):
 async def test_kick_following_matches_generated_drums_including_rests_and_variations(client, live, genre):
     _studio(live)
     server = build_server(client, all_song_options=True)
-    preview = _payload(await server.call_tool("plan_song", {"genre": genre, "seed": 7, "fx": False,
+    preview = _payload(await server.call_tool("plan_song", {"genre": genre, "seed": 7, "complexity": "simple", "fx": False,
                                                           "sidechain_mode": "follow_kick", "start_bar": 5}))
     assert preview["sidechain_mode"] == "follow_kick"
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})

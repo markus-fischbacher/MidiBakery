@@ -34,7 +34,7 @@ def _studio(live):
 
 
 async def _plan(server, **args):
-    return _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "fx": False, "sidechain": False, **args}))  # test_fx_*, test_sidechain_*
+    return _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "complexity": "simple", "fx": False, "sidechain": False, **args}))  # test_fx_*, test_sidechain_*
 
 
 async def test_house_song_on_found_and_new_tracks(client, live):
@@ -84,7 +84,7 @@ async def test_sounds_off_or_missing_keep_native_devices(client, live):
     server = build_server(client, all_song_options=True)
     preview = await _plan(server, sounds=False)
     assert preview["tracks"]["chords"]["device"] == "Wavetable" and "empty Drum Rack" in preview["warnings"][0]
-    trap = _payload(await server.call_tool("plan_song", {"genre": "trap", "seed": 1}))  # its sounds (but the lead) are not in the fake browser
+    trap = _payload(await server.call_tool("plan_song", {"genre": "trap", "seed": 1, "complexity": "simple"}))  # its sounds (but the lead) are not in the fake browser
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": trap["plan_id"]}))
     assert [t["device"] for t in applied["new_tracks"]] == ["Drum Rack", "Operator", "Drift", "Light Keys", "Riser Basic", "Sub 808 Pitch Boom", "Operator"]
     assert len(applied["warnings"]) == 3 and "808 Core Kit could not be loaded" in applied["warnings"][0]
@@ -179,7 +179,7 @@ async def test_fx_riser_before_each_drop_and_an_impact_on_it(client, live):
 
 async def test_fx_need_their_presets(client, live):
     server = build_server(client, all_song_options=True)
-    melodic = _payload(await server.call_tool("plan_song", {"genre": "melodic_techno", "seed": 2}))  # Hyper Riser: not in the fake browser
+    melodic = _payload(await server.call_tool("plan_song", {"genre": "melodic_techno", "seed": 2, "complexity": "simple"}))  # Hyper Riser: not in the fake browser
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": melodic["plan_id"]}))
     assert any("Hyper Riser could not be loaded" in w and "stays empty" in w for w in applied["warnings"])
     arrangement = {t["name"]: t["clips"] for t in (await client.call("arrangement.get", {}))["tracks"]}
@@ -939,7 +939,7 @@ def test_the_seed_picks_a_drum_groove_variant_and_keeps_the_kick():
 async def test_set_tempo_varies_a_little_with_the_seed(client, live):
     _studio(live)
     server = build_server(client, all_song_options=True)
-    tempos = {_payload(await server.call_tool("plan_song", {"genre": "house", "seed": seed, "set_tempo": True, "fx": False,
+    tempos = {_payload(await server.call_tool("plan_song", {"genre": "house", "seed": seed, "complexity": "simple", "set_tempo": True, "fx": False,
                                                              "sidechain": False, "create_missing": False}))["tempo"] for seed in range(8)}
     assert len(tempos) >= 2 and all(121 <= t <= 127 for t in tempos), tempos
 
@@ -1014,7 +1014,7 @@ async def test_plan_song_takes_a_key_and_sets_it(client, live):
 
 async def test_preview_track_indices_match_where_the_tracks_end_up(client, live):
     server = build_server(client, all_song_options=True)
-    preview = _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "fx": False, "sidechain": True}))
+    preview = _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "complexity": "simple", "fx": False, "sidechain": True}))
     wanted = {r: t["name"] for r, t in preview["tracks"].items()}
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     names = live.on_main(lambda: [t.name for t in live.song.tracks])

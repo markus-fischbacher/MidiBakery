@@ -31,6 +31,8 @@ from typing import Literal
 Role = Literal["drums", "bass", "chords", "lead"]
 ROLES: tuple[Role, ...] = ("drums", "bass", "chords", "lead")
 FX_ROLES = ("riser", "impact")  # placed by the song's drops, not by the sections' parts
+EXTRA_ROLES = ("answer", "lead2", "bass2")  # complexity="rich": voices derived from the lead and bass, with parts like the others
+RICH_FX = ("sweep",)  # rich: a noise track for sweeps, downlifters and swells
 LEAD_SOUND = "Synth Keys/Light Keys.adg"  # every genre's lead: it sounds better than the genre presets did
 Genre = Literal["house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap"]
 Length = Literal["radio", "standard", "extended"]
@@ -138,18 +140,28 @@ def _mix(volume: str, reverb: str, delay: str, decay: float, delay_16ths: int, f
     def levels(spec: str) -> dict[str, float]:
         return {role: float(db) for role, db in zip(ROLES, spec.split(",")) if db.strip() != "-"}
 
-    return Mix({**levels(volume), **FX_VOLUME}, {**levels(reverb), **FX_REVERB}, {**levels(delay), **FX_DELAY}, decay, delay_16ths, feedback, levels(duck), release)
+    vol, rev, dly, ducks = {**levels(volume), **FX_VOLUME}, {**levels(reverb), **FX_REVERB}, {**levels(delay), **FX_DELAY}, levels(duck)
+    # The second voices sit under the first: a little quieter, the answer wetter so it sounds further back.
+    vol |= {"answer": vol["lead"] - 3, "lead2": vol["lead"] - 5, "bass2": vol["bass"] - 4, "sweep": vol["riser"] - 2}
+    rev |= {"answer": rev.get("lead", -16) + 4, "lead2": rev.get("lead", -16), "sweep": -14.0}
+    dly["answer"] = dly.get("lead", -18) - 2
+    if "bass" in ducks:
+        ducks["bass2"] = ducks["bass"]
+    return Mix(vol, rev, dly, decay, delay_16ths, feedback, ducks, release)
 
 
 FX_VOLUME = {"riser": -12.0, "impact": -8.0}
 FX_REVERB = {"riser": -12.0, "impact": -18.0}
 FX_DELAY = {"riser": -22.0}
 FX_SOUNDS = {"riser": "Effects/Riser Basic.adg", "impact": "Bass/Sub 808 Pitch Boom.adg"}
+# complexity="rich": the second voices sound different from the first (genres may name their own).
+RICH_SOUNDS = {"answer": "Synth Keys/Basic Pluck Keys.adg", "lead2": "Synth Lead/Basic Peak Lead.adg", "bass2": "Bass/Reese Classic.adg",
+               "sweep": "Effects/Broadcast Noise.adg"}
 
 
 def _sounds(drums: tuple[str, ...], **presets: str) -> dict[str, tuple[str, ...]]:
     """The kit plus role -> "Category/Preset" in the browser's Sounds."""
-    presets = {**FX_SOUNDS, **presets}
+    presets = {**FX_SOUNDS, **RICH_SOUNDS, **presets}
     return {"drums": drums, **{role: ("sounds", *path.split("/")) for role, path in presets.items()}}
 
 
@@ -227,7 +239,7 @@ TEMPLATES: dict[str, Template] = {
     # 64-bar drops, a drumless 32-bar breakdown, liquid pads with 2 bars per chord, bass leaves the outro first.
     "drum_and_bass": Template("drum_and_bass", "Drum & Bass", Style(
         174, chords_per_bar=0.5, lead_range=(72, 89),
-        sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead=LEAD_SOUND, riser="Effects/ENCOM Riser.adg"),
+        sounds=_sounds(_kit("Electronic", "Halfstep Kit"), bass="Bass/Basic Reese Bass.adg", bass2="Bass/Basic Saw Bass.adg", chords="Pad/Basic Mellow Pad.adg", lead=LEAD_SOUND, riser="Effects/ENCOM Riser.adg"),
         mix=_mix("-5,-8,-13,-11", "-26,-,-10,-16", "-,-,-,-16", decay=2.0, delay_16ths=3, feedback=0.3, duck="-,-18,-,-", release=0.09),
         progressions=DNB_PROGRESSIONS, devices={"bass": "Operator", "chords": "Wavetable", "lead": "Operator"},
         filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",)},
@@ -244,7 +256,7 @@ TEMPLATES: dict[str, Template] = {
     # kicks, plucks without the root, hook only in the drops, a beat of silence before each drop.
     "trap": Template("trap", "Trap", Style(
         145, chords_per_bar=0.5, lead_range=(69, 86),
-        sounds=_sounds(_kit("Drum Machines", "808 Core Kit"), bass="Bass/808 Pure.adg", chords="Synth Keys/Basic Bell Keys.adg", lead=LEAD_SOUND),
+        sounds=_sounds(_kit("Drum Machines", "808 Core Kit"), bass="Bass/808 Pure.adg", bass2="Bass/Basic Saw Bass.adg", chords="Synth Keys/Basic Bell Keys.adg", lead=LEAD_SOUND),
         mix=_mix("-6,-7,-12,-11", "-28,-,-12,-16", "-,-,-18,-16", decay=2.2, delay_16ths=2, feedback=0.3, duck="-,-14,-,-", release=0.1),
         progressions=TRAP_PROGRESSIONS, devices={"bass": "Operator", "chords": "Drift", "lead": "Wavetable"},
         filters={"drums": "High-pass", "chords": "Low-pass"}, throws={"lead": ("drop",), "chords": ("verse",)},

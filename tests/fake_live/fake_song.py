@@ -563,7 +563,8 @@ class Browser(LiveObject):
             "Drum Machines", BrowserItem("909 Core Kit.adg", device="Drum Rack", kit=core_909))))))
         self.sounds = _folder("sounds", _folder("Bass", BrowserItem("Basic FM House Bass.adg", device="Operator")),
                               _folder("Synth Keys", BrowserItem("106 Organ.adg", device="Wavetable"), BrowserItem("Basic Pluck Keys.adg", device="Operator"), BrowserItem("Light Keys.adg", device="Operator")),
-                              _folder("Effects", BrowserItem("Riser Basic.adg", device="Instrument Rack", macros=("Filter Cutoff", "Filter Reso", "Rise Amount"))))
+                              _folder("Effects", BrowserItem("Riser Basic.adg", device="Instrument Rack", macros=("Filter Cutoff", "Filter Reso", "Rise Amount")),
+                                                      BrowserItem("Broadcast Noise.adg", device="Instrument Rack", macros=("Filter Cutoff", "Volume"))))
         self.sounds.children[0].children.append(BrowserItem("Sub 808 Pitch Boom.adg", device="Instrument Rack", macros=("Filter Cutoff", "Volume")))
         for name in ("midi_effects", "user_library", "plugins"):
             setattr(self, name, _folder(name))
