@@ -48,20 +48,20 @@ Tracks, slots and arrangement clips count from **0** (track 1 in Live = `track 0
 |---|---|---|
 | `get_session` | read | Tempo, signature, scale, transport and all tracks with devices and clips. |
 | `get_clip` | read | A clip's properties and, for MIDI clips, all notes. |
-| `get_arrangement` | read | Arrangement clips per track, locators, song length. |
+| `get_arrangement` | read | Arrangement clips per track (absolute beats; clip indexes change after moves, names are steadier), locators, song length. |
 | `get_reference` | read | References from the Reference Analyzer and Live Sets imported by the Set Importer: sections, key, tempo, and with `name` the per-bar lanes. |
-| `plan_song` | read | Plans a **whole song**: `genre` (`house`, `melodic_techno`, `peak_time_techno`, `drum_and_bass`, `trap`), `length` (`radio`/`standard`/`extended`), `key` (e.g. `A minor`; set in Live), `progression`, `reference` (an analyzed song or imported Set), `loops_from` (`{"bass": "<Set>"}`; roles drums, bass, lead, chords), `my_loops` (the seed draws loops from the imported Sets), `complexity` (`rich`, the default: call-and-response answer voice, lead and bass layers, noise sweeps, downlifters, short risers, snare rolls, ghost notes, section lengths that vary per seed, a lead that changes every 8 bars, answers and layers in several shapes (layers stay below MIDI 96); `simple`: the plain song), `seed`. Tempo follows the genre or reference; roles a Set lacks are filled from the genre. Returns a preview and a `plan_id`. |
-| `apply_plan` | **asks first** (when replacing) | Writes a plan to Live. `CONFLICT` if a target changed since planning. Plans are kept in memory (the last 32). |
+| `plan_song` | read | Plans a **whole song**: `genre` (`house`, `melodic_techno`, `peak_time_techno`, `drum_and_bass`, `trap`), `length` (`radio`/`standard`/`extended`), `key` (e.g. `A minor`; set in Live), `progression`, `reference` (an analyzed song or imported Set), `loops_from` (`{"bass": "<Set>"}`; roles drums, bass, lead, chords), `my_loops` (the seed draws loops from the imported Sets), `complexity` (`rich`, the default: call-and-response answer voice, lead and bass layers, noise sweeps, downlifters, short risers, snare rolls, ghost notes, section lengths that vary per seed, a lead that changes every 8 bars, answers and layers in several shapes (layers stay below MIDI 96); `simple`: the plain song), `seed`. Tempo follows the genre or reference, or the optional `tempo` (BPM); the preview names `tempo` and `key` and says when the Set's tempo or key will change. New tracks go behind all existing ones (a new sidechain track goes first). Roles a Set lacks are filled from the genre. Returns a preview and a `plan_id`. |
+| `apply_plan` | **asks first** (when replacing) | Writes a plan to Live. `CONFLICT` if a target changed since planning. Plans are kept in memory (the last 32). A song is several undo steps (Live counts track creation and every sound load separately): the result gives the track count to undo down to and the tempo/key from before; undo does not restore the key or the playhead. |
 | `compose` | **asks first** (when replacing) | **One part** as a MIDI clip in the set's key: `kind` drums, bass, chords or melody; `bars`, `seed`, `style`, `pattern`, `density`, `swing`, `progression`, `chords_from`, `follow_kick`, `if_exists`, `preview`. With `arrangement_clip` it rewrites that clip. |
 | `edit_arrangement` | write | Add MIDI clips, copy session clips, **copy (`copy_clip`), move, swap, delete** arrangement clips, set or delete locators (transport stopped). One undo step; a clip never lands on another. |
 | `find_sounds` | read | Search Live's browser by name (`query`, `category`, `limit`): instruments, presets, kits, each with a `path`. |
-| `set_track` | write | Rename a track (`name`) and/or load a `sound` from `find_sounds` onto it. No mixing: volume and pan stay. |
-| `edit_notes` | write | Change one MIDI clip in place: `add` notes, `remove` by `note_id` (from `get_clip`), `transpose` semitones (optionally `from_time`/`to_time`). |
+| `set_track` | write | Rename a track (`name`) and/or load a `sound` from `find_sounds` onto it (the sound and the rename are two undo steps; a failed load changes nothing). No mixing: volume and pan stay. |
+| `edit_notes` | write | Change one MIDI clip in place: `add` notes, `remove` by `note_id` (from `get_clip`), `transpose` semitones (optionally `from_time`/`to_time`, beats from the clip start; the arrangement tools use absolute beats). |
 | `create_track` | write | Create a MIDI or audio track (`kind`, `index` for the position, `name`); default: at the end. `compose` can then write into it. |
 | `delete_clip` | **asks first** | Delete one clip (Session by `slot`, Arrangement by `arrangement_clip`). |
 | `set_song` | write | Tempo, signature, key (`root_note`, `scale_name`, `scale_mode`), metronome, loop. |
 | `transport` | write | Play, stop, continue, stop all clips, toggle arrangement record. |
-| `undo` | write | Undo or redo in Live. |
+| `undo` | write | Undo or redo in Live; the result includes the track count. |
 
 ## For developers
 

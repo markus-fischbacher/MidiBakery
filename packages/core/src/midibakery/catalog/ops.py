@@ -586,7 +586,7 @@ for spec in [
     OpSpec("rack.get", DeviceRef, "Chains (devices, mixer, drum pad note) and macros of a rack", read_only=True),
     OpSpec("rack.set", RackSet, "Set macros, edit chains, or add a chain to a rack", read_only=False),
     OpSpec("clip.envelope", ClipEnvelope, "Write clip automation (points or shapes) onto an existing clip", read_only=False),
-    OpSpec("arrangement.get", ArrangementGet, "Arrangement clips per track (start, end), locators, song length", read_only=True),
+    OpSpec("arrangement.get", ArrangementGet, "Arrangement clips per track (start, end in absolute beats; indexes change after moves), locators, song length", read_only=True),
     OpSpec("arrangement.edit", ArrangementEdit, "Add MIDI clips with notes, copy session clips, move, swap or delete arrangement clips", read_only=False, timeout=15.0, min_live=(12, 1, 10)),
     OpSpec("arrangement.locators", ArrangementLocators, "Set, name or delete arrangement locators", read_only=False, timeout=30.0),
     OpSpec("song.position", SongPosition, "Move the play position and wait until Live applied it", read_only=False, timeout=5.0),

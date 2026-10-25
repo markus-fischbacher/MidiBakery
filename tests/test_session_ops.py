@@ -50,8 +50,8 @@ async def test_history_steps_back_and_forth(client, live):
     assert exc.value.code == "CONFLICT"
     await client.call("song.set", {"tempo": 99})
     steps = live.on_main(lambda: live.song.undo_steps)
-    assert await client.call("history.step", {"action": "undo"}) == {"can_undo": True, "can_redo": True}
-    assert await client.call("history.step", {"action": "redo"}) == {"can_undo": True, "can_redo": False}
+    assert await client.call("history.step", {"action": "undo"}) == {"can_undo": True, "can_redo": True, "tracks": 2}
+    assert await client.call("history.step", {"action": "redo"}) == {"can_undo": True, "can_redo": False, "tracks": 2}
     with pytest.raises(BridgeError, match="Nothing to redo"):
         await client.call("history.step", {"action": "redo"})
     # Stepping through the history is no undo step of its own.

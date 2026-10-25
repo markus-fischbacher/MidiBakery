@@ -122,6 +122,7 @@ class SongRequest(BaseModel):
     sidechain_mode: Literal["pumping", "follow_kick"] = Field("pumping", description="Continuous genre pulse or planned drum MIDI kick onsets")
     key: str | None = Field(None, description="Key of the song, e.g. 'A minor'; set in Live with the plan (default: the Set's key)")
     progression: str | None = Field(None, description="Main chords, e.g. 'i VI III VII'; default: generated")
+    tempo: Annotated[float, Field(ge=40, le=220, description="BPM for the song; sets the Set's tempo (default: the genre's)")] | None = None
     set_tempo: bool = Field(False, description="Set the genre's tempo (e.g. House 124, D&B 174); with a reference its tempo and key")
     reference: str | None = Field(None, description="Follow the sections of a song from get_reference (part of its name); overrides length")
     loops_from: dict[Literal["drums", "bass", "lead", "chords"], str] = Field(
@@ -213,6 +214,8 @@ class SongPlan:
     sidechain_mode: str = "pumping"
     sidechain_source: dict[str, Any] | None = None
     reuse: dict[str, dict[str, Any]] = field(default_factory=dict)  # role -> copied Session clip and how it is placed
+    old_tempo: float = 0.0  # the Set's tempo while planning
+    old_key: str = ""  # the Set's key while planning
 
     def mix_info(self) -> dict[str, Any]:
         if self.mix is None:
@@ -287,6 +290,10 @@ class SongPlan:
             "time_signature": self.meter,
             "tempo": self.tempo,
             "bpm": self.bpm,
+            **({"tempo_note": f"apply_plan changes the Set's tempo from {self.old_tempo:g} to {self.tempo:g} BPM"}
+               if self.tempo is not None and self.tempo != self.old_tempo else {}),
+            **({"key_note": f"apply_plan changes the Set's key from {self.old_key} to {self.scale}; undo does not restore it"}
+               if self.key is not None and self.scale != self.old_key else {}),
             "duration": _duration((self.end - self.start) / self.bpm * 60),
             "bars": int((self.end - self.start) / bpb),
             "from_bar": int(self.start / bpb) + 1,
@@ -565,8 +572,12 @@ def _assign_roles(session: Session, request: SongRequest, arrangement: dict[str,
     devices = {**NEW_TRACK_DEVICES, **template.style.devices}
     mine = my_sounds.load(template.genre) if request.sounds else {}
     arranged = {t["index"] for t in (arrangement or {}).get("tracks", []) if t.get("clips")}
-    spare = [t["index"] for t in tracks if t["index"] not in used and t["index"] not in arranged and t.get("kind") == "midi"
-             and re.fullmatch(r"\d+-MIDI", t.get("name", "")) and not t.get("clips") and not t.get("devices")]
+    spare: list[int] = []  # only the empty default MIDI tracks at the end of the Set: the new tracks stay behind the existing ones
+    for t in reversed(tracks):
+        if (t["index"] in used or t["index"] in arranged or t.get("kind") != "midi" or not re.fullmatch(r"\d+-MIDI", t.get("name", ""))
+                or t.get("clips") or t.get("devices")):
+            break
+        spare.insert(0, t["index"])
     created = 0
     for role in missing:
         sound = mine.get(role) or (template.style.sounds.get(role) if request.sounds else None)
@@ -914,6 +925,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         raise BridgeError("INVALID_PARAMS", f"plan_song needs 4/4 (the Set is {meter.numerator}/{meter.denominator}); set_song to 4/4 first")
     bpb = meter.beats_per_bar
     tempo = float(session.song.get("tempo", style.tempo))
+    old_tempo = tempo
     new_tempo = style.tempo if request.set_tempo else None
     reference, key = None, None
     if request.reference:
@@ -938,6 +950,8 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         request = request.model_copy(update={"loops_from": {**drawn, **request.loops_from}})
     if request.set_tempo and reference is None:  # the genre's tempo, a little different each time (+-2 %)
         new_tempo = float(round(style.tempo * (1 + random.Random(f"{seed}:tempo").uniform(-0.02, 0.02))))
+    if request.tempo is not None:
+        new_tempo = float(request.tempo)
     if new_tempo is not None:
         tempo = new_tempo
     if reference is not None:
@@ -1331,6 +1345,7 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         request.sidechain_mode,
         sidechain_source,
         {r: {**v, "name": next((c.get("name") for c in session.track(v["track"]).get("clips", []) if c["slot"] == v["slot"]), None)} for r, v in reuse.items()},
+        old_tempo, session.scale.describe(),
     )
 
 
@@ -1451,6 +1466,11 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         ops.append({"op": "device.set_param", "params": {"track": t.index, "device": t.filter_device, "parameter": "Filter Type", "value": FILTER_TYPES[t.filter]}})
     ops += _sidechain_ops(plan)
     ops += plan.mix_ops()
+    song_set: dict[str, Any] = {"tempo": plan.tempo} if plan.tempo is not None else {}
+    if plan.key is not None:
+        song_set.update(root_note=plan.key.root, scale_name=plan.key.name)
+    if song_set:  # in the tracks batch: no step of its own
+        ops.append({"op": "song.set", "params": song_set})
     try:
         if ops:
             try:
@@ -1490,13 +1510,9 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
                                           "with a named kick or use sidechain_mode='pumping'")
                     actions = _move_to_kit(actions, t.index, kit)
         undo_steps += await _route_sidechains(call, plan, warnings)
-        for t in new:  # loading an instrument arms its track again
-            await call("track.set", {"track": t.index, "arm": False})
-        song_set: dict[str, Any] = {"tempo": plan.tempo} if plan.tempo is not None else {}
-        if plan.key is not None:
-            song_set.update(root_note=plan.key.root, scale_name=plan.key.name)
-        if song_set:
-            await call("song.set", song_set)
+        if loaded:  # loading an instrument arms its track again: one batch for all of them
+            await call("batch", {"ops": [{"op": "track.set", "params": {"track": t.index, "arm": False}} for t in loaded],
+                                 "label": f"MidiBakery song {plan.id}: unarm"})
             undo_steps += 1
         result = await call("arrangement.edit", {"actions": actions})
         undo_steps += 1
@@ -1522,9 +1538,10 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         **({"sidechain": ducks} if (ducks := {r: f"track index {t.index}, device index {t.duck_device}" for r, t in plan.roles.items() if t.duck is not None}) else {}),
         **plan.mix_info(),
         "locators": placed,
-        "undo": f"at least {undo_steps} undo steps for tracks/mix/sounds/tempo/clips: Live may split track creation and sound loading "
-                f"into more, and each locator is its own step; undo until the new tracks and clips are gone",
-        "before": {"tempo": song.get("tempo"), "key": f"root_note {song.get('root_note')}, {song.get('scale_name')}"},
+        "undo": f"undo until the Set has {len(tracks)} tracks again and the new clips are gone: Live counts track creation and every "
+                f"sound load as steps of their own (at least {undo_steps}), and each locator is one more. "
+                "Undo does not restore the key or the playhead: set_song with 'before'",
+        "before": {"tempo": song.get("tempo"), "key": f"root_note {song.get('root_note')}, {song.get('scale_name')}", "tracks": len(tracks)},
         **({"warnings": warnings} if warnings else {}),
     }
 

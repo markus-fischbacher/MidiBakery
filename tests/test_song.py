@@ -73,7 +73,7 @@ async def test_new_drum_track_gets_the_genre_kit_and_its_pads(client, live):
     assert preview["tracks"]["drums"]["device"] == "909 Core Kit" and not preview["warnings"]
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
     assert [t["device"] for t in applied["new_tracks"]] == ["909 Core Kit", "Basic FM House Bass", "106 Organ", "Light Keys"]
-    assert "at least 7 undo steps" in applied["undo"]  # tracks+returns, the mix after them, one per sound, clips
+    assert "(at least 8)" in applied["undo"]  # tracks+returns+tempo, one per sound, unarm, clips
     drums = next(t["track"] for t in applied["new_tracks"] if t["name"] == "Drums")
     drop = (await client.call("notes.get", {"track": drums, "arrangement_clip": 2}))["notes"]
     pitches = {n["pitch"] for n in drop}
@@ -102,7 +102,7 @@ async def test_mix_scaffold_returns_sends_and_levels(client, live):
     assert preview["mix"]["levels"]["drums"] == "reverb -24 dB"  # an existing track keeps its fader
     assert "bass" not in preview["mix"]["levels"]
     applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
-    assert applied["mix"] == preview["mix"] and applied["undo"].startswith("at least 5 undo steps")  # tracks+returns, the mix after them, 2 sounds, clips
+    assert applied["mix"] == preview["mix"] and "(at least 6)" in applied["undo"]  # tracks+returns, 2 sounds, unarm, clips
     mixer = await client.call("mixer.get", {})
     assert [(r["name"], r["devices"]) for r in mixer["returns"]] == [("Reverb", ["Reverb"]), ("Delay", ["Delay"])]
     reverb = {p["name"]: p["value"] for p in (await client.call("device.params", {"return_track": 0, "device": 0}))["parameters"]}
@@ -1019,3 +1019,45 @@ async def test_preview_track_indices_match_where_the_tracks_end_up(client, live)
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     names = live.on_main(lambda: [t.name for t in live.song.tracks])
     assert {r: names[t["track"]] for r, t in preview["tracks"].items()} == wanted
+
+
+async def test_song_result_names_the_track_count_to_undo_to_and_what_undo_keeps(client, live):
+    server = build_server(client, all_song_options=True)
+    preview = await _plan(server, key="A minor", tempo=131)
+    assert preview["tempo"] == 131 and "from 120 to 131 BPM" in preview["tempo_note"] and "key" in preview["key_note"]
+    before = len(live.on_main(lambda: list(live.song.tracks)))
+    applied = _payload(await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]}))
+    assert applied["before"]["tracks"] == before and f"{before} tracks again" in applied["undo"]
+    assert "key or the playhead" in applied["undo"]
+    assert (await client.call("song.get", {}))["tempo"] == 131
+
+
+async def test_song_tempo_and_unarm_share_batches(client, live):
+    calls = []
+    real = client.call
+
+    async def spy(op, params=None):
+        calls.append(op)
+        return await real(op, params)
+
+    client.call = spy
+    server = build_server(client, all_song_options=True)
+    preview = await _plan(server, tempo=128)
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    assert "song.set" not in calls and "track.set" not in calls  # inside batches
+    assert calls.count("batch") == 2  # tracks (with the tempo), unarm
+    assert (await real("song.get", {}))["tempo"] == 128
+
+
+async def test_new_tracks_stay_behind_existing_ones(client, live):
+    def setup():  # an empty default track in front of a track in use is not reused
+        live.song.tracks[1].name = "Pad"
+        live.song.tracks[1].devices.append(DrumRackDevice())
+    live.on_main(setup)
+    server = build_server(client, all_song_options=True)
+    preview = await _plan(server)
+    assert not any(t.get("reused_empty_track") for t in preview["tracks"].values())
+    assert all(t["track"] >= 2 for t in preview["tracks"].values() if t.get("new"))
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    after = live.on_main(lambda: [t.name for t in live.song.tracks])
+    assert after[:2] == ["1-MIDI", "Pad"]
