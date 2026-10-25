@@ -37,7 +37,7 @@ Der Pfad enthält die Version: nach einem Update anpassen. Für Apps ohne stdio 
 
 - Jede Änderung ist ein Schritt in Lives Undo-Liste; Claude kann selbst `undo` aufrufen.
 - `plan_song` ändert **nichts**, bis `apply_plan` kommt. Ein Song überschreibt nie bestehende Arrangement-Clips.
-- Vor dem Löschen eines Clips oder dem Ersetzen von Noten fragt MidiBakery nach (Apps ohne Rückfragen bekommen stattdessen eine `plan_id` und müssen dich im Chat fragen, bevor `apply_plan` kommt). Abgelehnt: `CANCELLED`. Kommt `CANCELLED`, ohne dass du abgelehnt hast (die App zeigt keine Rückfrage), nimm `compose` mit `preview=true` und danach `apply_plan`.
+- Vor dem Löschen eines Clips oder dem Ersetzen von Noten fragt MidiBakery nach (Apps ohne Rückfragen bekommen stattdessen eine `plan_id` und müssen dich im Chat fragen, bevor `apply_plan` kommt). Abgelehnt: `CANCELLED`. Kommt `CANCELLED`, ohne dass du abgelehnt hast (die App zeigt keine Rückfrage), setze für den Server die Umgebungsvariable `MIDIBAKERY_CONFIRM=chat` (`claude mcp add -e MIDIBAKERY_CONFIRM=chat …`): Dann erscheint nie ein Dialog, und jedes Ersetzen oder Löschen kommt als Vorschau mit `plan_id` zurück, die Claude im Chat mit dir bestätigen muss, bevor `apply_plan` kommt.
 - Der Server spricht nur mit Live. Die App, in der du bist, sieht, was die Werkzeuge zurückgeben: Spur- und Clipnamen, Noten, Tempo.
 
 ## Die 13 Werkzeuge

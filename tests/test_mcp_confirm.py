@@ -139,3 +139,15 @@ async def test_replacing_an_arrangement_clip_asks_with_its_name(client, live):
         result = await mcp.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": 0})
     assert result.is_error and "CANCELLED" in result.content[0].text
     assert answer.messages == ["Replace 1 existing note(s) in track 2 arrangement clip 1?"]
+
+
+async def test_confirm_chat_mode_never_asks_even_with_elicitation(client, live, monkeypatch):
+    monkeypatch.setenv("MIDIBAKERY_CONFIRM", "chat")
+    await client.call("clip.create", {"track": 0, "slot": 0, "length": 4, "name": "Riff"})
+    answer = Answer("decline")
+    async with Client(build_server(client), elicitation_callback=answer) as mcp:
+        result = await mcp.call_tool("delete_clip", {"track": 0, "slot": 0})
+        assert not result.is_error and _clips(live, 0) == [True, False]
+        pending = json.loads(result.content[0].text)
+        assert not (await mcp.call_tool("apply_plan", {"plan_id": pending["plan_id"]})).is_error
+    assert answer.messages == [] and _clips(live, 0) == [False, False]

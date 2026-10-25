@@ -37,7 +37,7 @@ The path contains the version: adjust it after an update. For apps without stdio
 
 - Every change is a step in Live's undo list; Claude can call `undo` itself.
 - `plan_song` changes **nothing** until `apply_plan`. A song never overwrites existing Arrangement clips.
-- Before deleting a clip or replacing notes MidiBakery asks (apps without question support get a `plan_id` instead and must ask you in the chat before `apply_plan`). Declined: `CANCELLED`. If you get `CANCELLED` without declining (the app shows no question), use `compose` with `preview=true`, then `apply_plan`.
+- Before deleting a clip or replacing notes MidiBakery asks (apps without question support get a `plan_id` instead and must ask you in the chat before `apply_plan`). Declined: `CANCELLED`. If you get `CANCELLED` without declining (the app shows no question), set the environment variable `MIDIBAKERY_CONFIRM=chat` for the server (`claude mcp add -e MIDIBAKERY_CONFIRM=chat …`): it then never shows a dialog and every replacement or deletion comes back as a preview with a `plan_id` that Claude must confirm with you in the chat before `apply_plan`.
 - The server talks only to Live. The app you are in sees what the tools return: track and clip names, notes, tempo.
 
 ## The 13 tools

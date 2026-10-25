@@ -7,13 +7,15 @@ sessions use a classic ``elicitation/create`` round trip. Clients without the
 elicitation capability cannot ask: the change is not run but deferred (the tool
 passes ``later``), returned as a preview with a plan_id that only ``apply_plan``
 writes, so the model has to show it and get the user's go-ahead first. Calls
-outside a client request (in-process, tests) run directly.
+outside a client request (in-process, tests) run directly. With the environment variable MIDIBAKERY_CONFIRM=chat
+no client is asked: every destructive change is deferred like that (for apps that decline the dialog by themselves).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -112,6 +114,9 @@ async def confirm(
     if capabilities is _DIRECT:
         return None
     assert ctx is not None
+    if os.environ.get("MIDIBAKERY_CONFIRM") == "chat":  # for apps whose dialog is declined automatically
+        _report_once("MIDIBAKERY_CONFIRM=chat")
+        return await later(message) if later is not None else None
     if capabilities is None or capabilities.elicitation is None:
         _report_once("the client declared no capabilities" if capabilities is None else "the client does not declare the elicitation capability")
         return await later(message) if later is not None else None
