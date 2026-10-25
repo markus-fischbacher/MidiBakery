@@ -53,6 +53,8 @@ async def test_find_sounds_set_track_and_edit_notes(client, live):
     assert found
     await server.call_tool("set_track", {"track": 1, "name": "Bassline"})
     assert live.on_main(lambda: live.song.tracks[1].name) == "Bassline"
+    await server.call_tool("set_track", {"track": 1, "sound": found["items"][0]["path"]})
+    assert not live.on_main(lambda: live.song.tracks[1].arm)
     await client.call("clip.create", {"track": 1, "slot": 0, "length": 4})
     await client.call("notes.apply", {"track": 1, "slot": 0, "add": [
         {"pitch": 40, "start_time": 0.0, "duration": 1.0}, {"pitch": 43, "start_time": 2.0, "duration": 1.0}]})

@@ -408,7 +408,11 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
             result["name"] = wanted.name
         if wanted.sound is not None:
             path = [wanted.sound] if isinstance(wanted.sound, str) else wanted.sound
+            tracks = (await bridge.call("tracks.list"))["tracks"]
+            armed = tracks[wanted.track]["arm"] if wanted.track < len(tracks) else None  # None: cannot be armed
             result["loaded"] = await bridge.call("browser.load", {"track": wanted.track, "path": path})
+            if armed is False:  # Live arms a track when a sound is dropped on it
+                await bridge.call("track.set", {"track": wanted.track, "arm": False})
         return result
 
     server.add_tool(
