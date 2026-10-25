@@ -45,8 +45,8 @@ MidiBakery builds EDM song sketches in the Ableton Live 12 set that is open righ
   Other chords in half a clip: compose chords on that clip with a progression naming every bar.
 - edit_arrangement moves, copies or deletes arrangement clips and locators; undo takes back any write.
 - Deleting clips and replacing notes ask the user first; a declined change returns CANCELLED.
-  If CANCELLED comes back although the user did not decline (no question dialog in this app), ask in the chat, then
-  use compose with preview=true and apply_plan(plan_id).
+  If CANCELLED comes back although the user did not decline, the app has no question dialog: tell the user to set
+  MIDIBAKERY_CONFIRM=chat for this server.
 - compose bass/melody on a clip follows the song's chords track at that time; plan_song(key="A minor") sets the key.
 """
 

@@ -549,7 +549,7 @@ async def _detect(session: Session, spec: Harmonic, where: Place, what: str) -> 
     if not source.exists or not source.is_midi:
         raise BridgeError("NOT_FOUND", f"{what}: no MIDI clip in {where}")
     source_bars = max(1, round((source.length or meter.beats_per_bar) / meter.beats_per_bar))
-    result = harmony_mod.detect(source.notes or [], session.scale, meter, source_bars, spec.chords_per_bar)
+    result, _ = harmony_mod.detect_clip(source.notes or [], session.scale, meter, source_bars, spec.chords_per_bar)  # sevenths keep their root
     return result.for_length(meter, spec.bars)
 
 

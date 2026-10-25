@@ -325,3 +325,17 @@ async def test_compose_on_an_arrangement_clip_follows_the_songs_chords(client, l
     assert preview["changes"][0]["chords_source"] == "clip"
     await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
     assert {n["pitch"] % 12 for n in _arrangement_notes(live, 1, 0)} <= {2, 5, 9}
+
+
+async def test_compose_follows_seventh_chords_by_their_root(client, live):
+    server = build_server(client)
+    live.on_main(lambda: setattr(live.song.tracks[0], "name", "Chords"))
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 1, "start": 0, "length": 8}, {"action": "add_clip", "track": 0, "start": 0, "length": 8}]})
+    await client.call("notes.apply", {"track": 0, "arrangement_clip": 0, "add": [
+        {"pitch": p, "start_time": float(b), "duration": 4.0} for b, ps in ((0, (45, 48, 52, 55)), (4, (41, 45, 48, 52))) for p in ps]})  # Am7, Fmaj7
+    preview = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": 0, "seed": 3, "preview": True}))
+    assert preview["changes"][0]["chords_source"] == "clip"
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    second_bar = {n["pitch"] % 12 for n in _arrangement_notes(live, 1, 0) if 4 <= n["start_time"] < 8}
+    assert second_bar <= {5, 9, 0, 4} and 5 in second_bar  # F is there, not A alone
