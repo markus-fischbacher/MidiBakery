@@ -436,6 +436,54 @@
         "object"
       ]
     },
+    "CopyArrangementClip": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "copy_clip",
+          "type": [
+            "string"
+          ]
+        },
+        "clip": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": [
+                "integer"
+              ]
+            },
+            {
+              "minLength": 1,
+              "type": [
+                "string"
+              ]
+            }
+          ]
+        },
+        "start": {
+          "minimum": 0,
+          "type": [
+            "number"
+          ]
+        },
+        "track": {
+          "minimum": 0,
+          "type": [
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "action",
+        "clip",
+        "start",
+        "track"
+      ],
+      "type": [
+        "object"
+      ]
+    },
     "CopySessionClip": {
       "additionalProperties": false,
       "properties": {
@@ -1123,6 +1171,9 @@
                 },
                 {
                   "$ref": "CopySessionClip"
+                },
+                {
+                  "$ref": "CopyArrangementClip"
                 },
                 {
                   "$ref": "DeleteArrangementClip"

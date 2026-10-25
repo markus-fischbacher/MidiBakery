@@ -76,3 +76,14 @@ async def test_get_clip_returns_only_the_asked_range(client, live):
     whole = clip(await server.call_tool("get_clip", {"track": 1, "slot": 0}))
     part = clip(await server.call_tool("get_clip", {"track": 1, "slot": 0, "from_time": 2.0, "to_time": 4.0}))
     assert len(whole["notes"]) == 8 and sorted(n["start_time"] for n in part["notes"]) == [2.0, 3.0]
+
+
+async def test_edit_arrangement_copies_an_arrangement_clip(client, live):
+    from midibakery.mcp import build_server
+    server = build_server(client)
+    await client.call("arrangement.edit", {"actions": [{"action": "add_clip", "track": 1, "start": 0, "length": 4, "name": "Break"}]})
+    await client.call("notes.apply", {"track": 1, "arrangement_clip": 0, "add": [{"pitch": 45, "start_time": 0.0, "duration": 1.0}]})
+    await server.call_tool("edit_arrangement", {"actions": [{"action": "copy_clip", "track": 1, "clip": "Break", "start": 16}]})
+    clips = (await client.call("arrangement.get", {"track": 1}))["tracks"][0]["clips"]
+    assert [(c["start"], c["end"]) for c in clips] == [(0.0, 4.0), (16.0, 20.0)]
+    assert len((await client.call("notes.get", {"track": 1, "arrangement_clip": 1}))["notes"]) == 1
