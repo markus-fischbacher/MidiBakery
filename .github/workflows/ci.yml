@@ -71,4 +71,4 @@ jobs:
         run: uv sync --locked
 
       - name: Windows tests
-        run: uv run pytest -q -rs tests/test_install.py tests/test_launcher.py tests/test_credentials.py tests/test_version.py tests/test_license.py -k "not mcp_tools and not api_license"
+        run: uv run pytest -q -rs tests/test_install.py tests/test_launcher.py tests/test_credentials.py tests/test_version.py -k "not mcp_tools"

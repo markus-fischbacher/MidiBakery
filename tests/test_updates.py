@@ -165,7 +165,7 @@ def test_api_reports_and_installs_an_update(bridge_env, monkeypatch, tmp_path):
     with TestClient(build_app(BridgeClient(), lambda options: None, "t")) as client:
         assert client.get("/update").status_code == 401
         status = client.get("/update?force=1", headers=auth).json()
-        assert status["current"] == __version__ and status["update"] == {"version": NEWER, "notes": "n", "size": 3, "included": True}
+        assert status["current"] == __version__ and status["update"] == {"version": NEWER, "notes": "n", "size": 3}
         assert client.get("/health", headers=auth).json()["update"]["version"] == NEWER
         result = client.post("/update/install", headers=auth).json()
         assert result == {"ok": True, "version": NEWER, "installer": "MidiBakery.pkg"}
@@ -181,5 +181,5 @@ def test_api_without_an_update_installs_nothing(bridge_env):
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="no Node.js available")
 def test_update_service_worker():
-    result = subprocess.run(["node", "--test", "test/worker.test.js", "test/licenses.test.js"], cwd=ROOT / "services/updates", capture_output=True, text=True, timeout=60)
+    result = subprocess.run(["node", "--test", "test/worker.test.js"], cwd=ROOT / "services/updates", capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
