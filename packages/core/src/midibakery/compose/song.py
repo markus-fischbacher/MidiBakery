@@ -1420,6 +1420,8 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
                                           "with a named kick or use sidechain_mode='pumping'")
                     actions = _move_to_kit(actions, t.index, kit)
         undo_steps += await _route_sidechains(call, plan, warnings)
+        for t in new:  # loading an instrument arms its track again
+            await call("track.set", {"track": t.index, "arm": False})
         song_set: dict[str, Any] = {"tempo": plan.tempo} if plan.tempo is not None else {}
         if plan.key is not None:
             song_set.update(root_note=plan.key.root, scale_name=plan.key.name)
