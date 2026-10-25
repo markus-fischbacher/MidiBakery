@@ -1156,6 +1156,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
         else:
             flip = section.variation % 2 == 1
             notes = generate_hook(hook, harmony, scale, meter, bars, swing, low, high, tease=tease, velocity=88 + 12 * section.energy, flip=flip)
+            if is_rich and not tease:
+                notes = rich.vary_lead(notes, bars, bpb, offset_bars, harmony, scale, low, high, section.variation,
+                                       lambda block, variation: rng("lead", section.kind, variation, block))
         return notes if tease else _answer_space(notes, meter, bars, offset_bars)
 
     def _rich_drums(notes: list[Note], part: str, section: Section, bars: int, offset_bars: int, r: random.Random) -> list[Note]:
@@ -1284,9 +1287,9 @@ async def build_song(call: Call, request: SongRequest) -> SongPlan:
                 seg = [replace(n, start_time=n.start_time - offset * bpb) for n in base if offset * bpb - EPSILON <= n.start_time < (offset + count) * bpb - EPSILON]
                 if role == "answer":
                     low, high = style.lead_range
-                    seg = rich.answer_notes(seg, phrase_rests(seg, span, rich.ANSWER_BEATS), _from(harmony, offset * bpb, span), scale, low, high)
+                    seg = rich.answer_notes(seg, phrase_rests(seg, span, rich.ANSWER_BEATS), _from(harmony, offset * bpb, span), scale, low, high, r)
                 elif role == "lead2":
-                    seg = rich.double_lead(seg, scale, r)
+                    seg = rich.double_lead(seg, scale, r, bpb)
                 else:
                     seg = rich.mid_layer(seg)
                 derived += [replace(n, start_time=n.start_time + (offset - first) * bpb) for n in seg]
@@ -1519,7 +1522,9 @@ async def apply_song(call: Call, plan: SongPlan) -> dict[str, Any]:
         **({"sidechain": ducks} if (ducks := {r: f"track index {t.index}, device index {t.duck_device}" for r, t in plan.roles.items() if t.duck is not None}) else {}),
         **plan.mix_info(),
         "locators": placed,
-        "undo": f"{undo_steps} undo step(s) for tracks/mix/sounds/tempo/clips; each locator is its own step",
+        "undo": f"at least {undo_steps} undo steps for tracks/mix/sounds/tempo/clips: Live may split track creation and sound loading "
+                f"into more, and each locator is its own step; undo until the new tracks and clips are gone",
+        "before": {"tempo": song.get("tempo"), "key": f"root_note {song.get('root_note')}, {song.get('scale_name')}"},
         **({"warnings": warnings} if warnings else {}),
     }
 
