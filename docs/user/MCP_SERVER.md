@@ -6,6 +6,13 @@ Deutsche Version: [MCP_SERVER.de.md](MCP_SERVER.de.md) · Back to the [User Guid
 
 ## Setup
 
+**Steps:**
+
+1. Install MidiBakery and set up the Control Surface ([User Guide, chapters 2 and 3](USER_GUIDE.md#2-install-and-update)).
+2. Start Live.
+3. Add the server to Claude Code or Claude Desktop (below).
+4. Test it (below).
+
 **Requirements:** MidiBakery is installed, Live is running and the **MidiBakery** Control Surface is on ([User Guide, chapter 3](USER_GUIDE.md#3-set-up-in-live)). The Chat device is not needed.
 
 The server is the command `midibakery mcp` (stdio). **Claude Code:**
@@ -29,9 +36,9 @@ On Windows the program is in `%LOCALAPPDATA%\Programs\MidiBakery\runtime\<versio
 }
 ```
 
-The path contains the version: adjust it after an update. For apps without stdio, `midibakery mcp --http` serves on `127.0.0.1:8765` (`--port` changes it).
+The path contains the version: adjust it after an update. If Claude Desktop shows a confirmation dialog that is declined without you seeing it, add `"env": { "MIDIBAKERY_CONFIRM": "chat" }` next to `args`: Claude then asks you in the chat instead (see Safety). For apps without stdio, `midibakery mcp --http` serves on `127.0.0.1:8765` (`--port` changes it).
 
-**Test it:** "What is in my Live set?" Claude calls `get_session`. If that fails, run `midibakery ping`.
+**Test it:** "What is in my Live set?" Claude calls `get_session`. If that fails, check that Live is running with the MidiBakery Control Surface and run the installed program with `ping` (`…/runtime/<version>/midibakery ping`).
 
 ## Safety
 
