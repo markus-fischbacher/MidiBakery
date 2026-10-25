@@ -312,3 +312,16 @@ async def test_composing_over_an_arrangement_clip_says_it_replaces_it(client, li
                                                         "notes": [{"pitch": 33, "start_time": float(b), "duration": 0.5} for b in range(16)]}]})
     plan = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": "Breakdown Bass", "seed": 1, "preview": True}))
     assert plan["changes"][0]["note"].startswith("Replaces all 16 notes")
+
+
+async def test_compose_on_an_arrangement_clip_follows_the_songs_chords(client, live):
+    server = build_server(client)
+    live.on_main(lambda: setattr(live.song.tracks[0], "name", "Chords"))
+    await client.call("arrangement.edit", {"actions": [
+        {"action": "add_clip", "track": 1, "start": 0, "length": 16}, {"action": "add_clip", "track": 0, "start": 0, "length": 16}]})
+    await client.call("notes.apply", {"track": 0, "arrangement_clip": 0, "add": [
+        {"pitch": p, "start_time": float(b), "duration": 4.0} for b in range(0, 16, 4) for p in (50, 53, 57)]})  # D minor
+    preview = _payload(await server.call_tool("compose", {"kind": "bass", "track": 1, "arrangement_clip": 0, "seed": 3, "preview": True}))
+    assert preview["changes"][0]["chords_source"] == "clip"
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    assert {n["pitch"] % 12 for n in _arrangement_notes(live, 1, 0)} <= {2, 5, 9}

@@ -986,3 +986,36 @@ async def test_my_sounds_per_genre(client, live, tmp_path, monkeypatch):
     my_sounds.save("bass", None, genre="trap")
     assert my_sounds.load("trap")["bass"][-1] == "Analogue Bass.adv"
     assert "genres" not in my_sounds._read()
+
+
+async def test_new_parts_reuse_empty_default_tracks_and_stay_unarmed(client, live):
+    before = live.on_main(lambda: [t.name for t in live.song.tracks])
+    assert all(n.endswith("-MIDI") for n in before)
+    server = build_server(client, all_song_options=True)
+    preview = await _plan(server)
+    reused = [r for r, t in preview["tracks"].items() if t.get("reused_empty_track")]
+    assert reused and all(preview["tracks"][r]["track"] < len(before) for r in reused)
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    after = live.on_main(lambda: [(t.name, t.arm) for t in live.song.tracks])
+    assert len(after) == len(before) + len(preview["tracks"]) - len(reused)
+    assert not any(arm for _, arm in after)
+    assert all(preview["tracks"][r]["name"] == after[preview["tracks"][r]["track"]][0] for r in reused)
+
+
+async def test_plan_song_takes_a_key_and_sets_it(client, live):
+    server = build_server(client, all_song_options=True)
+    preview = await _plan(server, key="A minor")
+    assert preview["scale"].startswith("A") and "inor" in preview["scale"]
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    assert (await client.call("song.get", {}))["root_note"] == 9
+    with pytest.raises(ToolError, match="not a key"):
+        await _plan(server, key="banana")
+
+
+async def test_preview_track_indices_match_where_the_tracks_end_up(client, live):
+    server = build_server(client, all_song_options=True)
+    preview = _payload(await server.call_tool("plan_song", {"genre": "house", "seed": 7, "fx": False, "sidechain": True}))
+    wanted = {r: t["name"] for r, t in preview["tracks"].items()}
+    await server.call_tool("apply_plan", {"plan_id": preview["plan_id"]})
+    names = live.on_main(lambda: [t.name for t in live.song.tracks])
+    assert {r: names[t["track"]] for r, t in preview["tracks"].items()} == wanted
