@@ -123,7 +123,7 @@ What MidiBakery writes (Bake and Apply alike):
 - **Tracks:** it uses tracks named like Drums (or with a Drum Rack), Bass/Sub/808, Chords/Pad/Keys and Lead/Melody/Synth. Missing ones are created with a kit and presets from the Core Library. Name your tracks this way to keep your own sounds.
 - **Tempo:** the genre's tempo (or the reference's), with a little spread per seed.
 - **Notes:** drums with ghost notes and fills, a bass that follows the chords, a hook that develops, dynamics that follow each section's energy. The seed picks the bass pattern, the chord loop and the drum groove.
-- **Arrangement:** locators at the sections, a reverb and a delay return, sidechain pumping on bass and pads, risers before and impacts on the drops.
+- **Arrangement:** locators at the sections, a reverb and a delay return, sidechain pumping on bass and pads, risers before and impacts on the drops. By default the song is **rich**: an answer voice replies in the lead's rests, lead and bass get layers that enter and leave in different sections, noise sweeps, downlifters and short risers mark the borders, drums get ghost notes and fills, and section lengths differ per seed. Say "simple" for the plain song.
 
 Apply may take a few undo steps (tracks, returns, clips): press **Undo** until everything is gone.
 
