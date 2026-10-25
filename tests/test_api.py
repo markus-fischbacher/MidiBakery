@@ -79,7 +79,7 @@ def test_chat_streams_agent_events(app_factory, live):
     api, providers = app_factory(provider)
     with api.websocket_connect(f"/chat?token={TOKEN}&provider=anthropic&model=claude-opus-5-5&ignored=1") as ws:
         ready = ws.receive_json()
-        assert ready["type"] == "ready" and ready["tools"] == 13
+        assert ready["type"] == "ready" and ready["tools"] == 16
         ws.send_json({"type": "user", "text": "Chords please"})
         events = _until(ws, "done")
     assert providers[0][0] == {"provider": "anthropic", "model": "claude-opus-5-5"}

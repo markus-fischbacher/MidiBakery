@@ -13,7 +13,7 @@ import json
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Context
@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from midibakery import __version__, license
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.catalog import get_op
-from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty
+from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty, TrackIndex
 from midibakery.compose import ComposeRequest, PlanStore, apply_plan, build_plan
 from midibakery.compose.patterns import bass_names, drum_names, lead_names, mood_names
 from midibakery.compose.plan import Plan, new_seed
@@ -105,6 +105,45 @@ def _signature_from_model(model: type[BaseModel], skip: tuple[str, ...] = ()) ->
         annotation = Annotated[(field.annotation, Field(description=field.description), *field.metadata)]
         params.append(inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=default, annotation=annotation))
     return inspect.Signature(params, return_annotation=dict[str, Any])
+
+
+class FindSounds(BaseModel):
+    """Instruments, presets and kits of Live's browser, by words of their name."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, description="Words in the name, e.g. 'reese bass', '909 kit', 'wavetable pad'")
+    category: Literal["drums", "instruments", "sounds", "user_library", "plugins"] | None = None
+    limit: Annotated[int, Field(ge=1, le=50)] = 15
+
+
+class SetTrack(BaseModel):
+    """Name a track and/or load an instrument, preset or kit onto it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    track: TrackIndex
+    name: str | None = Field(None, min_length=1, description="New track name")
+    sound: list[str] | str | None = Field(None, description="`path` from find_sounds (or an item name); replaces the track's instrument")
+
+
+class NoteAdd(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pitch: Annotated[int, Field(ge=0, le=127)]
+    start_time: Annotated[float, Field(ge=0, description="Beats from the clip start")]
+    duration: Annotated[float, Field(gt=0)]
+    velocity: Annotated[float, Field(ge=1, le=127)] = 100
+
+
+class EditNotes(ClipRef):
+    """Change notes of a MIDI clip in place; the rest stays. Use get_clip for note_ids."""
+
+    add: list[NoteAdd] = Field(default_factory=list)
+    remove: list[int] = Field(default_factory=list, description="note_ids to delete")
+    transpose: int | None = Field(None, ge=-48, le=48, description="Semitones, for the notes from from_time (beats) to to_time, default all")
+    from_time: float | None = None
+    to_time: float | None = None
 
 
 # The newest server's plans: a track a song plan creates is unknown to Live until apply_plan (see build_server)
@@ -324,6 +363,63 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
         description="Sections (start bar, length, kick, elements), key and tempo of reference songs analyzed by the "
         "MidiBakery Reference Analyzer device or imported from Live Sets by the Set Importer. " + inspect.cleandoc(ReferenceQuery.__doc__ or ""),
         annotations=read_only,
+    )
+
+    async def find_sounds(args: dict[str, Any], ctx: Context | None) -> Any:
+        found = FindSounds.model_validate(args).model_dump(exclude_none=True)
+        return await bridge.call("browser.search", found)
+
+    server.add_tool(
+        _make_tool(FindSounds, find_sounds),
+        name="find_sounds",
+        title="Find instruments, presets and kits",
+        description="Search Live's browser by name. Each hit has a `path` for set_track. " + inspect.cleandoc(FindSounds.__doc__ or ""),
+        annotations=read_only,
+    )
+
+    async def set_track(args: dict[str, Any], ctx: Context | None) -> Any:
+        wanted = SetTrack.model_validate(args)
+        if wanted.name is None and wanted.sound is None:
+            raise BridgeError("INVALID_PARAMS", "give a name, a sound or both")
+        result: dict[str, Any] = {}
+        if wanted.name is not None:
+            await bridge.call("track.set", {"track": wanted.track, "name": wanted.name})
+            result["name"] = wanted.name
+        if wanted.sound is not None:
+            path = [wanted.sound] if isinstance(wanted.sound, str) else wanted.sound
+            result["loaded"] = await bridge.call("browser.load", {"track": wanted.track, "path": path})
+        return result
+
+    server.add_tool(
+        _make_tool(SetTrack, set_track),
+        name="set_track",
+        title="Rename a track or load a sound onto it",
+        description="Rename a track and/or load an instrument, preset or kit from find_sounds onto it (one undo step each). "
+        "Not for mixing: volume, pan and sends stay as they are.",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+    )
+
+    async def edit_notes(args: dict[str, Any], ctx: Context | None) -> Any:
+        edit = EditNotes.model_validate(args)
+        ref = {k: v for k, v in args.items() if k in ("track", "slot", "arrangement_clip") and v is not None}
+        modify: list[dict[str, Any]] = []
+        if edit.transpose:
+            notes = (await bridge.call("notes.get", ref))["notes"]
+            lo, hi = edit.from_time if edit.from_time is not None else 0.0, edit.to_time if edit.to_time is not None else float("inf")
+            modify = [{"note_id": n["note_id"], "pitch": min(127, max(0, n["pitch"] + edit.transpose))}
+                      for n in notes if lo <= n["start_time"] < hi and n["note_id"] not in edit.remove]
+        if not (edit.add or edit.remove or modify):
+            raise BridgeError("INVALID_PARAMS", "nothing to change: give add, remove or transpose (with notes in range)")
+        params = {**ref, "add": [n.model_dump() for n in edit.add], "modify": modify, "remove": edit.remove}
+        return await bridge.call("notes.apply", params)
+
+    server.add_tool(
+        _make_tool(EditNotes, edit_notes),
+        name="edit_notes",
+        title="Edit notes of a clip",
+        description="Add, remove or transpose notes of one MIDI clip, keeping the rest (adapt a part instead of rewriting it). "
+        + inspect.cleandoc(EditNotes.__doc__ or ""),
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
     )
 
     async def edit_arrangement(args: dict[str, Any], ctx: Context | None) -> dict[str, Any]:

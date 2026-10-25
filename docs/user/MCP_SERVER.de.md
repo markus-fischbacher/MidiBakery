@@ -1,6 +1,6 @@
 # MidiBakery als MCP-Server
 
-Der **MCP-Server** bringt MidiBakery in **Claude Desktop**, **Claude Code** oder jede andere MCP-App. Du sprichst mit Claude in dessen eigenem Fenster statt im Chat-Device; Claude nutzt dieselben 13 Werkzeuge, um dein Live Set zu lesen und darin Songs zu bauen.
+Der **MCP-Server** bringt MidiBakery in **Claude Desktop**, **Claude Code** oder jede andere MCP-App. Du sprichst mit Claude in dessen eigenem Fenster statt im Chat-Device; Claude nutzt dieselben 16 Werkzeuge, um dein Live Set zu lesen und darin Songs zu bauen.
 
 English version: [MCP_SERVER.md](MCP_SERVER.md) · Zurück zum [Benutzerhandbuch](BENUTZERHANDBUCH.md)
 
@@ -40,7 +40,7 @@ Der Pfad enthält die Version: nach einem Update anpassen. Für Apps ohne stdio 
 - Vor dem Löschen eines Clips oder dem Ersetzen von Noten fragt MidiBakery nach (Apps ohne Rückfragen bekommen stattdessen eine `plan_id` und müssen dich im Chat fragen, bevor `apply_plan` kommt). Abgelehnt: `CANCELLED`. Kommt `CANCELLED`, ohne dass du abgelehnt hast (die App zeigt keine Rückfrage), setze für den Server die Umgebungsvariable `MIDIBAKERY_CONFIRM=chat` (`claude mcp add -e MIDIBAKERY_CONFIRM=chat …`): Dann erscheint nie ein Dialog, und jedes Ersetzen oder Löschen kommt als Vorschau mit `plan_id` zurück, die Claude im Chat mit dir bestätigen muss, bevor `apply_plan` kommt.
 - Der Server spricht nur mit Live. Die App, in der du bist, sieht, was die Werkzeuge zurückgeben: Spur- und Clipnamen, Noten, Tempo.
 
-## Die 13 Werkzeuge
+## Die 16 Werkzeuge
 
 Spuren, Slots und Arrangement-Clips zählen ab **0** (Spur 1 in Live = `track 0`). Zeit in Schlägen; Tonhöhe 60 = C3. Clip-Werkzeuge nehmen `slot` (Session) **oder** `arrangement_clip` (Arrangement: Index oder **Name**, z. B. „Drop Bass“).
 
@@ -54,6 +54,9 @@ Spuren, Slots und Arrangement-Clips zählen ab **0** (Spur 1 in Live = `track 0`
 | `apply_plan` | **fragt nach** (beim Ersetzen) | Schreibt einen Plan nach Live. `CONFLICT`, wenn sich ein Ziel seit dem Planen geändert hat. Pläne bleiben im Speicher (die letzten 32). |
 | `compose` | **fragt nach** (beim Ersetzen) | **Eine Stimme** als MIDI-Clip in der Tonart des Sets: `kind` drums, bass, chords oder melody; `bars`, `seed`, `style`, `pattern`, `density`, `swing`, `progression`, `chords_from`, `follow_kick`, `if_exists`, `preview`. Mit `arrangement_clip` schreibt es diesen Clip neu. |
 | `edit_arrangement` | schreiben | MIDI-Clips anlegen, Session-Clips kopieren, Arrangement-Clips **verschieben, tauschen, löschen**, Locators setzen oder löschen (Transport gestoppt). Ein Undo-Schritt; ein Clip landet nie auf einem anderen. |
+| `find_sounds` | lesen | Durchsucht den Live-Browser nach Namen (`query`, `category`, `limit`): Instrumente, Presets, Kits, jeweils mit `path`. |
+| `set_track` | schreiben | Spur umbenennen (`name`) und/oder einen `sound` aus `find_sounds` laden. Kein Mixing: Lautstärke und Pan bleiben. |
+| `edit_notes` | schreiben | Einen MIDI-Clip an Ort und Stelle ändern: Noten `add`, `remove` per `note_id` (aus `get_clip`), `transpose` in Halbtönen (optional `from_time`/`to_time`). |
 | `create_track` | schreiben | MIDI- oder Audiospur anlegen (`kind`, `index` für die Position, `name`); Standard: am Ende. Danach kann `compose` hineinschreiben. |
 | `delete_clip` | **fragt nach** | Einen Clip löschen (Session per `slot`, Arrangement per `arrangement_clip`). |
 | `set_song` | schreiben | Tempo, Taktart, Tonart (`root_note`, `scale_name`, `scale_mode`), Metronom, Loop. |
