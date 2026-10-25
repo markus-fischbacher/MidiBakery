@@ -28,6 +28,8 @@
   .seg button:hover:not(:disabled) { background: var(--raise); }
   .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
   .tool { height: 28px; flex: none; }
+  #lengths { flex: 3; }
+  #complexities { flex: 2; }
   #ref-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #ref-name::before { content: "After  "; color: var(--dim); }
   #ref-name.on::before { color: var(--accent); opacity: .7; }
@@ -59,6 +61,8 @@
 <div class="row">
   <div class="seg" id="lengths"></div>
   <div class="seg" id="complexities" title="Rich: layered lead and bass, an answer voice, more FX. Simple: one voice per role"></div>
+</div>
+<div class="row">
   <button class="tool" id="my-loops" title="The seed draws drums, bass, lead and chords from your imported Sets">My loops</button>
   <button class="tool" id="ref-name" title="Follow the structure of an imported Set or analyzed song">No reference</button>
 </div>
