@@ -100,7 +100,7 @@ jobs:
 
       - name: Worker tests
         working-directory: services/updates
-        run: node --test test/worker.test.js test/licenses.test.js
+        run: node --test test/worker.test.js
 
       - name: Deploy the update service
         working-directory: services/updates
@@ -155,6 +155,4 @@ jobs:
           for file in release/MidiBakery-*.pkg release/MidiBakery-*-setup.exe; do
             put "midibakery/releases/${VERSION}/$(basename "$file")" "$file" application/octet-stream
           done
-          # the release date, for downloads that a license's updates must include
-          put "midibakery/releases/${VERSION}/manifest.json" stable.json application/json
           put midibakery/channels/stable.json stable.json application/json

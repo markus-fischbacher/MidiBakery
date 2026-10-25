@@ -22,7 +22,7 @@ from mcp.types import ToolAnnotations
 from mcp_types import CallToolResult, InputRequiredResult, TextContent
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from midibakery import __version__, license
+from midibakery import __version__
 from midibakery.bridge import BridgeClient, BridgeError
 from midibakery.catalog import get_op
 from midibakery.catalog.ops import ArrangementTool, ClipRef, Empty, TrackIndex
@@ -157,16 +157,9 @@ _unapplied_track: Callable[[int], str | None] = lambda index: None
 
 def _make_tool(
     model: type[BaseModel], run: Runner, skip: tuple[str, ...] = (), extra: dict[str, Any] | None = None,
-    free: bool = False,
 ):
-    """free: usable without a license (reading Live, undo); everything else needs the trial or a license."""
 
     async def tool(ctx: Context | None = None, **kwargs: Any) -> Any:
-        if not free:
-            try:
-                license.require()
-            except license.LicenseError as exc:
-                raise ToolError(f"LICENSE_REQUIRED: {exc} Run `midibakery license` or use the Chat device.") from None
         try:
             result = await run(kwargs, ctx)
         except BridgeError as exc:
@@ -347,14 +340,14 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
 
     read_only = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
     server.add_tool(
-        _make_tool(Empty, get_session, free=True),
+        _make_tool(Empty, get_session),
         name="get_session",
         title="Get Live session",
         description="Song settings (tempo, signature, scale, transport) plus all tracks with devices and clips.",
         annotations=read_only,
     )
     server.add_tool(
-        _make_tool(GetClip, get_clip, free=True),
+        _make_tool(GetClip, get_clip),
         name="get_clip",
         title="Get clip with notes",
         description="Clip properties and, for MIDI clips, its notes with note_id, probability and velocity deviation; "
@@ -366,7 +359,7 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
         return read_references(ReferenceQuery.model_validate(args).name)
 
     server.add_tool(
-        _make_tool(ReferenceQuery, get_reference, free=True),
+        _make_tool(ReferenceQuery, get_reference),
         name="get_reference",
         title="Get reference song analysis",
         description="Sections (start bar, length, kick, elements), key and tempo of reference songs analyzed by the "
@@ -504,7 +497,7 @@ def build_server(client: BridgeClient | None = None, all_song_options: bool = Fa
             return result
 
         server.add_tool(
-            _make_tool(spec.params, run, free=spec.read_only or op_name == "history.step"),
+            _make_tool(spec.params, run),
             name=tool_name,
             title=title,
             description=" ".join(filter(None, [spec.summary + ".", inspect.cleandoc(spec.params.__doc__ or "")])),

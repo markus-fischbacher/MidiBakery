@@ -363,9 +363,6 @@ out.push(aboutText("0.2.0", {{ api: "0.2.0", script: "0.2.0" }}));
 out.push(aboutText("0.2.0", {{ api: "0.3.0", script: "0.2.0" }}));
 out.push(aboutText("0.2.0", {{ api: "0.2.0", script: null }}));
 out.push(aboutText("0.2.0", {{ api: "0.2.0", script: "0.2.0", update: "0.3.0" }}));
-out.push(aboutText("0.2.0", {{ api: "0.2.0", script: "0.2.0", license: {{ state: "trial", message: "Trial: 9 days left" }} }}));
-out.push(aboutText("0.2.0", {{ api: "0.2.0", script: "0.2.0", license: {{ state: "expired", message: "x" }} }}));
-out.push(aboutText("0.2.0", {{ api: "0.2.0", script: "0.2.0", license: {{ state: "licensed", message: "Licensed" }} }}));
 const server = http.createServer((req, res) => {{
   const ok = req.url === "/health" && req.headers.authorization === "Bearer secret";
   res.writeHead(ok ? 200 : 401, {{ "content-type": "application/json" }});
@@ -387,9 +384,6 @@ server.listen(0, "127.0.0.1", async () => {{
         "Versions differ: device 0.2.0, API 0.3.0, Remote Script 0.2.0 - reinstall MidiBakery",
         "MidiBakery 0.2.0 (device, API) · Remote Script not connected",
         "MidiBakery 0.2.0 (device, API, Remote Script) · Update 0.3.0 available: Install in the Chat device",
-        "MidiBakery 0.2.0 (device, API, Remote Script) · Trial: 9 days left",
-        "MidiBakery 0.2.0 (device, API, Remote Script) · License needed: see the Chat device",
-        "MidiBakery 0.2.0 (device, API, Remote Script)",
         "MidiBakery 0.2.0 · API not running",
         "Versions differ: device 0.2.0, API 0.2.0, Remote Script 0.1.9 - reinstall MidiBakery"
         " · Update 0.3.0 available: Install in the Chat device",

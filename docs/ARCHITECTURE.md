@@ -74,8 +74,8 @@ flowchart LR
   - `GET /ui`, `WS /chat`: the chat page and the agent (events `text`, `thinking`, `tool_call`, `tool_result`, `plan`, `confirm`, `live_state`, `done`, `error`).
   - `GET /bake`, `/bake/options`, `POST /bake/run`: the Bake device (`bake.py`: `build_song` and `apply_song` without a model; *Again* deletes the last baked song's clips and locators and bakes another seed at its place, its tracks stay; a failure undoes the deletion).
   - `GET /importer`, `/import/scan|preview|run|queue|pick|library|patterns`, `DELETE /import/{reference}`: the Set Importer.
-  - `GET /models`, `/auth/anthropic`, `/update`, `/license`, `/health`.
-  Port and token are in `api.json`; every request needs the token. With the license check on and no valid license, the chat answers `LICENSE_REQUIRED`.
+  - `GET /models`, `/auth/anthropic`, `/update`, `/health`.
+  Port and token are in `api.json`; every request needs the token.
 
 ### Max devices
 
@@ -98,11 +98,10 @@ A `midibakery mcp` runs the code of the folder its Claude session started in; se
 
 "Build me a house song" in the Chat device: the page sends the text over WebSocket; the agent asks the LLM, which calls `plan_song`; the server reads the session, the engine plans sections, tracks and notes, and the page shows a timeline with **Apply**. Apply calls `apply_plan`, which creates missing tracks, writes the clips in batches and sets locators.
 
-## Installer, updates, license
+## Installer and updates
 
 - **Package:** `packaging/build_app.py` freezes `midibakery` with Python, the Remote Script and the built devices (PyInstaller). `packaging/macos/build_pkg.py` and `packaging/windows/build_setup.py` build installers that install for the current user and run `midibakery install`. Not signed yet. CI builds them and tests install, update and uninstall.
-- **Updates:** Cloudflare Worker, R2 and D1 on `updates.klirrwerk.com` (`services/updates`). The app trusts only an Ed25519-signed manifest and a matching SHA-256.
-- **License:** built but **off** while `LICENSE_KEYS` in `license.py` is empty. Then: 30-day trial, then a key (perpetual, 12 months of updates, two computers), checked offline. Without one the app reads and undoes but changes nothing.
+- **Updates:** Cloudflare Worker and R2 on `updates.klirrwerk.com` (`services/updates`). The app trusts only an Ed25519-signed manifest and a matching SHA-256.
 
 ## Where to look when something goes wrong
 
@@ -115,7 +114,7 @@ All in `~/Library/Application Support/MidiBakery/` (Windows `%APPDATA%\MidiBaker
 | `device-bake.log`, `device-chat.log`, `device-importer.log`, `device-reference.log` | the devices |
 | `references/`, `patterns/` | analyzed and imported references, imported loops |
 | `launcher.json`, `installed.json` | how Live starts the API; every path `install` wrote |
-| `settings.json`, `update.json`, `license.json` | settings, update status, license token |
+| `settings.json`, `update.json` | settings, update status |
 | Live's `Log.txt` | the Remote Script (`MidiBakery: …`) |
 
 `uv run midibakery ping` checks the connection to the Remote Script.

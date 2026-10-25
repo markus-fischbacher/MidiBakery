@@ -11,9 +11,6 @@
 - ``GET /health``: server and Live bridge status; ``update`` names a newer version, if there is one.
 - ``GET /update``: the daily update check's result (``midibakery.updates``); ``?force=1`` asks now.
 - ``POST /update/install``: downloads the newer version's installer, verifies it and opens it.
-- ``GET /license``: trial or license state (``midibakery.license``); ``POST /license/trial``,
-  ``POST /license/activate`` ``{"key"}``, ``POST /license/deactivate``. Without the trial or a license the
-  MIDI Tools and the chat answer ``LICENSE_REQUIRED``; reading Live and undo keep working.
 - ``GET /importer``: the Set Importer page; ``POST /import/scan`` ``{"path"}`` (a Live Set or a folder: the Sets in it),
   ``POST /import/preview`` ``{"file"}`` (one Set's roles, key and sections), ``POST /import/run`` ``{"files", "genres"?}``
   (stores them as references), ``GET``/``POST /import/queue`` (the list of Sets shared by the device and a popped-out page), ``POST /import/pick`` ``{"kind": "file"|"folder"}`` (the system file dialog, for the page in a browser),
@@ -56,7 +53,7 @@ from starlette.responses import HTMLResponse, JSONResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from midibakery import bake, credentials, license, updates
+from midibakery import bake, credentials, updates
 from midibakery.als import library as als_library
 from midibakery.agent import LOCAL_PROVIDERS, SYSTEM_PROMPT, Agent, Provider, ToolHost
 from midibakery.bridge import BridgeClient, BridgeError
@@ -129,12 +126,10 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         update = update_state["update"]
         if update is None or not update.available:
             return None
-        return {"version": update.version, "notes": update.notes, "size": (update.file or {}).get("size"),
-                "included": update.included}
+        return {"version": update.version, "notes": update.notes, "size": (update.file or {}).get("size")}
 
     async def follow_updates() -> None:
         while True:
-            await license.refresh()
             await refresh_update()
             await asyncio.sleep(UPDATE_RECHECK)
 
@@ -148,9 +143,6 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         update = update_state["update"]
         if update is None or not update.available:
             return JSONResponse({"error": "NO_UPDATE"}, status_code=409)
-        if not update.included:
-            return JSONResponse({"error": "NOT_INCLUDED", "message": f"MidiBakery {update.version} is not included in "
-                                 "your license's updates.", "purchase_url": license.PURCHASE_URL}, status_code=402)
         try:
             path = await updates.download(update)
             updates.open_installer(path)
@@ -246,8 +238,6 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         return JSONResponse({"mine": mine, "part": part, "genre": genre, "preset": mine[part].rsplit("/", 1)[-1].rsplit(".", 1)[0]})
 
     async def bake_run(request: Request) -> JSONResponse:
-        if not license.allowed():
-            return JSONResponse({"error": "LICENSE_REQUIRED", "message": license.status().message}, status_code=402)
         try:
             body = await request.json()
             if not isinstance(body, dict):
@@ -309,31 +299,7 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
         except (BridgeError, asyncio.TimeoutError) as exc:
             live = {"error": str(exc)}
         # pid: the Remote Script stops an API of another version (left from before an update) by it
-        state = license.status()
-        return JSONResponse({"ok": True, "version": VERSION, "pid": os.getpid(), "live": live, "update": update_info(),
-                             "license": {"state": state.state, "message": state.message}})
-
-    async def license_state(request: Request) -> JSONResponse:
-        return JSONResponse(license.status().as_dict())
-
-    async def license_action(request: Request) -> JSONResponse:
-        action = request.path_params["action"]
-        try:
-            if action == "trial":
-                await license.start_trial()
-            elif action == "activate":
-                try:
-                    key = str((await request.json()).get("key", ""))
-                except (ValueError, AttributeError):
-                    key = ""
-                await license.activate(key)
-            elif action == "deactivate":
-                await license.deactivate()
-            else:
-                return JSONResponse({"error": "NOT_FOUND"}, status_code=404)
-        except license.LicenseError as exc:
-            return JSONResponse({"error": exc.code, "message": str(exc)}, status_code=422)
-        return JSONResponse(license.status().as_dict())
+        return JSONResponse({"ok": True, "version": VERSION, "pid": os.getpid(), "live": live, "update": update_info()})
 
     async def chat(ws: WebSocket) -> None:
         if not _authorized(token, ws.query_params.get("token")):
@@ -401,10 +367,6 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
                         if running is not None and not running.done():
                             await emit({"type": "error", "message": "Still working on the previous message; send cancel first."})
                             continue
-                        if kind == "user" and not license.allowed():
-                            # before the model runs: no tokens spent on an answer whose tools would refuse
-                            await emit({"type": "error", "code": "LICENSE_REQUIRED", "message": license.status().message})
-                            continue
                         if kind == "user":
                             work = agent.send(str(message.get("text", "")), emit)
                         else:
@@ -471,8 +433,6 @@ def build_app(bridge: BridgeClient, provider_factory: ProviderFactory, token: st
             Route("/models", guard(models), methods=["GET"]),
             Route("/update", guard(update_status), methods=["GET"]),
             Route("/update/install", guard(update_install), methods=["POST"]),
-            Route("/license", guard(license_state), methods=["GET"]),
-            Route("/license/{action}", guard(license_action), methods=["POST"]),
             Route("/auth/anthropic", guard(auth), methods=["GET", "PUT", "DELETE"]),
             WebSocketRoute("/chat", chat),
         ]

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/worker.test.js test/licenses.test.js",
+    "test": "node --test test/worker.test.js",
     "deploy": "npx wrangler@4 deploy"
   }
 }

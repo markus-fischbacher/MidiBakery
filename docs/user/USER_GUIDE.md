@@ -208,15 +208,13 @@ Fine edits, mixing and sound design are faster in Live itself.
 
 **"plan_song needs 4/4":** set the time signature to 4/4.
 
-**LICENSE_REQUIRED:** only when the license check is on: **Start trial** or **Enter key** in the chat.
-
 **Logs:** macOS `~/Library/Application Support/MidiBakery/`, Windows `%APPDATA%\MidiBakery\`: `api.log` (every message and tool call), `device-chat.log`, `device-importer.log`, `device-reference.log`; Live's `Log.txt` for the Remote Script. **Copy** in the chat copies the whole conversation for a bug report.
 
 ## 10. FAQ
 
 **Does MidiBakery change my project without asking?** Only on request; a song comes as a preview first, deleting and replacing ask first, everything is undoable.
 
-**What does it cost?** Claude: API use on your Anthropic account. Local models: nothing. The MidiBakery license check is **off** in this version.
+**What does it cost?** Claude: API use on your Anthropic account. Local models: nothing.
 
 **Which data leaves my computer?** With Claude: what the AI reads (track and clip names, notes, tempo, key). With local models: nothing. The update check sends version, OS, processor and channel.
 

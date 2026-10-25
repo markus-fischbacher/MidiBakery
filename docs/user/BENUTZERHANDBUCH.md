@@ -208,15 +208,13 @@ Feinschliff, Mixing und Sounddesign gehen in Live selbst schneller.
 
 **„plan_song needs 4/4“:** Taktart auf 4/4 stellen.
 
-**LICENSE_REQUIRED:** nur bei eingeschalteter Lizenzprüfung: **Start trial** oder **Enter key** im Chat.
-
 **Logs:** macOS `~/Library/Application Support/MidiBakery/`, Windows `%APPDATA%\MidiBakery\`: `api.log` (jede Nachricht und jeder Tool-Aufruf), `device-chat.log`, `device-importer.log`, `device-reference.log`; Lives `Log.txt` für das Remote Script. **Copy** im Chat kopiert das ganze Gespräch für eine Fehlermeldung.
 
 ## 10. FAQ
 
 **Ändert MidiBakery mein Projekt ungefragt?** Nur auf Bitte; ein Song kommt erst als Vorschau, Löschen und Ersetzen fragen nach, alles ist rückgängig zu machen.
 
-**Was kostet es?** Claude: API-Nutzung auf deinem Anthropic-Konto. Lokale Modelle: nichts. Die MidiBakery-Lizenzprüfung ist in dieser Version **aus**.
+**Was kostet es?** Claude: API-Nutzung auf deinem Anthropic-Konto. Lokale Modelle: nichts.
 
 **Welche Daten verlassen meinen Rechner?** Mit Claude: was die KI liest (Spur- und Clipnamen, Noten, Tempo, Tonart). Mit lokalen Modellen: nichts. Die Update-Prüfung sendet Version, Betriebssystem, Prozessor und Kanal.
 
