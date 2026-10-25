@@ -2,6 +2,20 @@
 
 By Klirrwerk. EDM song sketches for inspiration in Ableton Live 12 Suite: from genre recipes, from imported Live Sets and from analyzed reference songs.
 
+## Install
+
+MidiBakery is free of charge. You need **Ableton Live 12 Suite** (12.3 or newer, with Max for Live) on **macOS** or **Windows 64-bit**. No Python or other tools.
+
+1. Download the installer from the [latest release](https://github.com/markus-fischbacher/MidiBakery/releases/latest): `MidiBakery-<version>-macos-arm64.pkg` (Apple Silicon), `-macos-x64.pkg` (Intel) or `-windows-x64-setup.exe`.
+2. Close Live and run the installer. It installs for your user only, no administrator password. Not signed yet: macOS **System Settings > Privacy & Security > Open Anyway**, Windows **More info > Run anyway**.
+3. Start Live. In **Settings > Link, Tempo & MIDI > Control Surface** choose **MidiBakery** (Input and Output stay *None*).
+4. In the browser, **User Library**: drag **MidiBakery Bake** onto a MIDI track, pick a genre, click **Bake**. That is your first song. Also there: **Chat**, **Set Importer**, **Reference Analyzer**.
+5. For the chat, add a Claude API key (**Key** button in the Chat device) or use a local model. For Claude Desktop or Claude Code, see the MCP server guide (set `MIDIBAKERY_CONFIRM=chat` if a confirmation is declined).
+
+Details, updates, uninstall and troubleshooting: [User Guide](docs/user/USER_GUIDE.md) (English), [Benutzerhandbuch](docs/user/BENUTZERHANDBUCH.md) (Deutsch).
+
+**Deutsch, kurz:** Installer von der [Releases-Seite](https://github.com/markus-fischbacher/MidiBakery/releases/latest) laden (macOS `.pkg`, Windows `-setup.exe`), Live schließen, Installer ausführen (nicht signiert: macOS „Dennoch öffnen“, Windows „Trotzdem ausführen“), Live starten, unter **Einstellungen > Link, Tempo & MIDI > Control Surface** **MidiBakery** wählen, dann **MidiBakery Bake** aus der User Library auf eine MIDI-Spur ziehen und **Bake** klicken. Alles Weitere im [Benutzerhandbuch](docs/user/BENUTZERHANDBUCH.md).
+
 ## Documentation
 
 | For | Document |
@@ -12,6 +26,7 @@ By Klirrwerk. EDM song sketches for inspiration in Ableton Live 12 Suite: from g
 | How the Remote Script, the core (MCP server, API, agent) and the Max for Live devices work together | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Genre recipes behind `plan_song` | [docs/GENRES.md](docs/GENRES.md) |
 | Named patterns for `compose` (bass, lead, techno drums, emotion progressions) | [docs/PATTERNS.md](docs/PATTERNS.md) |
+| Changes per version | [CHANGELOG.md](CHANGELOG.md) |
 | Update service | [services/updates/README.md](services/updates/README.md) |
 
 ## Layout
@@ -71,7 +86,7 @@ The installer is the updater. The running API asks `updates.klirrwerk.com` once 
 version exists; the devices' About line and the Chat device then show it, and *Install* in the Chat device
 downloads the installer, checks it against the release's Ed25519-signed manifest and opens it.
 `midibakery update` does the same from the terminal (`--check` only asks, `--disable` turns the daily check off).
-A tag `v<version>` publishes a release; setup and details in [services/updates/README.md](services/updates/README.md).
+A tag `v<version>` builds the installers and publishes them to the update service; setup and details in [services/updates/README.md](services/updates/README.md).
 
 ## License
 

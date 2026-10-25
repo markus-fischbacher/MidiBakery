@@ -35,20 +35,78 @@ Du brauchst **Ableton Live 12 Suite** (12.3 oder neuer; Max for Live ist in Suit
 
 ## 2. Installieren und aktualisieren
 
-Schließe zuerst Live. Beide Installer installieren nur für dein Benutzerkonto, ohne Administrator-Passwort.
+### Voraussetzungen
 
-- **macOS:** `MidiBakery-<version>-macos-arm64.pkg` (Apple Silicon) oder `-macos-x64.pkg` (Intel). Wenn macOS das Öffnen verweigert (noch nicht notarisiert): **Systemeinstellungen > Datenschutz & Sicherheit > Dennoch öffnen**.
-- **Windows:** `MidiBakery-<version>-windows-x64-setup.exe`. Wenn Windows warnt: **Weitere Informationen > Trotzdem ausführen**.
+- **Ableton Live 12 Suite**, Version 12.3 oder neuer. Suite enthält Max for Live, das die Devices brauchen.
+- **macOS** oder **Windows 64-bit**. Intel-Macs gehen auch.
+- Kein Python, kein uv, keine weiteren Programme: der Installer bringt alles mit.
+- Optional: ein Claude-API-Key oder ein lokales Modell für das Chat-Device (Kapitel 4). Das Bake-Device braucht keins.
+- MidiBakery ist kostenlos. Es braucht kein Konto und keinen Lizenzschlüssel.
 
-**Updates:** Einmal am Tag fragt MidiBakery `updates.klirrwerk.com` nach einer neueren Version (gesendet: Version, Betriebssystem, Prozessortyp, Kanal). Das Chat-Device zeigt dann „MidiBakery … ist verfügbar“: **Install** lädt den Installer, prüft ihn und öffnet ihn. Danach Live neu starten. Aus: `midibakery update --disable`.
+### Installation auf macOS
 
-**Deinstallieren:** Windows **Einstellungen > Apps > MidiBakery**. macOS: `~/Library/Application Support/MidiBakery/runtime/<version>/midibakery uninstall` (`--purge` löscht auch Einstellungen und den gespeicherten Key). Deine Musik wird nie angefasst.
+1. Öffne die [Releases-Seite](https://github.com/markus-fischbacher/MidiBakery/releases/latest).
+2. Lade die Datei für deinen Mac herunter: `MidiBakery-<version>-macos-arm64.pkg` (Apple Silicon: M1 und neuer) oder `MidiBakery-<version>-macos-x64.pkg` (Intel). Unsicher? Apfel-Menü > **Über diesen Mac**.
+3. Schließe Ableton Live.
+4. Doppelklick auf die `.pkg`. Wenn macOS das Öffnen verweigert (der Installer ist noch nicht notarisiert): **Systemeinstellungen > Datenschutz & Sicherheit**, nach unten scrollen, **Dennoch öffnen**, dann bestätigen.
+5. Klick dich durch den Installer. Er installiert nur für dein Benutzerkonto und fragt nicht nach einem Administrator-Passwort. Das Programm landet in `~/Library/Application Support/MidiBakery/`, das Remote Script und die Devices in deiner Live User Library.
+6. Weiter mit Kapitel 3.
+
+### Installation auf Windows
+
+1. Öffne die [Releases-Seite](https://github.com/markus-fischbacher/MidiBakery/releases/latest).
+2. Lade `MidiBakery-<version>-windows-x64-setup.exe` herunter.
+3. Schließe Ableton Live.
+4. Doppelklick auf die Datei. Wenn Windows warnt (das Setup ist noch nicht signiert): **Weitere Informationen > Trotzdem ausführen**.
+5. Klick dich durch das Setup. Es installiert nur für dein Benutzerkonto und fragt nicht nach einem Administrator-Passwort. Das Programm landet in `%LOCALAPPDATA%\Programs\MidiBakery\`.
+6. Weiter mit Kapitel 3.
+
+### Installation aus dem Quellcode (für Entwickler)
+
+Du brauchst Python 3.12 oder neuer und [uv](https://docs.astral.sh/uv/). Im Ordner des Repositorys:
+
+```bash
+uv sync
+uv run midibakery install
+```
+
+`install` nimmt die User Library aus Lives Einstellungen. `--link` verlinkt das Remote Script statt es zu kopieren. `--library <Ordner>` nennt eine andere User Library. `--no-api` verhindert, dass die API mit Live startet.
+
+### Der Befehl `midibakery`
+
+Der Installer legt `midibakery` **nicht** in den PATH. Wo dieses Handbuch `midibakery …` schreibt, nimm den vollen Pfad des installierten Programms:
+
+- macOS: `"$HOME/Library/Application Support/MidiBakery/runtime/<version>/midibakery"`
+- Windows: `%LOCALAPPDATA%\Programs\MidiBakery\runtime\<version>\midibakery.exe`
+
+`<version>` ist der Ordnername, den du dort siehst (z. B. `0.4.0`). Aus dem Quellcode: `uv run midibakery`.
+
+### Aktualisieren
+
+1. Einmal am Tag fragt MidiBakery `updates.klirrwerk.com` nach einer neueren Version. Gesendet werden Version, Betriebssystem, Prozessortyp und Kanal, sonst nichts.
+2. Gibt es eine, zeigt das Chat-Device „MidiBakery … ist verfügbar“.
+3. Klick **Install**. MidiBakery lädt den Installer, prüft seine Signatur und öffnet ihn.
+4. Live schließen, Installer ausführen, Live neu starten. Deine Einstellungen und der gespeicherte Key bleiben.
+
+Kein Chat-Device? Lade den neuen Installer von der Releases-Seite und führe ihn aus wie beim ersten Mal. Oder `midibakery update` (`--check` fragt nur). Die tägliche Prüfung schaltest du mit `midibakery update --disable` aus.
+
+### Deinstallieren
+
+1. Live schließen.
+2. **Windows:** **Einstellungen > Apps > MidiBakery > Deinstallieren.**
+3. **macOS:** `"$HOME/Library/Application Support/MidiBakery/runtime/<version>/midibakery" uninstall` ausführen. Mit `--purge` löschst du auch Einstellungen, gespeicherte Analysen und den gespeicherten Claude-Key.
+4. In Live unter **Einstellungen > Link, Tempo & MIDI** die MidiBakery-Zeile auf *None* stellen (optional).
+
+Deine Musik und deine Live Sets werden nie angefasst.
 
 ## 3. In Live einrichten
 
-1. **Live starten** (nach jeder Installation neu starten).
-2. **Einstellungen > Link, Tempo & MIDI > Control Surface:** wähle in einer freien Zeile **MidiBakery**. Input und Output bleiben auf *None*. Live startet damit auch die MidiBakery-API im Hintergrund.
-3. Im Browser unter **User Library** (oder Suche „MidiBakery“):
+Das machst du einmal nach der ersten Installation.
+
+1. **Live starten.** Nach jeder Installation oder jedem Update frisch starten.
+2. Öffne **Einstellungen > Link, Tempo & MIDI** (macOS: **Live > Einstellungen**).
+3. Wähle bei **Control Surface** in einer freien Zeile **MidiBakery**. **Input** und **Output** bleiben auf *None*. Live startet damit auch die MidiBakery-API im Hintergrund. Fehlt **MidiBakery** in der Liste, ist die Installation nicht fertig geworden oder Live wurde nicht neu gestartet (Kapitel 9).
+4. Im Live-Browser findest du die Devices unter **User Library** (oder Suche „MidiBakery“):
 
 | Device | Ordner |
 |---|---|
@@ -57,9 +115,10 @@ Schließe zuerst Live. Beide Installer installieren nur für dein Benutzerkonto,
 | MidiBakery Set Importer | Presets > MIDI Effects > Max MIDI Effect > MidiBakery |
 | MidiBakery Reference Analyzer | Presets > Audio Effects > Max Audio Effect > MidiBakery |
 
-4. Zieh **MidiBakery Chat** auf eine beliebige MIDI-Spur (MIDI läuft unverändert durch). Tippe „Hallo“ in das **Eingabefeld rechts im Device** und drück Enter.
+5. **Erster Song in zwei Klicks (ohne KI):** Zieh **MidiBakery Bake** auf eine beliebige MIDI-Spur, wähle ein Genre, klick **Bake**. Der Song erscheint im Arrangement hinter dem letzten Clip.
+6. **Chat:** Zieh **MidiBakery Chat** auf eine beliebige MIDI-Spur (MIDI läuft unverändert durch). Tippe „Hallo“ in das **Eingabefeld rechts im Device** und drück Enter. Für eine KI weiter mit Kapitel 4.
 
-Live gibt keine Tastatureingaben an das Chatfenster selbst weiter: tippe nur ins Eingabefeld rechts, oder nutze mit **Pop out** den Chat im Browser. Jedes Device hat einen **About**-Knopf mit den Versionen von Device, API und Remote Script; sie sollten übereinstimmen.
+Live reicht keine Tastatureingabe an das Chat-Fenster selbst weiter: tippe nur ins Eingabefeld rechts, oder drück **Pop out**, um den Chat im Browser zu nutzen. Jedes Device hat einen **About**-Knopf mit den Versionen von Device, API und Remote Script; sie sollten übereinstimmen.
 
 ## 4. Eine KI wählen
 
@@ -208,7 +267,13 @@ Feinschliff, Mixing und Sounddesign gehen in Live selbst schneller.
 
 **„plan_song needs 4/4“:** Taktart auf 4/4 stellen.
 
-**Logs:** macOS `~/Library/Application Support/MidiBakery/`, Windows `%APPDATA%\MidiBakery\`: `api.log` (jede Nachricht und jeder Tool-Aufruf), `device-chat.log`, `device-importer.log`, `device-reference.log`; Lives `Log.txt` für das Remote Script. **Copy** im Chat kopiert das ganze Gespräch für eine Fehlermeldung.
+**„MidiBakery“ fehlt in der Control-Surface-Liste oder die Devices fehlen:** die Installation ist nicht fertig geworden oder Live wurde nicht neu gestartet. Live schließen, Installer erneut ausführen, Live starten. Auf macOS schreibt der Installer `~/Library/Application Support/MidiBakery/install.log`; aus dem Quellcode `uv run midibakery install` ausführen und die Ausgabe lesen. Die Devices liegen in der User Library, die Live benutzt (**Einstellungen > Library** zeigt, wo). Hast du sie kürzlich verschoben, führe die Installation erneut aus.
+
+**Der Installer lässt sich nicht öffnen (macOS) oder warnt (Windows):** er ist noch nicht signiert. Siehe Kapitel 2 (**Dennoch öffnen** / **Trotzdem ausführen**).
+
+**Die Devices zeigen einen Fehler oder die API startet nicht:** öffne `api.log` (unten). Prüfe die Versionen mit **About**: weichen sie ab, erneut installieren und Live neu starten.
+
+**Logs:** macOS `~/Library/Application Support/MidiBakery/`, Windows `%APPDATA%\MidiBakery\`: `api.log` (jede Nachricht und jeder Tool-Aufruf), `device-chat.log`, `device-importer.log`, `device-reference.log`; Lives `Log.txt` für das Remote Script (macOS `~/Library/Preferences/Ableton/Live 12.x/Log.txt`, Windows `%APPDATA%\Ableton\Live 12.x\Preferences\Log.txt`). **Copy** im Chat kopiert das ganze Gespräch für eine Fehlermeldung.
 
 ## 10. FAQ
 
