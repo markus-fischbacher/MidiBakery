@@ -23,6 +23,7 @@ from midibakery.compose import user_patterns
 Call = Callable[..., Awaitable[dict[str, Any]]]
 GENRES = ("house", "melodic_techno", "peak_time_techno", "drum_and_bass", "trap")
 LENGTHS = ("radio", "standard", "extended")
+COMPLEXITIES = ("simple", "rich")
 EPSILON = 1e-6
 
 
@@ -44,7 +45,7 @@ def options() -> dict[str, Any]:
     """What the page offers: genres, lengths, the analyzed and imported references, whether there are own loops."""
     refs = [{"name": r.get("name"), "source": r.get("source", "audio"), "genre": r.get("genre"), "tempo": r.get("tempo")}
             for r in load_references() if r.get("name")]
-    return {"genres": list(GENRES), "lengths": list(LENGTHS), "references": refs, "my_loops": bool(user_patterns.entries())}
+    return {"genres": list(GENRES), "lengths": list(LENGTHS), "complexities": list(COMPLEXITIES), "references": refs, "my_loops": bool(user_patterns.entries())}
 
 
 def _settings(body: dict[str, Any]) -> dict[str, Any]:
@@ -53,9 +54,12 @@ def _settings(body: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"genre: one of {', '.join(GENRES)}")
     if length not in LENGTHS:
         raise ValueError(f"length: one of {', '.join(LENGTHS)}")
+    complexity = body.get("complexity") or "rich"
+    if complexity not in COMPLEXITIES:
+        raise ValueError(f"complexity: one of {', '.join(COMPLEXITIES)}")
     if genre is None and reference is None:
         raise ValueError("choose a genre or a reference")
-    return {"genre": genre, "length": length, "reference": reference, "my_loops": bool(body.get("my_loops"))}
+    return {"genre": genre, "length": length, "reference": reference, "complexity": complexity, "my_loops": bool(body.get("my_loops"))}
 
 
 class Baker:
@@ -72,7 +76,7 @@ class Baker:
                           f"{int(last.end / last.beats_per_bar)}", "can_go_back": len(last.seeds) > 1}}
 
     async def bake(self, body: dict[str, Any]) -> dict[str, Any]:
-        """body: genre, length, reference, my_loops, seed (optional) and mode: new, again or back."""
+        """body: genre, length, reference, complexity, my_loops, seed (optional) and mode: new, again or back."""
         mode = body.get("mode") or "new"
         if mode not in ("new", "again", "back"):
             raise ValueError("mode: new, again or back")

@@ -88,7 +88,7 @@ Local models get the same tools in a compact form. Name tracks and clips, ask on
 
 ### With one click (Bake)
 
-Drag **MidiBakery Bake** onto any MIDI track. Choose a **genre** and a **length**, optionally **After** (an imported Set or analyzed song, chapters 6 and 7) and **My loops** (loops from your imported Sets). Then:
+Drag **MidiBakery Bake** onto any MIDI track. Choose a **genre**, a **length** and the **complexity** (**Rich**, the default: layered lead and bass, an answer voice, more FX; **Simple**: one voice per role), optionally **After** (an imported Set or analyzed song, chapters 6 and 7) and **My loops** (loops from your imported Sets). Then:
 
 - **Bake** writes a new song after the last clip in the Arrangement, at the genre's tempo, on fitting tracks (missing ones are created).
 - **Again** replaces the song baked last with another seed: its clips and locators are deleted, the tracks stay.

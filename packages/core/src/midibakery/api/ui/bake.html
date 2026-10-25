@@ -31,7 +31,8 @@
   #ref-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #ref-name::before { content: "After  "; color: var(--dim); }
   #ref-name.on::before { color: var(--accent); opacity: .7; }
-  #lengths { flex: none; width: 218px; }
+  #lengths { flex: none; width: 190px; }
+  #complexities { flex: none; width: 96px; }
   .actions { align-items: center; }
   .big { height: 34px; font-size: 13px; padding: 0 14px; flex: none; }
   .primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; min-width: 96px; }
@@ -57,6 +58,7 @@
 <div class="row"><div class="seg" id="genres"></div></div>
 <div class="row">
   <div class="seg" id="lengths"></div>
+  <div class="seg" id="complexities" title="Rich: layered lead and bass, an answer voice, more FX. Simple: one voice per role"></div>
   <button class="tool" id="my-loops" title="The seed draws drums, bass, lead and chords from your imported Sets">My loops</button>
   <button class="tool" id="ref-name" title="Follow the structure of an imported Set or analyzed song">No reference</button>
 </div>
@@ -75,8 +77,9 @@ addEventListener("hashchange", () => location.reload());  // a new token: the AP
 
 const GENRE_LABELS = { house: "House", melodic_techno: "Melodic", peak_time_techno: "Peak-Time", drum_and_bass: "D&B", trap: "Trap" };
 const LENGTH_LABELS = { radio: "Radio", standard: "Standard", extended: "Extended" };
+const COMPLEXITY_LABELS = { simple: "Simple", rich: "Rich" };
 const KEY = "midibakery-bake";
-let choice = { genre: "house", length: "standard", reference: null, my_loops: false };
+let choice = { genre: "house", length: "standard", complexity: "rich", reference: null, my_loops: false };
 try { Object.assign(choice, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (_) {}
 let options = null, busy = false;
 
@@ -114,12 +117,14 @@ function chips(holder, labels, key) {
 function describe(baked) {
   if (!baked) return "Ready. Bake writes a song after the last clip in the Arrangement.";
   const what = baked.reference ? `after ${baked.reference}` : GENRE_LABELS[baked.genre] || baked.genre;
-  return `${what} · bars ${baked.bars} · seed ${baked.seed}`;
+  const level = baked.complexity === "simple" ? " · simple" : "";
+  return `${what}${level} · bars ${baked.bars} · seed ${baked.seed}`;
 }
 
 function render() {
   chips($("genres"), GENRE_LABELS, "genre");
   chips($("lengths"), LENGTH_LABELS, "length");
+  chips($("complexities"), COMPLEXITY_LABELS, "complexity");
   $("my-loops").className = "tool" + (choice.my_loops ? " on" : "");
   $("my-loops").disabled = Boolean(options && !options.my_loops);
   $("ref-name").textContent = choice.reference || "none";
@@ -177,7 +182,7 @@ async function run(mode) {
   render();
   status(mode === "new" ? "Baking..." : mode === "again" ? "Baking another one..." : "Going back...", "busy");
   try {
-    const body = mode === "back" ? { mode } : { mode, genre: choice.genre, length: choice.length, reference: choice.reference, my_loops: choice.my_loops };
+    const body = mode === "back" ? { mode } : { mode, genre: choice.genre, length: choice.length, complexity: choice.complexity, reference: choice.reference, my_loops: choice.my_loops };
     const result = await api("/bake/run", body);
     options.baked = result.baked;
     const tempo = result.tempo ? ` · ${Math.round(result.tempo)} BPM` : "";
